@@ -207,6 +207,34 @@ export function formatVolumeLabel(db: number): string {
   return `${Math.round(db)} dB · ${percent < 1 ? "<1" : percent}%`;
 }
 
+type PathContext = Pick<
+  CanvasRenderingContext2D,
+  "beginPath" | "moveTo" | "lineTo" | "stroke"
+>;
+
+/**
+ * Strokes a waveform across `width`. `sampleAt` returns -1 to 1, drawn from
+ * the vertical middle (positive is up). Callers set the stroke style.
+ */
+export function strokeWaveform(
+  context: PathContext,
+  count: number,
+  sampleAt: (index: number) => number,
+  width: number,
+  height: number,
+): void {
+  if (count < 2) return;
+  const middle = height / 2;
+  context.beginPath();
+  for (let index = 0; index < count; index += 1) {
+    const x = (index / (count - 1)) * width;
+    const y = middle - sampleAt(index) * middle;
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  }
+  context.stroke();
+}
+
 export function rampParam(
   param: AudioParam,
   target: number,

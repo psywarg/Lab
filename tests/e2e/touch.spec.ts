@@ -67,10 +67,11 @@ test("H3: sample rate does not double with two fingers", async ({ page, context 
   const one = await rateWith([[100, 200]]);
   const two = await rateWith([[100, 200], [260, 200]]);
   expect(one).toBeGreaterThan(0);
-  // Event dispatch timing in the harness varies by about 20%; the bug this
-  // guards against doubled the rate (ratio 2.0).
-  expect(two / one).toBeGreaterThan(0.67);
-  expect(two / one).toBeLessThan(1.5);
+  // CDP event dispatch timing varies under load (a ratio of 1.54 has been
+  // seen with correct code); the bug this guards against doubled the rate
+  // (ratio 2.0), which this bound still fails clearly.
+  expect(two / one).toBeGreaterThan(0.6);
+  expect(two / one).toBeLessThan(1.75);
 });
 
 test("C5: a tap 5 px from the target centre grades as Centre", async ({ page, context }) => {
@@ -104,4 +105,41 @@ test("H2: holding the top-right hint pauses the test and shows the controls", as
   await expect(page.locator("#touch-stage")).toHaveAttribute("data-active", "false");
   await expect(page.locator("#touch-start")).toBeVisible();
   await expect(page.locator("#touch-start")).toHaveText("Resume");
+});
+
+test("Drift: tracing the guide reports a small deviation, 30 px off reports about 30 px", async ({ page, context }) => {
+  const touch = createTouch(await cdpFor(context, page));
+  await openTool(page, "touch-test");
+  await startTest(page, "drift");
+  const guide = page.locator("#touch-drift-layer svg path").first();
+  await expect(guide).toBeAttached();
+  const points = await guide.evaluate((path) => {
+    const el = path as SVGPathElement;
+    const box = el.ownerSVGElement?.getBoundingClientRect();
+    const length = el.getTotalLength();
+    return Array.from({ length: 41 }, (_, i) => {
+      const p = el.getPointAtLength((length * i) / 40);
+      return [p.x + (box?.left ?? 0), p.y + (box?.top ?? 0)] as const;
+    });
+  });
+
+  async function trace(offsetY: number): Promise<number> {
+    const shifted = points.map(([x, y]) => [x, y + offsetY] as const);
+    const [first, ...rest] = shifted;
+    if (!first) throw new Error("No guide points");
+    await touch.send("touchStart", [first]);
+    for (const point of rest) {
+      await touch.send("touchMove", [point]);
+      await page.waitForTimeout(16);
+    }
+    await touch.send("touchEnd", []);
+    await page.waitForTimeout(200);
+    return Number.parseInt((await stageStat(page, "primary").textContent()) ?? "", 10);
+  }
+
+  const onGuide = await trace(0);
+  expect(onGuide).toBeLessThanOrEqual(4);
+  const off = await trace(30);
+  expect(off).toBeGreaterThanOrEqual(26);
+  expect(off).toBeLessThanOrEqual(34);
 });

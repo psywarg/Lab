@@ -3,6 +3,11 @@
 
 export type Vector3 = { x: number; y: number; z: number };
 
+/** A sensor reading as a number, or null when missing or not finite. */
+export function finiteNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 export function mean(values: readonly number[]): number {
   if (values.length === 0) return 0;
   let sum = 0;

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   createMeterAccumulator,
+  formatClipEvents,
+  formatDbfs,
+  formatSeconds,
+  isNewClipEvent,
+  levelEstimates,
   mergeMeterReports,
+  nextPeakHold,
+  pickRecorderMimeType,
+  snrDb,
   micConstraints,
   micDeviceOptions,
 } from "@/utils/phones/tools/mic";
@@ -89,5 +97,47 @@ describe("mergeMeterReports", () => {
     expect(merged?.clipped).toBe(true);
     expect(merged?.rms).toBeCloseTo(Math.sqrt((0.01 * 100 + 0.09 * 300) / 400), 6);
     expect(mergeMeterReports([])).toBeNull();
+  });
+});
+
+describe("level statistics", () => {
+  it("waits for 30 readings, then takes the 10th and 95th percentiles", () => {
+    expect(levelEstimates(Array.from({ length: 29 }, () => -50))).toBeNull();
+    const window = Array.from({ length: 100 }, (_, i) => -90 + i * 0.5);
+    const estimates = levelEstimates(window);
+    expect(estimates?.noiseFloorDb).toBeCloseTo(-85, 6);
+    expect(estimates?.speechDb).toBeCloseTo(-43, 6);
+  });
+
+  it("reports SNR only when both levels are usable", () => {
+    expect(snrDb(-70, -30)).toBe(40);
+    expect(snrDb(-70, -69.5)).toBeNull();
+    expect(snrDb(-100, -30)).toBeNull();
+  });
+
+  it("debounces clip events and holds the peak for 1.5 s", () => {
+    expect(isNewClipEvent(true, 1000, 800)).toBe(false);
+    expect(isNewClipEvent(true, 1000, 700)).toBe(true);
+    expect(isNewClipEvent(false, 1000, 0)).toBe(false);
+    const hold = { amplitude: 0.8, at: 0 };
+    expect(nextPeakHold(0.5, 1000, hold)).toBe(hold);
+    expect(nextPeakHold(0.5, 1600, hold)).toEqual({ amplitude: 0.5, at: 1600 });
+    expect(nextPeakHold(0.9, 100, hold)).toEqual({ amplitude: 0.9, at: 100 });
+  });
+
+  it("formats readouts", () => {
+    expect(formatDbfs(-100)).toBe("--");
+    expect(formatDbfs(-12.34)).toBe("-12.3 dBFS");
+    expect(formatSeconds(-5)).toBe("0.0");
+    expect(formatSeconds(9450)).toBe("9.4");
+    expect([0, 1, 3].map(formatClipEvents)).toEqual(["None", "1 event", "3 events"]);
+  });
+
+  it("picks the first supported recording format", () => {
+    const supported = new Set(["audio/webm", "audio/mp4"]);
+    expect(pickRecorderMimeType(["audio/webm;codecs=opus", "audio/webm", "audio/mp4"], (t) => supported.has(t))).toBe(
+      "audio/webm",
+    );
+    expect(pickRecorderMimeType(["audio/ogg"], () => false)).toBeUndefined();
   });
 });

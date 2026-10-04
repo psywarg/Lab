@@ -88,3 +88,11 @@ test("M3: with hidden controls, the first tap only reveals them", async ({ page,
   await page.touchscreen.tap((viewport?.width ?? 0) * 0.8, (viewport?.height ?? 0) * 0.3);
   await expect(label).not.toHaveText(before ?? "");
 });
+
+test("the gamma pattern shows a measured frame rate", async ({ page }) => {
+  await openTool(page, "screen-test");
+  await page.evaluate(() =>
+    document.querySelector<HTMLButtonElement>("[data-tool-sidebar-item][data-pattern-kind='gamma-blend']")?.click(),
+  );
+  await expect(page.locator('[data-stat="frame-rate"]').first()).toHaveText(/^\d+ fps$/, { timeout: 5000 });
+});
