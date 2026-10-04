@@ -29,7 +29,19 @@ export default defineConfig(
     },
   },
 
-  // 5. Custom project rules & ignores
+  // 5. Plain browser scripts inlined with `is:inline` (not bundled).
+  {
+    files: ["src/scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        localStorage: "readonly",
+      },
+    },
+  },
+
+  // 6. Custom project rules & ignores
   {
     rules: {
       // Allow intentionally unused parameters and variables prefixed with "_".
