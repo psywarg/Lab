@@ -12,6 +12,7 @@ import type { GetStaticPaths } from "astro";
 import { Picture } from "astro:assets";
 import type { CollectionEntry } from "astro:content";
 import { getCollection, render } from "astro:content";
+import { getOgImage } from "@/utils/site/ogImage";
 
 export const getStaticPaths = (async () => {
   const allExplainers = (await getCollection("explainers")).filter(
@@ -50,11 +51,12 @@ const displayDateLabel = updatedAt ? "Last Updated" : "Published";
 const h2Headings = headings.filter((entryHeading) => entryHeading.depth === 2);
 
 const siteUrl = Astro.site?.origin ?? "";
-const ogImage = image.src;
+const ogImage = image;
 const structuredData = createTechArticleStructuredData({
   title,
   description: metaDescription,
-  image: ogImage,
+  // Same JPEG as og:image, which crawlers read more reliably than AVIF.
+  image: (await getOgImage(image)).url,
   urlPath: `/phones/explainers/${entry.id}`,
   publishedAt,
   updatedAt: articleDateModified,

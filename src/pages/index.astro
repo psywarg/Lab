@@ -8,14 +8,12 @@ import screenToolImage from "@/assets/images/phones/tools/screen-test.avif";
 import SortoHome from "@/assets/images/sorto/sorto-home.svg";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { ORGANIZATION_ID, SITE_ORIGIN, WEBSITE_ID } from "@/utils/site/schema";
 import { Picture } from "astro:assets";
 
 const title = "Sorted Tech - Insights Beyond Influence";
 const metaDescription =
   "Your source for independent insights that bring clarity to the latest in tech, grounded in real understanding and built to help you see beyond the hype.";
-const ogImage = DEFAULT_OG_IMAGE;
 const spotlightCards = [
   {
     hubLabel: "Explainers",
@@ -72,7 +70,6 @@ const structuredData = {
 <BaseLayout
   {title}
   {metaDescription}
-  {ogImage}
   {structuredData}
   robots="index, follow"
 >

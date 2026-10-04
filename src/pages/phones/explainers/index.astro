@@ -6,7 +6,6 @@ export const prerender = true;
 import Icons from "@/assets/icons/content-sprites.svg?url";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { SITE_ORIGIN } from "@/utils/site/schema";
 import { Picture } from "astro:assets";
 import { getCollection } from "astro:content";
@@ -61,10 +60,9 @@ const meta = {
   heading: "Technical Explainers & Deep Dives",
   description:
     "Knowledge is power, but only if it's accessible. This hub is dedicated to making the complex technologies we use every day easy to understand. We strip away the jargon to explain the 'how' and 'why' behind your favorite tech in a way that actually makes sense.",
-  ogImage: DEFAULT_OG_IMAGE,
 };
 
-const { title, metaDescription, ogImage, heading, description } = meta;
+const { title, metaDescription, heading, description } = meta;
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -88,7 +86,6 @@ const structuredData = {
 <BaseLayout
   {title}
   {metaDescription}
-  {ogImage}
   {structuredData}
   robots="index, follow"
 >

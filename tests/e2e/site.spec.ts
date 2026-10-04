@@ -1,4 +1,7 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import sharp from "sharp";
 import { blockExternal, collectErrors } from "./helpers";
 
 for (const [path, icon] of [
@@ -40,14 +43,22 @@ test("IMG9: the 404 page has no duplicate element IDs", async ({ page }) => {
   expect(duplicates).toEqual([]);
 });
 
-for (const path of ["/phones/tools/screen-test", "/phones/explainers/soc"]) {
-  test(`H8: ${path} publishes a JPEG or PNG social image with matching type`, async ({ page }) => {
-    test.fail(true, "Review finding H8: og:image is AVIF but labelled image/png");
-    await blockExternal(page);
+test("H8: every page publishes a 1200x630 JPEG social image with matching tags", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Checks build output; one viewport is enough");
+  const pages = readdirSync("dist", { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".html"))
+    .map((file) => `/${file.replace(/\\/g, "/").replace(/\.html$/, "")}`);
+  expect(pages.length).toBeGreaterThan(10);
+  await blockExternal(page);
+  for (const path of pages) {
     await page.goto(path);
-    const image = await page.locator('meta[property="og:image"]').getAttribute("content");
-    const type = await page.locator('meta[property="og:image:type"]').getAttribute("content");
-    expect(image).toMatch(/\.(jpe?g|png)$/);
-    expect(type).toBe(image?.endsWith(".png") ? "image/png" : "image/jpeg");
-  });
-}
+    const meta = (property: string) =>
+      page.locator(`meta[property="og:image${property}"]`).getAttribute("content");
+    const url = new URL((await meta("")) ?? "");
+    expect(await meta(":type"), path).toBe("image/jpeg");
+    expect(await meta(":width"), path).toBe("1200");
+    expect(await meta(":height"), path).toBe("630");
+    const info = await sharp(join("dist", url.pathname)).metadata();
+    expect([info.format, info.width, info.height], path).toEqual(["jpeg", 1200, 630]);
+  }
+});

@@ -4,13 +4,11 @@
 export const prerender = true;
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { ORGANIZATION_ID, SITE_ORIGIN } from "@/utils/site/schema";
 
 const title = "Terms of Service - Sorted Tech";
 const metaDescription =
   "Sorted Tech User Agreement: outlines user responsibilities, site conduct, and key terms for using our website.";
-const ogImage = DEFAULT_OG_IMAGE;
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -24,7 +22,7 @@ const structuredData = {
 };
 ---
 
-<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+<BaseLayout {title} {metaDescription} {structuredData}>
   <section class="content-card rounded-none">
     <h1>Terms of Service</h1>
 

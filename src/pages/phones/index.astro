@@ -8,7 +8,6 @@ import explainersImage from "@/assets/images/phones/explainers.avif";
 import toolsImage from "@/assets/images/phones/tools.avif";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { SITE_ORIGIN } from "@/utils/site/schema";
 import { Picture } from "astro:assets";
 
@@ -19,7 +18,6 @@ const meta = {
   heading: "Smartphones, explained and tested.",
   description:
     "Understand the technology inside your smartphone through clear, practical explainers, then use browser-based tools to check your device. Learn how key components work and test your screen, touch input, speakers, microphone, motion sensors, and more without installing an app.",
-  ogImage: DEFAULT_OG_IMAGE,
 };
 
 const cards = [
@@ -46,7 +44,7 @@ const cards = [
     labelClass: "text-accent-ink",
   },
 ];
-const { title, metaDescription, ogImage, heading, description } = meta;
+const { title, metaDescription, heading, description } = meta;
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "CollectionPage",
@@ -69,7 +67,6 @@ const structuredData = {
 <BaseLayout
   {title}
   {metaDescription}
-  {ogImage}
   {structuredData}
   robots="index, follow"
 >

@@ -1,60 +1,39 @@
 // src/utils/site/ogImage.ts
 
 import type { ImageMetadata } from "astro";
+import { getImage } from "astro:assets";
+import defaultOgSource from "@/assets/images/site/st-og.png";
 
-export const DEFAULT_OG_IMAGE = "/site/images/st-og.png";
+export const OG_IMAGE_WIDTH = 1200;
+export const OG_IMAGE_HEIGHT = 630;
 
-type OgImageModule = { default: ImageMetadata };
-type OgImageSource = ImageMetadata | string | null | undefined;
+export type OgImage = {
+  url: string;
+  type: "image/jpeg";
+  width: number;
+  height: number;
+};
 
-const pngImages = import.meta.glob<OgImageModule>(
-  "/src/assets/images/**/*.png",
-  {
-    eager: true,
-  },
-);
-
-function isImageMetadata(value: OgImageSource): value is ImageMetadata {
-  return typeof value === "object" && value !== null && "src" in value;
-}
-
-function normalizeSourcePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\/assets\//, "/src/assets/");
-}
-
-function assertPng(path: string): void {
-  const cleanPath = path.split(/[?#]/, 1)[0];
-  if (!cleanPath.toLowerCase().endsWith(".png")) {
-    throw new Error(
-      `OG image must be a PNG: ${path}. Use a .png file or omit it to fall back to ${DEFAULT_OG_IMAGE}.`,
-    );
-  }
-}
-
-function resolveSource(source: OgImageSource): string | undefined {
-  if (!source) return undefined;
-
-  const sourcePath = isImageMetadata(source) ? source.src : source;
-  assertPng(sourcePath);
-
-  const normalizedPath = normalizeSourcePath(sourcePath);
-  const importedImage = pngImages[normalizedPath]?.default;
-  if (importedImage) return importedImage.src;
-
-  return normalizedPath.startsWith("/src/assets/") ? undefined : sourcePath;
-}
-
-export function resolvePngOgImage(
-  source: OgImageSource,
-  candidates: readonly string[] = [],
-): string {
-  const resolvedSource = resolveSource(source);
-  if (resolvedSource) return resolvedSource;
-
-  for (const candidate of candidates) {
-    const image = pngImages[normalizeSourcePath(candidate)]?.default;
-    if (image) return image.src;
-  }
-
-  return DEFAULT_OG_IMAGE;
+/**
+ * Social preview image: a 1200x630 JPEG built from the page's own image (or
+ * the site default). Crawlers that read og:image do not reliably accept
+ * AVIF, which is what the page images are stored as.
+ */
+export async function getOgImage(
+  source: ImageMetadata = defaultOgSource,
+): Promise<OgImage> {
+  const image = await getImage({
+    src: source,
+    format: "jpeg",
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+    fit: "cover",
+    position: "center",
+  });
+  return {
+    url: image.src,
+    type: "image/jpeg",
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+  };
 }
