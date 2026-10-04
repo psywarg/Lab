@@ -7,15 +7,13 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import NotFound404 from "@/assets/images/sorto/notfound-404.svg";
 import Sorto404 from "@/assets/images/sorto/sorto-404.svg";
 import Icons from "@/assets/icons/site-sprites.svg?url";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 
 const title = "404 - Page Not Found";
 const metaDescription =
   "Looks like this page took a wrong turn in the cloud. Let's get you back to the tech insights that actually exist.";
-const ogImage = DEFAULT_OG_IMAGE;
 ---
 
-<BaseLayout {title} {metaDescription} {ogImage} robots="noindex, follow">
+<BaseLayout {title} {metaDescription} robots="noindex, follow">
   <style>
     @keyframes float-scale {
       0%,

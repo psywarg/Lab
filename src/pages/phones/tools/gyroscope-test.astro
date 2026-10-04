@@ -12,7 +12,7 @@ import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
 import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
 
 const tool = getToolBySlug("gyroscope-test");
-const ogImage = tool.image.src;
+const ogImage = tool.image;
 const title = "Free Online Gyroscope Test: Rotation, Drift & 3D Tracking";
 const metaDescription =
   "Check pitch, roll, yaw, X, Y, and Z rotation rates, twist direction, peak spin, and drift. Capture a local zero-rate offset directly in your browser.";
@@ -2284,6 +2284,12 @@ const structuredData = createToolApplicationSchema({
         unwrappedHeadingHistory.length = 0;
       }
       currentCheck = checkId;
+      checkButtons.forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.gyroCheck === checkId),
+        ),
+      );
       if (stage) stage.dataset.check = checkId;
       if (shell) shell.dataset.check = checkId;
       const activeCheckButton = checkButtons.find(

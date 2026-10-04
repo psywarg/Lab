@@ -159,10 +159,18 @@ const { class: className } = Astro.props;
             el.previousElementSibling?.setAttribute("aria-expanded", "false");
           });
         };
+        // Only one pending close at a time, so reopening cancels it.
+        if (this.closeTimeout) {
+          clearTimeout(this.closeTimeout);
+          this.closeTimeout = null;
+        }
         if (immediate) {
           doClose();
         } else {
-          this.closeTimeout = setTimeout(doClose, 300);
+          this.closeTimeout = setTimeout(() => {
+            this.closeTimeout = null;
+            doClose();
+          }, 300);
         }
       };
 

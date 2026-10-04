@@ -17,7 +17,7 @@ export default {
   async fetch(
     request: Request,
     env: Env,
-    ctx: ContactExecutionContext,
+    _ctx: ContactExecutionContext,
   ): Promise<Response> {
     const pathname = new URL(request.url).pathname;
 
@@ -36,7 +36,7 @@ export default {
         });
       }
 
-      return handleContact(request, env, ctx);
+      return handleContact(request, env);
     }
 
     return env.ASSETS.fetch(request);

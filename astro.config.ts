@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import mdx from "@astrojs/mdx";
-import partytown from "@astrojs/partytown";
+
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
@@ -12,6 +14,18 @@ const ASTRO_CONTENT_MODULES: string[] = [
   "astro/content-layer",
 ];
 const VITE_OPTIMIZE_EXCLUDES = [...ASTRO_CONTENT_MODULES];
+
+// The theme script is inlined with `is:inline`, which Astro does not hash,
+// so its CSP hash is computed here from the same file the layout inlines.
+const THEME_INIT_HASH: `sha256-${string}` = `sha256-${createHash("sha256")
+  .update(readFileSync("./src/scripts/theme-init.js", "utf8"))
+  .digest("base64")}`;
+
+// Hosts from Google's GA4 CSP guide and Cloudflare's Turnstile CSP guide.
+const GOOGLE_TAG = "https://*.googletagmanager.com";
+const GOOGLE_ANALYTICS = "https://*.google-analytics.com";
+const GOOGLE_ANALYTICS_REGION = "https://*.analytics.google.com";
+const TURNSTILE = "https://challenges.cloudflare.com";
 
 export default defineConfig({
   site: SITE_ORIGIN,
@@ -73,8 +87,39 @@ export default defineConfig({
   build: {
     format: "file",
   },
+  security: {
+    // Scripts and <style> elements must match a hash or an allowed origin.
+    // Inline style="" attributes stay allowed: the tools use them for data
+    // driven swatches, and they cannot run code.
+    csp: {
+      algorithm: "SHA-256",
+      directives: [
+        "default-src 'self'",
+        `img-src 'self' data: blob: ${GOOGLE_ANALYTICS} ${GOOGLE_TAG}`,
+        `connect-src 'self' ${GOOGLE_ANALYTICS} ${GOOGLE_ANALYTICS_REGION} ${GOOGLE_TAG}`,
+        `frame-src ${TURNSTILE}`,
+        "media-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ],
+      scriptDirective: {
+        resources: ["'self'", GOOGLE_TAG, TURNSTILE],
+        hashes: [THEME_INIT_HASH],
+      },
+      styleDirective: {
+        resources: ["'self'", { resource: "'unsafe-inline'", kind: "attribute" }],
+      },
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
+    build: {
+      // Never inline SVGs as data: URLs: <use href> refuses data: URLs, so
+      // inlined sprites render nothing.
+      assetsInlineLimit: (filePath: string) =>
+        filePath.endsWith(".svg") ? false : undefined,
+    },
     optimizeDeps: {
       exclude: VITE_OPTIMIZE_EXCLUDES,
     },
@@ -87,7 +132,7 @@ export default defineConfig({
   },
   integrations: [
     mdx(),
-    partytown(),
+
     sitemap({
       namespaces: {
         news: false,

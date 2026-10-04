@@ -5,13 +5,11 @@ export const prerender = true;
 
 import SortoAbout from "@/assets/images/sorto/sorto-about.svg";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { ORGANIZATION_ID, SITE_ORIGIN, WEBSITE_ID } from "@/utils/site/schema";
 
 const title = "About - Sorted Tech";
 const metaDescription =
   "Our mission is to bring clarity to tech, empower users to make smarter decisions, and guide them with integrity, independence, and transparency.";
-const ogImage = DEFAULT_OG_IMAGE;
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -26,7 +24,7 @@ const structuredData = {
 };
 ---
 
-<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+<BaseLayout {title} {metaDescription} {structuredData}>
   <section class="content-card rounded-none">
     <div
       class="mx-auto w-45 sm:float-right sm:ml-6 sm:w-50 md:w-55 lg:w-60 xl:w-65"

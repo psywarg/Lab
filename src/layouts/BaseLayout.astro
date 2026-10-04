@@ -1,18 +1,21 @@
 ---
 // src/layouts/BaseLayout.astro
 
+import type { ImageMetadata } from "astro";
 import { Font } from "astro:assets";
 import Header from "@/components/site/Header.astro";
 import Footer from "@/components/site/Footer.astro";
 import Breadcrumb from "@/components/site/Breadcrumb.astro";
+import ConsentBanner from "@/components/site/ConsentBanner.astro";
 import { jsonForScript } from "@/utils/site/json";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { getOgImage } from "@/utils/site/ogImage";
 import {
   organizationSchema,
   SITE_NAME,
   TWITTER_HANDLE,
   websiteSchema,
 } from "@/utils/site/schema";
+import themeInitScript from "@/scripts/theme-init.js?raw";
 import "@/styles/global.css";
 
 type Accent = "site" | "explainers" | "tools";
@@ -32,7 +35,8 @@ function accentForPath(pathname: string): Accent {
 interface Props {
   title: string;
   metaDescription?: string;
-  ogImage?: string;
+  /** Source image for the social preview; the site default when omitted. */
+  ogImage?: ImageMetadata;
   breadcrumbLabels?: Record<string, string>;
   showBreadcrumbVisual?: boolean;
   maxVisibleItems?: number;
@@ -45,7 +49,7 @@ interface Props {
 const {
   title,
   metaDescription,
-  ogImage = DEFAULT_OG_IMAGE,
+  ogImage,
   breadcrumbLabels,
   showBreadcrumbVisual = true,
   maxVisibleItems = 3,
@@ -66,7 +70,8 @@ const canonicalPath = normalizePagePath(Astro.url.pathname);
 const canonical = new URL(canonicalPath, Astro.site).href;
 const pageAccent = accent ?? accentForPath(canonicalPath);
 
-const fullOgImage = new URL(ogImage, Astro.site).href;
+const og = await getOgImage(ogImage);
+const fullOgImage = new URL(og.url, Astro.site).href;
 const isHomepage = canonicalPath === "/";
 const pageStructuredData = structuredData
   ? ([] as object[]).concat(structuredData)
@@ -92,66 +97,7 @@ const robotsContent = robots ?? "index, follow";
       content="width=device-width,initial-scale=1.0,viewport-fit=cover"
     />
 
-    <script is:inline>
-      (() => {
-        const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
-
-        const getStoredTheme = () => {
-          try {
-            const theme = localStorage.getItem("theme");
-            return theme === "light" || theme === "dark" ? theme : null;
-          } catch {
-            return null;
-          }
-        };
-
-        const syncThemeToggle = (isDark) => {
-          const btn = document.querySelector("[data-theme-toggle]");
-          btn?.setAttribute("aria-pressed", String(isDark));
-        };
-
-        const applyTheme = () => {
-          const storedTheme = getStoredTheme();
-          const isDark =
-            storedTheme === "dark" ||
-            (storedTheme === null && themeMedia.matches);
-
-          document.documentElement.classList.toggle("dark", isDark);
-          syncThemeToggle(isDark);
-          return isDark;
-        };
-
-        const setThemePreference = (theme) => {
-          try {
-            if (theme === "system") {
-              localStorage.removeItem("theme");
-            } else {
-              localStorage.setItem("theme", theme);
-            }
-          } catch {
-            // Ignore localStorage access errors
-          }
-
-          return applyTheme();
-        };
-
-        if (!window.__themeControllerReady) {
-          window.__themeControllerReady = true;
-          window.applyTheme = applyTheme;
-          window.setThemePreference = setThemePreference;
-
-          const handleSystemThemeChange = () => {
-            if (getStoredTheme() === null) {
-              applyTheme();
-            }
-          };
-
-          themeMedia.addEventListener("change", handleSystemThemeChange);
-        }
-
-        applyTheme();
-      })();
-    </script>
+    <script is:inline set:html={themeInitScript} />
 
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
@@ -173,9 +119,9 @@ const robotsContent = robots ?? "index, follow";
     <meta property="og:locale" content="en_US" />
     <meta property="og:image" content={fullOgImage} />
     <meta property="og:image:alt" content={title} />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content={og.type} />
+    <meta property="og:image:width" content={String(og.width)} />
+    <meta property="og:image:height" content={String(og.height)} />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content={TWITTER_HANDLE} />
@@ -228,19 +174,6 @@ const robotsContent = robots ?? "index, follow";
         />
       ))
     }
-
-    <script
-      is:inline
-      type="text/partytown"
-      src="https://www.googletagmanager.com/gtag/js?id=G-HJ4YRNZ9LG"></script>
-    <script is:inline type="text/partytown">
-      window.dataLayer = window.dataLayer || [];
-      function gtag(...args) {
-        dataLayer.push(args);
-      }
-      gtag("js", new Date());
-      gtag("config", "G-HJ4YRNZ9LG");
-    </script>
   </head>
 
   <body>
@@ -281,5 +214,6 @@ const robotsContent = robots ?? "index, follow";
     </main>
 
     <Footer />
+    <ConsentBanner />
   </body>
 </html>

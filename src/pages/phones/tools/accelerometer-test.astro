@@ -12,7 +12,7 @@ import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
 import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
 
 const tool = getToolBySlug("accelerometer-test");
-const ogImage = tool.image.src;
+const ogImage = tool.image;
 const title = "Free Online Accelerometer Test: Motion, Tilt & G-Force";
 const metaDescription =
   "Check X, Y, and Z acceleration, gravity, tilt, lift, shakes, peak force, noise, and 3D orientation directly in your browser.";
@@ -1423,6 +1423,12 @@ const structuredData = createToolApplicationSchema({
         tiltHistory.length = 0;
       }
       currentCheck = checkId;
+      checkButtons.forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.accelCheck === checkId),
+        ),
+      );
       if (stage) stage.dataset.check = checkId;
       const activeCheckButton = checkButtons.find(
         (button) => button.dataset.accelCheck === checkId,

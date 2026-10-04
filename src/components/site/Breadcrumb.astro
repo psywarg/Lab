@@ -67,14 +67,18 @@ const schemaData = {
 ---
 
 {
+  hasBreadcrumbTrail && (
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={jsonForScript(schemaData)}
+    />
+  )
+}
+
+{
   showVisual && hasBreadcrumbTrail && (
     <>
-      <script
-        is:inline
-        type="application/ld+json"
-        set:html={jsonForScript(schemaData)}
-      />
-
       <nav aria-label="Breadcrumb" class="text-xsmall mb-4 md:mb-6">
         <ol class="flex flex-wrap items-center gap-2">
           {visibleBreadcrumbs.map((crumb, index) => {

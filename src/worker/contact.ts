@@ -9,6 +9,7 @@ const MAX_EMAIL_LENGTH = 160;
 const MAX_SUBJECT_LENGTH = 80;
 const MAX_MESSAGE_LENGTH = 5000;
 const MAX_FORM_BYTES = 16 * 1024;
+const UPSTREAM_TIMEOUT_MS = 8000;
 
 const VALID_SUBJECTS = new Set([
   "General Enquiry",
@@ -24,6 +25,8 @@ export interface ContactEnv {
 export interface ContactExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
 }
+
+type ContactFailure = { message: string; status: number };
 
 function jsonResponse(
   body: { ok: boolean; message: string },
@@ -75,13 +78,52 @@ function isRequestTooLarge(request: Request): boolean {
   return Number.isFinite(parsed) && parsed > MAX_FORM_BYTES;
 }
 
+/**
+ * Reads the body with a hard size cap. A `Content-Length` check alone is not
+ * enough: chunked requests do not send one.
+ */
+async function readBodyWithLimit(
+  request: Request,
+  limit: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (isRequestTooLarge(request)) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 interface TurnstileVerifyResponse {
   success: boolean;
+  hostname?: string;
+}
+
+/** Local development hosts, where Turnstile test keys report another hostname. */
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
 async function verifyTurnstileToken(
   token: string,
   remoteIp: string | null,
+  expectedHostname: string,
   env: ContactEnv,
 ): Promise<boolean> {
   const secret = env.TURNSTILE_SECRET_KEY;
@@ -98,16 +140,47 @@ async function verifyTurnstileToken(
     if (!verifyResponse.ok) return false;
 
     const result = (await verifyResponse.json()) as TurnstileVerifyResponse;
-    return result.success === true;
+    if (result.success !== true) return false;
+    // A token solved on another site must not be accepted here.
+    return isLocalHost(expectedHostname) || result.hostname === expectedHostname;
   } catch {
     return false;
   }
 }
 
+/**
+ * Sends the message to the Apps Script endpoint and waits for it, following
+ * its redirect by hand, so the visitor is only told "sent" when it was.
+ */
+async function sendUpstream(form: FormData): Promise<boolean> {
+  const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+  try {
+    let response = await fetch(CONTACT_UPSTREAM_URL, {
+      method: "POST",
+      body: form,
+      headers: { Accept: "application/json" },
+      redirect: "manual",
+      signal,
+    });
+    const location = response.headers.get("Location");
+    if (response.status >= 300 && response.status < 400 && location) {
+      response = await fetch(location, { method: "GET", signal });
+    }
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function failure(request: Request, { message, status }: ContactFailure): Response {
+  return wantsJson(request)
+    ? jsonResponse({ ok: false, message }, status)
+    : redirectToContact(request.url, "error");
+}
+
 export async function handleContact(
   request: Request,
   env: ContactEnv,
-  ctx: ContactExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get("Origin");
@@ -117,18 +190,16 @@ export async function handleContact(
       : redirectToContact(request.url, "error");
   }
 
-  if (isRequestTooLarge(request)) {
-    return wantsJson(request)
-      ? jsonResponse(
-          { ok: false, message: "Message payload is too large." },
-          413,
-        )
-      : redirectToContact(request.url, "error");
+  const body = await readBodyWithLimit(request, MAX_FORM_BYTES);
+  if (!body) {
+    return failure(request, { message: "Message payload is too large.", status: 413 });
   }
 
   let formData: FormData;
   try {
-    formData = await request.formData();
+    formData = await new Response(body, {
+      headers: { "Content-Type": request.headers.get("Content-Type") ?? "" },
+    }).formData();
   } catch {
     return wantsJson(request)
       ? jsonResponse(
@@ -181,6 +252,7 @@ export async function handleContact(
   const turnstileVerified = await verifyTurnstileToken(
     turnstileToken,
     request.headers.get("CF-Connecting-IP"),
+    url.hostname,
     env,
   );
 
@@ -202,31 +274,12 @@ export async function handleContact(
   upstreamFormData.set("subject", subject);
   upstreamFormData.set("message", message);
 
-  const upstreamPromise = (async () => {
-    try {
-      const initialResponse = await fetch(CONTACT_UPSTREAM_URL, {
-        method: "POST",
-        body: upstreamFormData,
-        headers: {
-          Accept: "application/json",
-        },
-        redirect: "manual",
-      });
-
-      const location = initialResponse.headers.get("Location");
-      if (
-        initialResponse.status >= 300 &&
-        initialResponse.status < 400 &&
-        location
-      ) {
-        await fetch(location, { method: "GET" });
-      }
-    } catch {
-      // The response has already been sent; do not expose upstream failures.
-    }
-  })();
-
-  ctx.waitUntil(upstreamPromise);
+  if (!(await sendUpstream(upstreamFormData))) {
+    return failure(request, {
+      message: "Your message could not be sent right now. Please try again in a few minutes.",
+      status: 502,
+    });
+  }
 
   return wantsJson(request)
     ? jsonResponse({ ok: true, message: "Message sent successfully." })

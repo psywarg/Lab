@@ -236,9 +236,12 @@ const mobileNavItems = MAIN_NAV_ITEMS.map((menu) => ({
 
           if (e.key !== "Tab") return;
 
-          const focusable = Array.from(
-            this.querySelectorAll<HTMLElement>(focusableSelector),
-          ).filter((el) => el.offsetParent !== null);
+          // The menu button (which closes the menu) sits outside this
+          // element but belongs in the trap.
+          const focusable = [
+            btn,
+            ...Array.from(this.querySelectorAll<HTMLElement>(focusableSelector)),
+          ].filter((el) => el.getClientRects().length > 0);
           if (focusable.length === 0) return;
 
           const first = focusable[0];
@@ -251,7 +254,7 @@ const mobileNavItems = MAIN_NAV_ITEMS.map((menu) => ({
           } else if (!e.shiftKey && active === last) {
             e.preventDefault();
             first.focus();
-          } else if (!this.contains(active)) {
+          } else if (!this.contains(active) && active !== btn) {
             e.preventDefault();
             first.focus();
           }

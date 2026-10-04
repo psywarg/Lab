@@ -11,7 +11,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
 
 const tool = getToolBySlug("mic-test");
-const ogImage = tool.image.src;
+const ogImage = tool.image;
 const title = "Free Online Microphone Test: Level, Waveform & Playback";
 const metaDescription =
   "Check microphone input level, noise floor, SNR, peak and clipping, view waveform, spectrum and level graphs, then record and play back a 10-second sample.";

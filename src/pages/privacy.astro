@@ -4,13 +4,11 @@
 export const prerender = true;
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
 import { ORGANIZATION_ID, SITE_ORIGIN } from "@/utils/site/schema";
 
 const title = "Privacy Policy - Sorted Tech";
 const metaDescription =
   "Sorted Tech respects your privacy. Our policy details how we collect, use, and secure your information.";
-const ogImage = DEFAULT_OG_IMAGE;
 
 const structuredData = {
   "@context": "https://schema.org",
@@ -24,7 +22,7 @@ const structuredData = {
 };
 ---
 
-<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+<BaseLayout {title} {metaDescription} {structuredData}>
   <section class="content-card rounded-none">
     <h1>Privacy Policy</h1>
 
@@ -102,9 +100,13 @@ const structuredData = {
         <span class="text-slate-800 dark:text-slate-200"
           ><strong>Google Analytics:</strong></span
         >
-        We use Google Analytics to track user interaction with the site (e.g., pages
-        visited, time spent on the site). Google Analytics uses cookies for this purpose.
-        You can opt-out of Google Analytics tracking by using the
+        We use Google Analytics to understand how the site is used (e.g., pages
+        visited, time spent on the site), but only if you choose Accept in the
+        cookie banner. Until you accept, or if you choose Reject, the site does not
+        load Google Analytics and no analytics cookies are set. You can change your
+        choice at any time with "Cookie settings" at the bottom of every page;
+        withdrawing consent stops analytics and deletes the Google Analytics cookies
+        this site set. You can also use the
         <a
           href="https://tools.google.com/dlpage/gaoptout"
           target="_blank"
@@ -130,8 +132,11 @@ const structuredData = {
         <span class="text-slate-800 dark:text-slate-200"
           ><strong>What cookies we use:</strong></span
         >
-        Performance cookies (for anonymous data on site usage) and security cookies
-        (for site protection).
+        Analytics cookies from Google Analytics (named <code>_ga</code> and
+        <code>_ga_</code> followed by an ID), set only after you accept them, and
+        security cookies (for site protection). Your analytics choice itself is saved
+        in your browser's local storage under <code>consent:analytics</code>; it is
+        not a cookie and is not sent to us.
       </li>
       <li>
         <span class="text-slate-800 dark:text-slate-200"
@@ -144,16 +149,17 @@ const structuredData = {
         <span class="text-slate-800 dark:text-slate-200"
           ><strong>Who provides these cookies:</strong></span
         >
-        Third-party providers, such as Google (via Google Analytics) and Cloudflare
-        (for security and performance), may set cookies on your behalf.
+        Google (via Google Analytics, only with your consent) and Cloudflare (for
+        security and performance) may set cookies on your behalf.
       </li>
       <li>
         <span class="text-slate-800 dark:text-slate-200"
           ><strong>How you can manage cookies:</strong></span
         >
-        You can control cookie preferences directly in your browser settings. Most
-        browsers allow you to refuse or delete cookies. However, disabling cookies
-        may affect your user experience and certain features of the site.
+        Use "Cookie settings" at the bottom of any page to accept or reject analytics
+        cookies. You can also control cookies in your browser settings; most browsers
+        allow you to refuse or delete them. Disabling security cookies may affect
+        certain features of the site.
       </li>
     </ul>
 

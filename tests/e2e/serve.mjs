@@ -4,7 +4,7 @@
 // `astro preview` is not used because it detaches into the background in
 // non-interactive shells, which Playwright's webServer cannot manage.
 
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import process from "node:process";
@@ -32,6 +32,37 @@ const TYPES = {
   ".webmanifest": "application/manifest+json",
 };
 
+// Applies dist/_headers like Cloudflare does, for the "/path" and "/dir/*"
+// rule forms this site uses, so tests run under the deployed headers.
+function loadHeaderRules() {
+  const file = join(root, "_headers");
+  if (!existsSync(file)) return [];
+  const rules = [];
+  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    if (!/^\s/.test(line)) {
+      rules.push({ pattern: line.trim(), headers: [] });
+    } else {
+      const index = line.indexOf(":");
+      rules.at(-1)?.headers.push([line.slice(0, index).trim(), line.slice(index + 1).trim()]);
+    }
+  }
+  return rules;
+}
+
+const headerRules = loadHeaderRules();
+
+function headersFor(pathname) {
+  const headers = {};
+  for (const { pattern, headers: list } of headerRules) {
+    const matches = pattern.endsWith("*")
+      ? pathname.startsWith(pattern.slice(0, -1))
+      : pathname === pattern;
+    if (matches) for (const [name, value] of list) headers[name] = value;
+  }
+  return headers;
+}
+
 function resolveFile(pathname) {
   const clean = normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, "");
   const candidates =
@@ -53,6 +84,7 @@ createServer((req, res) => {
   const status = file ? 200 : 404;
   const target = file ?? join(root, "404.html");
   res.writeHead(status, {
+    ...headersFor(pathname),
     "Content-Type": TYPES[extname(target)] ?? "application/octet-stream",
   });
   createReadStream(target).pipe(res);
