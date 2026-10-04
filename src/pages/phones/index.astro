@@ -81,7 +81,7 @@ const structuredData = {
       class="mt-6 grid grid-cols-1 gap-5 md:mt-12 md:grid-cols-2"
     >
       {
-        cards.map((card) => (
+        cards.map((card, index) => (
           <a
             href={card.href}
             data-astro-prefetch="viewport"
@@ -98,7 +98,8 @@ const structuredData = {
                 sizes={IMAGE_PRESETS["index-card"].sizes}
                 widths={IMAGE_PRESETS["index-card"].widths}
                 class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
-                loading="lazy"
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchpriority={index === 0 ? "high" : undefined}
               />
             </div>
             <div class="from-accent-wash flex flex-1 flex-col bg-linear-to-br to-transparent p-4">

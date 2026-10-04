@@ -75,6 +75,12 @@ export default defineConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    build: {
+      // Never inline SVGs as data: URLs: <use href> refuses data: URLs, so
+      // inlined sprites render nothing.
+      assetsInlineLimit: (filePath: string) =>
+        filePath.endsWith(".svg") ? false : undefined,
+    },
     optimizeDeps: {
       exclude: VITE_OPTIMIZE_EXCLUDES,
     },

@@ -98,7 +98,7 @@ const structuredData = {
 
     <section class="space-y-10">
       {
-        series.map((s) => (
+        series.map((s, seriesIndex) => (
           <div>
             <div class="relative z-10 mb-1 flex w-fit items-stretch">
               <div class="bg-custom-100 dark:bg-custom-700 border-accent-line h-10 w-10 origin-bottom-right skew-x-[-20deg] rounded-tl-md border-t border-l" />
@@ -115,7 +115,7 @@ const structuredData = {
 
             <div class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow rounded-tr-xl rounded-b-xl border p-4 shadow-md">
               <div class="grid grid-cols-1 justify-center gap-5 sm:grid-cols-[repeat(auto-fill,minmax(0,20rem))]">
-                {s.articles.map((article) => (
+                {s.articles.map((article, articleIndex) => (
                   <a
                     href={`/phones/explainers/${article.slug}`}
                     data-astro-prefetch="viewport"
@@ -132,7 +132,16 @@ const structuredData = {
                           sizes={IMAGE_PRESETS["index-card"].sizes}
                           widths={IMAGE_PRESETS["index-card"].widths}
                           class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
-                          loading="lazy"
+                          loading={
+                            seriesIndex === 0 && articleIndex === 0
+                              ? "eager"
+                              : "lazy"
+                          }
+                          fetchpriority={
+                            seriesIndex === 0 && articleIndex === 0
+                              ? "high"
+                              : undefined
+                          }
                         />
                       ) : (
                         <div class="h-full w-full" />
