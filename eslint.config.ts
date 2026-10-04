@@ -14,8 +14,12 @@ export default defineConfig(
   ...eslintPluginAstro.configs.recommended,
 
   // 4. Type-aware TypeScript rules, scoped to plain .ts files only.
+  //    The virtual files eslint-plugin-astro extracts from <script> blocks
+  //    (e.g. Page.astro/1_1.ts) are not in the TS project, so they must be
+  //    excluded here or parsing fails and their lint results are dropped.
   {
     files: ["**/*.ts"],
+    ignores: ["**/*.astro/*.ts"],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -27,6 +31,21 @@ export default defineConfig(
 
   // 5. Custom project rules & ignores
   {
-    ignores: ["dist/", ".astro/", "node_modules/"],
+    rules: {
+      // Allow intentionally unused parameters and variables prefixed with "_".
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
+    ignores: [
+      "dist/",
+      ".astro/",
+      "node_modules/",
+      "test-results/",
+      "playwright-report/",
+    ],
   },
 );

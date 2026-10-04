@@ -9,7 +9,10 @@
     ".astro/types.d.ts",
     "src/**/*",
     "astro.config.ts",
-    "eslint.config.ts"
+    "eslint.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "tests/**/*"
   ],
   "exclude": ["dist", "node_modules", ".wrangler"]
 }
