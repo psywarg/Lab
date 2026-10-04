@@ -843,6 +843,7 @@ const structuredData = createToolApplicationSchema({
       isFullscreenActive as shellIsFullscreen,
       showRuntimeControls as showShellControls,
     } from "@/utils/phones/tools/runtimeShell";
+    import { applyStartButton } from "@/utils/phones/tools/sensorSession";
     import {
       gravityOffsetState,
       isShakeEvent,
@@ -1878,18 +1879,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function syncStartButton(): void {
-      if (!startButton) return;
-      const isRunning = started && !pausedForFullscreen;
-      startButton.classList.toggle("is-running", isRunning);
-      startButton.setAttribute("aria-pressed", String(isRunning));
-      startButton.toggleAttribute("disabled", startInFlight);
-      startButton.textContent = startInFlight
-        ? "Starting..."
-        : isRunning
-          ? "Pause"
-          : pausedForFullscreen
-            ? "Resume"
-            : "Start";
+      applyStartButton(startButton, {
+        started,
+        paused: pausedForFullscreen,
+        inFlight: startInFlight,
+      });
     }
 
     function pauseSensorTest(): void {

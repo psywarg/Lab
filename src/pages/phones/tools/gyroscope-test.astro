@@ -1067,7 +1067,6 @@ const structuredData = createToolApplicationSchema({
       type OrientationAngle,
     } from "@/utils/phones/tools/orientation";
     import {
-      BIAS_CAPTURE,
       createMotionGraph,
       driftState as gradeDrift,
       genericSensorCtor,
@@ -1083,6 +1082,25 @@ const structuredData = createToolApplicationSchema({
       isFullscreenActive as shellIsFullscreen,
       showRuntimeControls as showShellControls,
     } from "@/utils/phones/tools/runtimeShell";
+    import { applyStartButton } from "@/utils/phones/tools/sensorSession";
+    import {
+      DRIFT_QUIET_RATE,
+      appendHeading,
+      applyDriftRateDeadband,
+      applyQuietRateDeadband,
+      correctedRate,
+      driftStateLabel as driftStateText,
+      formatAngle,
+      formatNoise,
+      formatRate,
+      formatSignedRate,
+      headingDriftRange,
+      headingStateLabel as headingStateText,
+      isRecent as isRecentSample,
+      restingNoiseLabel,
+      smoothCorrectedRate,
+      wrapDegrees,
+    } from "@/utils/phones/tools/gyroscope";
 
     type GyroCheck = "level" | "twist" | "drift" | "3d";
 
@@ -1283,12 +1301,8 @@ const structuredData = createToolApplicationSchema({
     const rotationIntervals: number[] = [];
     let lastDetailedRefresh = 0;
     const detailedRefreshInterval = 1000 / 12;
-    const sensorFreshnessWindow = 1800;
     const rateHistoryLimit = 48;
-    const rateResidualDeadband = 0.9;
-    const rateSmoothingFactor = 0.26;
-    const driftQuietRateThreshold = 2.4;
-    const twistQuietRateThreshold = 3.5;
+    const driftQuietRateThreshold = DRIFT_QUIET_RATE;
     const driftVisualScale = 8;
 
     type BiasCaptureState = "idle" | "capturing" | "captured" | "rejected";
@@ -1325,10 +1339,6 @@ const structuredData = createToolApplicationSchema({
         updateStageInfo(frameMetrics);
       }
     });
-
-    function wrapDegrees(value: number): number {
-      return ((value + 540) % 360) - 180;
-    }
 
 
 
@@ -1375,22 +1385,6 @@ const structuredData = createToolApplicationSchema({
         applyDriftRateDeadband(rateY),
         applyDriftRateDeadband(rateZ),
       );
-    }
-
-    function correctedRate(
-      value: number,
-      bias: number,
-      biasReady: boolean,
-    ): number {
-      const corrected = value - (biasReady ? bias : 0);
-      return Math.abs(corrected) < rateResidualDeadband ? 0 : corrected;
-    }
-
-    function smoothCorrectedRate(previous: number, next: number): number {
-      if (next === 0 && Math.abs(previous) < rateResidualDeadband * 1.25)
-        return 0;
-      const smoothed = previous + (next - previous) * rateSmoothingFactor;
-      return Math.abs(smoothed) < rateResidualDeadband ? 0 : smoothed;
     }
 
     function updateCorrectedRatesFromRaw(): void {
@@ -1558,10 +1552,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function isRecent(lastSampleTime: number): boolean {
-      return (
-        lastSampleTime > 0 &&
-        performance.now() - lastSampleTime < sensorFreshnessWindow
-      );
+      return isRecentSample(lastSampleTime, performance.now());
     }
 
     function hasRecentAlphaData(): boolean {
@@ -1619,34 +1610,6 @@ const structuredData = createToolApplicationSchema({
           : "";
       });
       updateBiasCaptureUi();
-    }
-
-    function formatAngle(value: number): string {
-      return `${value.toFixed(1)}°`;
-    }
-
-    function formatRate(value: number): string {
-      return `${Math.round(value)} deg/s`;
-    }
-
-    function formatSignedRate(value: number): string {
-      const rounded = Math.round(value);
-      return `${rounded > 0 ? "+" : ""}${rounded} deg/s`;
-    }
-
-    function formatNoise(value: number): string {
-      return `${value.toFixed(1)} deg/s`;
-    }
-
-    function applyQuietRateDeadband(
-      value: number,
-      threshold = twistQuietRateThreshold,
-    ): number {
-      return Math.abs(value) < threshold ? 0 : value;
-    }
-
-    function applyDriftRateDeadband(value: number): number {
-      return Math.abs(value) < driftQuietRateThreshold ? 0 : value;
     }
 
     function setStatus(text: string): void {
@@ -1735,11 +1698,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function computeHeadingDriftRange(): number {
-      if (!unwrappedHeadingHistory.length) return 0;
-      return (
-        Math.max(...unwrappedHeadingHistory) -
-        Math.min(...unwrappedHeadingHistory)
-      );
+      return headingDriftRange(unwrappedHeadingHistory);
     }
 
     function updateSampleMetrics(): void {
@@ -1865,39 +1824,21 @@ const structuredData = createToolApplicationSchema({
       if (runDrift) runDrift.textContent = driftText;
       if (stageDrift) stageDrift.textContent = driftText;
       if (driftStateLabel) {
-        driftStateLabel.textContent =
-          driftState === "waiting"
-            ? "Waiting for rate"
-            : driftState === "calm"
-              ? "Calm"
-              : driftState === "minor"
-                ? "Minor drift"
-                : "High drift";
+        driftStateLabel.textContent = driftStateText(driftState);
       }
       stage?.setAttribute("data-drift-state", driftState);
       if (noiseScoreLabel)
         noiseScoreLabel.textContent =
           driftState === "waiting" ? "--" : formatNoise(restingNoise);
       if (noiseStateLabel)
-        noiseStateLabel.textContent =
-          driftState === "waiting"
-            ? "Waiting for rate"
-            : restingNoise <= BIAS_CAPTURE.noiseLimit
-              ? "Steady"
-              : "Moving or noisy";
+        noiseStateLabel.textContent = restingNoiseLabel(driftState, restingNoise);
 
       if (headingDriftLabel)
         headingDriftLabel.textContent = recentHeadingData
           ? formatAngle(headingRange)
           : "--";
       if (headingStateLabel) {
-        headingStateLabel.textContent = !recentHeadingData
-          ? "Unavailable"
-          : headingRange < 2
-            ? "Stable"
-            : headingRange < 8
-              ? "Minor drift"
-              : "Large drift";
+        headingStateLabel.textContent = headingStateText(recentHeadingData, headingRange);
       }
 
       if (peakSpinLabel)
@@ -2210,23 +2151,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function pushHeadingSample(heading: number): void {
-      headingHistory.push(heading);
-      if (headingHistory.length > 48) headingHistory.shift();
-
-      if (!unwrappedHeadingHistory.length) {
-        unwrappedHeadingHistory.push(heading);
-        return;
-      }
-
-      const lastWrapped =
-        headingHistory.length > 1
-          ? headingHistory[headingHistory.length - 2]
-          : heading;
-      const lastUnwrapped =
-        unwrappedHeadingHistory[unwrappedHeadingHistory.length - 1];
-      const delta = wrapDegrees(heading - lastWrapped);
-      unwrappedHeadingHistory.push(lastUnwrapped + delta);
-      if (unwrappedHeadingHistory.length > 48) unwrappedHeadingHistory.shift();
+      appendHeading(headingHistory, unwrappedHeadingHistory, heading);
     }
 
     function handleNoData(): void {
@@ -2631,18 +2556,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function syncStartButton(): void {
-      if (!startButton) return;
-      const isRunning = started && !pausedForFullscreen;
-      startButton.classList.toggle("is-running", isRunning);
-      startButton.setAttribute("aria-pressed", String(isRunning));
-      startButton.toggleAttribute("disabled", startInFlight);
-      startButton.textContent = startInFlight
-        ? "Starting..."
-        : isRunning
-          ? "Pause"
-          : pausedForFullscreen
-            ? "Resume"
-            : "Start";
+      applyStartButton(startButton, {
+        started,
+        paused: pausedForFullscreen,
+        inFlight: startInFlight,
+      });
     }
 
     function pauseSensorTest(): void {
