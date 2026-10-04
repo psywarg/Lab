@@ -5,9 +5,8 @@ export const prerender = true;
 
 import Icons from "@/assets/icons/content-sprites.svg?url";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
 import { SITE_ORIGIN } from "@/utils/site/schema";
-import { Picture } from "astro:assets";
+import ResponsiveImage from "@/components/site/ResponsiveImage.astro";
 import { getCollection } from "astro:content";
 
 const allExplainers = (await getCollection("explainers")).filter(
@@ -120,14 +119,10 @@ const structuredData = {
                   >
                     <div class="aspect-40/21 overflow-hidden">
                       {article.image ? (
-                        <Picture
+                        <ResponsiveImage
                           src={article.image}
                           alt=""
-                          formats={["avif"]}
-                          fallbackFormat="png"
-                          layout={IMAGE_PRESETS["index-card"].layout}
-                          sizes={IMAGE_PRESETS["index-card"].sizes}
-                          widths={IMAGE_PRESETS["index-card"].widths}
+                          preset="explainer-card"
                           class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
                           loading={
                             seriesIndex === 0 && articleIndex === 0
@@ -179,14 +174,10 @@ const structuredData = {
                         class="border-accent-line from-accent-wash hover:border-accent-500 active:border-accent-500 group flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-linear-to-r to-transparent p-2 transition-colors"
                       >
                         <div class="h-16 w-24 shrink-0 overflow-hidden rounded-md">
-                          <Picture
+                          <ResponsiveImage
                             src={article.image}
                             alt=""
-                            formats={["avif"]}
-                            fallbackFormat="png"
-                            layout="constrained"
-                            sizes="96px"
-                            widths={[96, 192]}
+                            preset="explainer-thumbnail"
                             class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
                             loading="lazy"
                           />

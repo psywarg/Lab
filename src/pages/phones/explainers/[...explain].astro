@@ -9,7 +9,7 @@ import ExplainerSidebar from "@/components/phones/explainers/Sidebar.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { createTechArticleStructuredData } from "@/utils/site/schema";
 import type { GetStaticPaths } from "astro";
-import { Picture } from "astro:assets";
+import ResponsiveImage from "@/components/site/ResponsiveImage.astro";
 import type { CollectionEntry } from "astro:content";
 import { getCollection, render } from "astro:content";
 import { getOgImage } from "@/utils/site/ogImage";
@@ -99,14 +99,10 @@ const structuredData = createTechArticleStructuredData({
                   class="bg-accent-500 absolute inset-0 [clip-path:var(--shape-right)]"
                 />
                 <div class="bg-cyan-950 absolute inset-px flex items-center justify-center overflow-hidden [clip-path:var(--shape-right)]">
-                  <Picture
+                  <ResponsiveImage
                     src={image}
                     alt={heading}
-                    formats={["avif"]}
-                    fallbackFormat="png"
-                    layout="none"
-                    sizes="(min-width: 1280px) 300px, (min-width: 768px) 30vw, 30vw"
-                    widths={[360, 480, 640, 720, 960]}
+                    preset="explainer-hero"
                     fit="cover"
                     position="center"
                     loading="eager"

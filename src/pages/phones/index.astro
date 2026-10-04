@@ -7,9 +7,8 @@ import Icons from "@/assets/icons/content-sprites.svg?url";
 import explainersImage from "@/assets/images/phones/explainers.png";
 import toolsImage from "@/assets/images/phones/tools.png";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
 import { SITE_ORIGIN } from "@/utils/site/schema";
-import { Picture } from "astro:assets";
+import ResponsiveImage from "@/components/site/ResponsiveImage.astro";
 
 const meta = {
   title: "Smartphone Explainers & Tools - Sorted Tech",
@@ -86,14 +85,10 @@ const structuredData = {
             class="border-accent-line shadow-accent-glow hover:border-accent-500 group bg-custom-100 dark:bg-custom-700 flex flex-col overflow-hidden rounded-xl border shadow-md transition duration-300 ease-out hover:-translate-y-1"
           >
             <div class="border-accent-line aspect-40/21 overflow-hidden border-b">
-              <Picture
+              <ResponsiveImage
                 src={card.cardImage}
                 alt=""
-                formats={["avif"]}
-                fallbackFormat="jpeg"
-                layout={IMAGE_PRESETS["index-card"].layout}
-                sizes={IMAGE_PRESETS["index-card"].sizes}
-                widths={IMAGE_PRESETS["index-card"].widths}
+                preset="hub-card"
                 class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchpriority={index === 0 ? "high" : undefined}
