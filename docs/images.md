@@ -13,10 +13,10 @@ Quality is set once in `astro.config.ts` (`image.service.config`): AVIF q60, Web
 
 Export rules:
 
-- Size: exactly 1200x630. Other sizes are cropped to 1200x630 around the centre.
+- Size: exactly 1200x630. With another aspect ratio, the `og:image` is cropped to 1200x630 around the centre and the cards crop in the browser. A master narrower than 1200 px limits the largest variant, because Astro does not upscale.
 - Format: PNG, sRGB, no lossy step before export. Saving through JPEG or AVIF first adds artefacts that every generated variant inherits.
 - Cards (home, `/phones`, tools and explainers grids) are 1200:630 boxes, so they show the whole image.
-- The explainer hero crops the sides. Its box measured 0.70:1 to 1.15:1 between 360 and 1920 px wide, so at 360 px only the centre 441 px of the 1200 px width is visible. Keep an explainer image's subject inside that centre strip.
+- The explainer hero crops the sides. Its box measured 0.73:1 on a 360 px phone and up to 1.15:1 at 1366 px and wider, so at 360 px only the centre 462 px of the 1200 px width is visible. Keep an explainer image's subject inside that centre strip.
 - The small explainer list thumbnail (96x64, 1.5:1) shows the centre 945 px.
 
 SVGs stay SVG: the Sorto illustrations, the SoC diagram, the logo and the icon sprites.
