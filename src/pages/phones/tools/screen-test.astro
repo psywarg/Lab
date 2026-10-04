@@ -1025,12 +1025,17 @@ const structuredData = createToolApplicationSchema({
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
     import { getBrowserCapabilities } from "@/utils/phones/tools/capabilities";
     import { showRuntimeControls as showShellControls } from "@/utils/phones/tools/runtimeShell";
-    import { median } from "@/utils/phones/tools/stats";
+    import {
+      createFrameRateMeter,
+      formatPatternMeta,
+      gammaPatchValue,
+      optionModeFor,
+      type OptionMode,
+    } from "@/utils/phones/tools/screen";
 
     const AUTO_TOUR_MS = 5000;
     const CHECKER_FLIP_INTERVAL_MS = 500;
-    const FRAME_RATE_MIN_SAMPLES = 20;
-    const FRAME_RATE_MAX_SAMPLES = 120;
+
     const GAMMA_CANDIDATES = [1.8, 2.0, 2.2, 2.4, 2.6] as const;
     const RETENTION_MOTION_COPY =
       "Use a dim room and watch for a fixed patch behind the moving pattern.";
@@ -1175,8 +1180,7 @@ const structuredData = createToolApplicationSchema({
     let checkerFlipTimer = 0;
     let currentBurnInLayer: HTMLElement | null = null;
     let frameRateRafId = 0;
-    let frameRateLastTs = 0;
-    let frameRateSamples: number[] = [];
+    const frameRateMeter = createFrameRateMeter();
 
     const pageController = new AbortController();
     const wakeLock = createWakeLock({ signal: pageController.signal });
@@ -1205,9 +1209,6 @@ const structuredData = createToolApplicationSchema({
       currentBurnInLayer = null;
     }
 
-    function formatPatternMeta(value: string): string {
-      return value.startsWith("#") ? value.toUpperCase() : value;
-    }
 
     function getGradientAngle(): number {
       return gradientAngles[gradientAngleIndex] ?? 90;
@@ -1258,20 +1259,8 @@ const structuredData = createToolApplicationSchema({
       return GAMMA_CANDIDATES[gammaIndex] ?? 2.2;
     }
 
-    function gammaPatchValue(gamma: number): number {
-      return Math.round(255 * 0.5 ** (1 / gamma));
-    }
-
-    function isBandingKind(kind: string): boolean {
-      return kind === "steps-16" || kind === "steps-32" || kind === "steps-64";
-    }
-
-    type OptionMode = "angle" | "banding" | "none";
-
     function getOptionMode(kind: string): OptionMode {
-      if (angleablePatternKinds.has(kind)) return "angle";
-      if (isBandingKind(kind)) return "banding";
-      return "none";
+      return optionModeFor(kind, angleablePatternKinds);
     }
 
     function syncPatternOptionButton(kind: string): void {
@@ -1323,35 +1312,19 @@ const structuredData = createToolApplicationSchema({
           : tip;
     }
 
-    function medianOf(values: number[]): number {
-      return median(values) ?? 0;
-    }
-
-    function updateFrameRateReadout(): void {
-      if (frameRateSamples.length < FRAME_RATE_MIN_SAMPLES) return;
-      const medianDelta = medianOf(frameRateSamples);
-      if (medianDelta <= 0) return;
-      const hz = Math.round(1000 / medianDelta);
-      frameRateEls.forEach((el) => {
-        el.textContent = `${hz} fps`;
-      });
-    }
-
     function frameRateTick(timestamp: number): void {
-      if (frameRateLastTs !== 0) {
-        frameRateSamples.push(timestamp - frameRateLastTs);
-        if (frameRateSamples.length > FRAME_RATE_MAX_SAMPLES)
-          frameRateSamples.shift();
-        updateFrameRateReadout();
+      const hz = frameRateMeter.tick(timestamp);
+      if (hz !== null) {
+        frameRateEls.forEach((el) => {
+          el.textContent = `${hz} fps`;
+        });
       }
-      frameRateLastTs = timestamp;
       frameRateRafId = requestAnimationFrame(frameRateTick);
     }
 
     function startFrameRateSampling(): void {
       if (frameRateRafId !== 0) return;
-      frameRateSamples = [];
-      frameRateLastTs = 0;
+      frameRateMeter.reset();
       frameRateRafId = requestAnimationFrame(frameRateTick);
     }
 
@@ -1360,7 +1333,7 @@ const structuredData = createToolApplicationSchema({
         cancelAnimationFrame(frameRateRafId);
         frameRateRafId = 0;
       }
-      frameRateLastTs = 0;
+      frameRateMeter.reset();
       frameRateEls.forEach((el) => {
         el.textContent = "--";
       });
