@@ -754,25 +754,29 @@ const structuredData = createToolApplicationSchema({
       volumeDbToGain,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
+    import {
+      channelGain,
+      fillNoise,
+      formatClock,
+      hearingSteps,
+      panForChannel,
+      type NoiseSignal,
+      type SpeakerChannel,
+    } from "@/utils/phones/tools/speaker";
 
     type SpeakerMode = "signal" | "water" | "hearing";
     type SpeakerSignal = "tone" | "sweep" | "pink" | "white" | "brown";
-    type SpeakerChannel = "stereo" | "mono" | "left" | "right";
-    type NoiseSignal = "pink" | "white" | "brown";
+
 
     const WATER_FREQUENCY_HZ = 165;
     const WATER_CYCLE_MS = 45000;
     const HEARING_MIN_HZ = 20;
     const HEARING_MAX_HZ = 20000;
     const HEARING_STEP_COUNT = 20;
-    const HEARING_STEPS: number[] = Array.from(
-      { length: HEARING_STEP_COUNT },
-      (_, index) =>
-        Math.round(
-          HEARING_MIN_HZ *
-            (HEARING_MAX_HZ / HEARING_MIN_HZ) **
-              (index / (HEARING_STEP_COUNT - 1)),
-        ),
+    const HEARING_STEPS = hearingSteps(
+      HEARING_MIN_HZ,
+      HEARING_MAX_HZ,
+      HEARING_STEP_COUNT,
     );
     const METER_BAND_COUNT = 6;
     const METER_MIN_HZ = 60;
@@ -924,12 +928,6 @@ const structuredData = createToolApplicationSchema({
       return `Ready to play ${SIGNAL_LABELS[activeSignal].toLowerCase()} with ${channel} routing.`;
     }
 
-    function formatClock(ms: number): string {
-      const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return `${minutes}:${String(seconds).padStart(2, "0")}`;
-    }
 
     function setStatus(text: string): void {
       if (stageCopy) stageCopy.textContent = text;
@@ -967,10 +965,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function targetGain(): number {
-      const gain = volumeDbToGain(Number(volumeInput?.value));
-      // StereoPanner's equal-power law plays a centred mono source 3 dB lower
-      // on each side than a fully panned one, so Mono gets the 3 dB back.
-      return pannerNode && activeChannel === "mono" ? gain * Math.SQRT2 : gain;
+      return channelGain(
+        volumeDbToGain(Number(volumeInput?.value)),
+        activeChannel,
+        pannerNode !== null,
+      );
     }
 
     function applyToneFrequency(): void {
@@ -1095,44 +1094,7 @@ const structuredData = createToolApplicationSchema({
       // Long enough that the loop point is not heard as a repeating pattern.
       const length = context.sampleRate * NOISE_BUFFER_SECONDS;
       const buffer = context.createBuffer(1, length, context.sampleRate);
-      const channel = buffer.getChannelData(0);
-
-      if (type === "white") {
-        for (let index = 0; index < length; index += 1) {
-          channel[index] = Math.random() * 2 - 1;
-        }
-        return buffer;
-      }
-
-      if (type === "brown") {
-        let lastOut = 0;
-        for (let index = 0; index < length; index += 1) {
-          const white = Math.random() * 2 - 1;
-          lastOut = (lastOut + 0.02 * white) / 1.02;
-          channel[index] = lastOut * 3.5;
-        }
-        return buffer;
-      }
-
-      let b0 = 0;
-      let b1 = 0;
-      let b2 = 0;
-      let b3 = 0;
-      let b4 = 0;
-      let b5 = 0;
-      let b6 = 0;
-      for (let index = 0; index < length; index += 1) {
-        const white = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.969 * b2 + white * 0.153852;
-        b3 = 0.8665 * b3 + white * 0.3104856;
-        b4 = 0.55 * b4 + white * 0.5329522;
-        b5 = -0.7616 * b5 - white * 0.016898;
-        channel[index] =
-          (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-        b6 = white * 0.115926;
-      }
+      fillNoise(buffer.getChannelData(0), type);
       return buffer;
     }
 
@@ -1148,9 +1110,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function currentPanValue(): number {
-      if (activeChannel === "left") return -1;
-      if (activeChannel === "right") return 1;
-      return 0;
+      return panForChannel(activeChannel);
     }
 
     function clearStereoPanTimer(): void {
