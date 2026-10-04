@@ -1916,6 +1916,7 @@ const structuredData = createToolApplicationSchema({
       } else if (kind === "near-white") {
         renderNearBlocks("white");
       } else if (renderGradient(kind)) {
+        // renderGradient() has already painted the linear gradient.
       } else if (kind === "gradient-radial") {
         content.style.background = supportsOklch
           ? "radial-gradient(circle at center in oklch, #fff 0%, #808080 38%, #000 100%)"
