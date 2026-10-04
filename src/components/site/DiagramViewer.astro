@@ -60,6 +60,52 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
   type DiagramBlock = { id: string; label: string; href?: string };
 
   const ZOOM_LEVEL = 2;
+  // Start fetching the preview SVG a little before it scrolls into view.
+  const PREVIEW_ROOT_MARGIN = "200px";
+
+  /**
+   * Gives every id in `svg` a prefix and rewrites the references to them
+   * (url(#...), href="#...", aria id lists), so a second copy of the same SVG
+   * on the page has no duplicate ids.
+   */
+  function prefixSvgIds(svg: SVGSVGElement, prefix: string): void {
+    const ids = new Set<string>();
+    svg.querySelectorAll<Element>("[id]").forEach((el) => {
+      ids.add(el.id);
+      el.id = `${prefix}${el.id}`;
+    });
+    if (ids.size === 0) return;
+    const rewriteUrls = (value: string) =>
+      value.replace(/url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/g, (match, quote: string, id: string) =>
+        ids.has(id) ? `url(${quote}#${prefix}${id}${quote})` : match,
+      );
+    [svg, ...svg.querySelectorAll<Element>("*")].forEach((el) => {
+      for (const attr of Array.from(el.attributes)) {
+        let value = attr.value;
+        if (
+          attr.localName === "href" &&
+          value.startsWith("#") &&
+          ids.has(value.slice(1))
+        ) {
+          value = `#${prefix}${value.slice(1)}`;
+        } else if (
+          attr.name === "aria-labelledby" ||
+          attr.name === "aria-describedby"
+        ) {
+          value = value
+            .split(/\s+/)
+            .map((token) => (ids.has(token) ? `${prefix}${token}` : token))
+            .join(" ");
+        } else if (value.includes("url(")) {
+          value = rewriteUrls(value);
+        }
+        if (value !== attr.value) attr.value = value;
+      }
+      if (el.localName === "style" && el.textContent) {
+        el.textContent = rewriteUrls(el.textContent);
+      }
+    });
+  }
 
   function parseDiagramBlocks(raw: string | undefined): DiagramBlock[] {
     if (!raw) return [];
@@ -89,6 +135,8 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
     #closeTimer: number | null = null;
     #scrollLocked = false;
     #contentLoaded = false;
+    #svgText: Promise<string> | null = null;
+    #previewObserver: IntersectionObserver | null = null;
 
     #src = "";
     #alt = "";
@@ -165,6 +213,8 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
     }
 
     disconnectedCallback() {
+      this.#previewObserver?.disconnect();
+      this.#previewObserver = null;
       this.#controller?.abort();
       this.#controller = null;
       if (this.#closeTimer !== null) {
@@ -355,11 +405,26 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
       return importedSvg;
     }
 
-    async #loadSvg() {
-      const res = await fetch(this.#src, { signal: this.#controller!.signal });
-      if (!res.ok) throw new Error(`Failed to load diagram: ${res.status}`);
+    /** Fetches the SVG once; the preview and the dialog share the text. */
+    #fetchSvgText(): Promise<string> {
+      this.#svgText ??= fetch(this.#src, {
+        signal: this.#controller!.signal,
+      }).then((res) => {
+        if (!res.ok) throw new Error(`Failed to load diagram: ${res.status}`);
+        return res.text();
+      });
+      return this.#svgText;
+    }
 
-      return this.#parseSvg(await res.text());
+    async #loadSvg(idPrefix = "") {
+      const svg = this.#parseSvg(await this.#fetchSvgText());
+      if (svg && idPrefix) prefixSvgIds(svg, idPrefix);
+      return svg;
+    }
+
+    /** Prefix for the dialog copy's ids, unique per viewer on the page. */
+    get #dialogIdPrefix() {
+      return `${this.#dialog?.id ?? "viewer"}-`;
     }
 
     #initPreview() {
@@ -368,6 +433,25 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
       );
       if (!previewImage || !this.#src) return;
 
+      // The <img> shows until the preview nears the viewport; then the
+      // inline SVG replaces it so its labels can use the page's web font.
+      if (typeof IntersectionObserver === "undefined") {
+        this.#inlinePreview(previewImage);
+        return;
+      }
+      this.#previewObserver = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return;
+          this.#previewObserver?.disconnect();
+          this.#previewObserver = null;
+          this.#inlinePreview(previewImage);
+        },
+        { rootMargin: PREVIEW_ROOT_MARGIN },
+      );
+      this.#previewObserver.observe(previewImage);
+    }
+
+    #inlinePreview(previewImage: HTMLImageElement) {
       this.#loadSvg()
         .then((svg) => {
           if (!svg) return;
@@ -383,7 +467,9 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
 
     #wireBlocks(svgWrapper: HTMLDivElement) {
       this.#blocks.forEach(({ id, label, href }) => {
-        const el = svgWrapper.querySelector<SVGElement>(`#${CSS.escape(id)}`);
+        const el = svgWrapper.querySelector<SVGElement>(
+          `#${CSS.escape(`${this.#dialogIdPrefix}${id}`)}`,
+        );
         if (!el) return;
 
         const title = document.createElementNS(
@@ -447,7 +533,7 @@ const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
 
       this.#bindZoomPan(svgWrapper);
 
-      this.#loadSvg()
+      this.#loadSvg(this.#dialogIdPrefix)
         .then((svg) => {
           if (!svg) throw new Error("Failed to parse diagram SVG.");
           svgWrapper.replaceChildren(svg);

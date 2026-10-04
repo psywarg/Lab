@@ -114,3 +114,28 @@ test("M12: the CSP blocks an injected inline script", async ({ page }) => {
   });
   expect(ran).toEqual({ ran: false, directive: "script-src-elem" });
 });
+
+test("M14: the diagram loads only near the viewport and the dialog copy has unique IDs", async ({ page }) => {
+  await blockExternal(page);
+  await page.goto("/phones/explainers/soc");
+  await page.waitForTimeout(800);
+  const viewer = page.locator("diagram-viewer");
+  // Off screen: still the <img>, so the inline SVG was not fetched on load.
+  await expect(viewer.locator("svg")).toHaveCount(0);
+  await viewer.scrollIntoViewIfNeeded();
+  await expect(viewer.locator("button[data-viewer-trigger] svg")).toHaveCount(1);
+  await viewer.locator("button[data-viewer-trigger]").click();
+  const dialog = viewer.locator("dialog");
+  await expect(dialog.locator("svg[role='img']")).toHaveCount(1);
+  const result = await page.evaluate(() => {
+    const counts = new Map<string, number>();
+    document.querySelectorAll("[id]").forEach((el) => counts.set(el.id, (counts.get(el.id) ?? 0) + 1));
+    const dialogEl = document.querySelector("diagram-viewer dialog");
+    const cpu = dialogEl?.querySelector(`[id="${dialogEl.id}-CPU"]`);
+    return {
+      duplicates: [...counts].filter(([, count]) => count > 1).map(([id]) => id),
+      cpuTitle: cpu?.querySelector("title")?.textContent ?? null,
+    };
+  });
+  expect(result).toEqual({ duplicates: [], cpuTitle: "Central Processing Unit" });
+});
