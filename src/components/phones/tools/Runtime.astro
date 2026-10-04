@@ -1,0 +1,1062 @@
+---
+// src/components/phones/tools/Runtime.astro
+
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+
+type ToolRuntimeStat = {
+  label: string;
+  value?: string;
+  attributes?: Record<string, string>;
+  className?: string;
+  labelAttributes?: Record<string, string>;
+  valueClassName?: string;
+  valueAttributes?: Record<string, string>;
+};
+
+type ToolRuntimeButton = {
+  label: string;
+  attributes?: Record<string, string>;
+  className?: string;
+  disabled?: boolean;
+  tone?: "default" | "success" | "danger";
+};
+
+interface Props {
+  actionBarLabel?: string;
+  buttons?: ToolRuntimeButton[];
+  controlsAutoHide?: boolean;
+  dockPrimaryItemCount?: number;
+  dockSecondaryItemCount?: number;
+  fullscreenButtonMuted?: boolean;
+  fullscreenButtonId?: string;
+  fullscreenScreenTouch?: "auto" | "none";
+  fullscreenStatsFloating?: boolean;
+  screenOverflow?: "hidden" | "visible";
+  secondaryButtons?: ToolRuntimeButton[];
+  shellId?: string;
+  stageStatsFillMobile?: boolean;
+  stageStatsMode?: "inline" | "fullscreen-only";
+  secondaryStats?: ToolRuntimeStat[];
+  stageVariant?: "standard" | "tall";
+  stageStats?: ToolRuntimeStat[];
+  stats?: ToolRuntimeStat[];
+}
+
+const {
+  actionBarLabel,
+  buttons = [],
+  controlsAutoHide = false,
+  dockPrimaryItemCount = 4,
+  dockSecondaryItemCount = 4,
+  fullscreenButtonMuted = false,
+  fullscreenButtonId,
+  fullscreenScreenTouch = "auto",
+  fullscreenStatsFloating = false,
+  screenOverflow = "hidden",
+  secondaryButtons = [],
+  shellId,
+  stageStatsFillMobile = false,
+  stageStatsMode = "inline",
+  secondaryStats = [],
+  stageVariant = "standard",
+  stageStats = [],
+  stats = [],
+} = Astro.props;
+
+const hasDockLead = Astro.slots.has("dockLead");
+const hasDockTabs = Astro.slots.has("dockTabs");
+const hasDockPrimary = Astro.slots.has("dockPrimary");
+const hasDockSecondary = Astro.slots.has("dockSecondary");
+const hasDockHead = buttons.length > 0 || stats.length > 0;
+const hasPrimaryDock =
+  hasDockTabs ||
+  hasDockLead ||
+  hasDockHead ||
+  hasDockPrimary ||
+  secondaryButtons.length > 0;
+const hasSecondaryDock = secondaryStats.length > 0 || hasDockSecondary;
+const hasFloatingStatsPanel = fullscreenStatsFloating && stats.length > 0;
+
+const dockSpanClasses = [
+  "sm:col-span-2 sm:col-start-4 md:col-span-2 md:col-start-4",
+  "sm:col-span-2 sm:col-start-4 md:col-span-2 md:col-start-4",
+  "sm:col-span-4 sm:col-start-3 md:col-span-4 md:col-start-3",
+  "sm:col-span-6 sm:col-start-2 md:col-span-6 md:col-start-2",
+  "sm:col-span-8 sm:col-start-1 md:col-span-8 md:col-start-1",
+] as const;
+
+function dockSpanClass(count: number): string {
+  return (
+    dockSpanClasses[Math.min(4, Math.max(1, count))] ??
+    "sm:col-span-8 sm:col-start-1 md:col-span-8 md:col-start-1"
+  );
+}
+
+function dockCountClass(group: string, count: number): string {
+  return `${group}--count-${Math.min(4, Math.max(1, count))}`;
+}
+
+function dockStatsSpanClass(count: number): string {
+  return dockSpanClass(count === 1 ? 1 : 4);
+}
+
+function withoutId(
+  attributes: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!attributes?.id) return attributes;
+  return Object.fromEntries(
+    Object.entries(attributes).filter(([key]) => key !== "id"),
+  );
+}
+
+const buttonToneClasses = {
+  default: "bg-linear-to-br from-accent-600 to-accent-400",
+  success: "bg-linear-to-br from-ok-600 to-ok-400",
+  danger: "bg-linear-to-br from-danger-600 to-danger-400",
+} as const;
+---
+
+<tool-runtime-shell
+  id={shellId}
+  data-controls-auto-hide={controlsAutoHide ? "true" : undefined}
+  data-fullscreen-button-muted={fullscreenButtonMuted ? "true" : undefined}
+  data-fullscreen-screen-touch={fullscreenScreenTouch === "none"
+    ? "none"
+    : undefined}
+  data-runtime-screen-overflow={screenOverflow === "visible"
+    ? "visible"
+    : undefined}
+  class="tool-runtime"
+>
+  <div
+    class:list={[
+      "tool-runtime-screen",
+      stageVariant === "tall"
+        ? "lg:aspect-3/2 lg:h-auto"
+        : "lg:aspect-8/5 lg:h-auto",
+    ]}
+  >
+    <slot />
+    {
+      stageStats.length > 0 && (
+        <div
+          class:list={[
+            "tool-runtime-stage-stats",
+            stageStatsMode === "fullscreen-only" &&
+              "tool-runtime-stage-stats--fullscreen-only",
+            stageStatsFillMobile && "tool-runtime-stage-stats--fill-mobile",
+          ]}
+        >
+          {stageStats.map((stat) => (
+            <span
+              class:list={["tool-runtime-pill", stat.className]}
+              {...(stat.attributes ?? {})}
+            >
+              <span
+                class="tool-runtime-pill-label"
+                {...(stat.labelAttributes ?? {})}
+              >
+                {stat.label}
+              </span>
+              <strong
+                class:list={["tool-runtime-pill-value", stat.valueClassName]}
+                {...(stat.valueAttributes ?? {})}
+              >
+                {stat.value ?? "--"}
+              </strong>
+            </span>
+          ))}
+        </div>
+      )
+    }
+
+    {
+      hasFloatingStatsPanel && (
+        <div class="tool-runtime-floating-stats" aria-hidden="true">
+          {stats.map((stat) => (
+            <span
+              class:list={["tool-runtime-pill", stat.className]}
+              {...withoutId(stat.attributes)}
+            >
+              <span
+                class="tool-runtime-pill-label"
+                {...withoutId(stat.labelAttributes)}
+              >
+                {stat.label}
+              </span>
+              <strong
+                class:list={["tool-runtime-pill-value", stat.valueClassName]}
+                {...withoutId(stat.valueAttributes)}
+              >
+                {stat.value ?? "--"}
+              </strong>
+            </span>
+          ))}
+        </div>
+      )
+    }
+
+    {
+      fullscreenButtonId && (
+        <button
+          type="button"
+          id={fullscreenButtonId}
+          class="tool-runtime-fullscr-btn"
+          data-tool-runtime-fullscreen
+          aria-label="Open fullscreen"
+        >
+          <svg
+            class="h-5 w-5 fill-none stroke-current"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <use href={`${ToolIcons}#fullscreen`} />
+          </svg>
+        </button>
+      )
+    }
+  </div>
+
+  {
+    (hasPrimaryDock || hasSecondaryDock) && (
+      <div class="tool-runtime-dock-primary" aria-label={actionBarLabel}>
+        {hasDockTabs && (
+          <div
+            class:list={[
+              "tool-runtime-dock-tabs",
+              "sm:order-0",
+              dockSpanClass(4),
+            ]}
+          >
+            <slot name="dockTabs" />
+          </div>
+        )}
+
+        {hasDockLead && (
+          <div
+            class:list={[
+              "tool-runtime-dock-lead",
+              "sm:order-1",
+              dockSpanClass(4),
+            ]}
+          >
+            <svg
+              class="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400"
+              aria-hidden="true"
+            >
+              <use href={`${SiteIcons}#info`} />
+            </svg>
+            <div class="tool-runtime-dock-tip-copy">
+              <slot name="dockLead" />
+            </div>
+          </div>
+        )}
+
+        {hasPrimaryDock && (
+          <>
+            {buttons.length > 0 && (
+              <div
+                class:list={[
+                  "tool-runtime-dock-head",
+                  "sm:order-2",
+                  dockSpanClass(buttons.length),
+                ]}
+              >
+                <div
+                  class:list={[
+                    "tool-runtime-button-group",
+                    dockCountClass("tool-runtime-button-group", buttons.length),
+                    buttons.length % 2 === 1 &&
+                      "tool-runtime-button-group--odd",
+                  ]}
+                >
+                  {buttons.map((button) => (
+                    <button
+                      type="button"
+                      class:list={[
+                        "tool-runtime-button",
+                        buttonToneClasses[button.tone ?? "default"],
+                        button.className,
+                      ]}
+                      disabled={button.disabled}
+                      {...(button.attributes ?? {})}
+                    >
+                      {button.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {secondaryButtons.length > 0 && (
+              <div
+                class:list={[
+                  "tool-runtime-dock-secondary-buttons",
+                  "sm:order-3",
+                  dockSpanClass(secondaryButtons.length),
+                ]}
+              >
+                <div
+                  class:list={[
+                    "tool-runtime-button-group",
+                    dockCountClass(
+                      "tool-runtime-button-group",
+                      secondaryButtons.length,
+                    ),
+                    secondaryButtons.length % 2 === 1 &&
+                      "tool-runtime-button-group--odd",
+                  ]}
+                >
+                  {secondaryButtons.map((button) => (
+                    <button
+                      type="button"
+                      class:list={[
+                        "tool-runtime-button",
+                        buttonToneClasses[button.tone ?? "default"],
+                        button.className,
+                      ]}
+                      disabled={button.disabled}
+                      {...(button.attributes ?? {})}
+                    >
+                      {button.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasDockPrimary && (
+              <div
+                class:list={[
+                  "tool-runtime-dock-extra",
+                  "sm:order-4",
+                  dockSpanClass(dockPrimaryItemCount),
+                ]}
+              >
+                <slot name="dockPrimary" />
+              </div>
+            )}
+
+            {stats.length > 0 && (
+              <div
+                class:list={[
+                  "tool-runtime-stats-group",
+                  "sm:order-5",
+                  dockStatsSpanClass(stats.length),
+                  dockCountClass("tool-runtime-stats-group", stats.length),
+                  stats.length === 1 && "tool-runtime-stats-group--single",
+                  stats.length % 2 === 1 && "tool-runtime-stats-group--odd",
+                ]}
+              >
+                {stats.map((stat) => (
+                  <span
+                    class:list={["tool-runtime-pill", stat.className]}
+                    {...(stat.attributes ?? {})}
+                  >
+                    <span
+                      class="tool-runtime-pill-label"
+                      {...(stat.labelAttributes ?? {})}
+                    >
+                      {stat.label}
+                    </span>
+                    <strong
+                      class:list={[
+                        "tool-runtime-pill-value",
+                        stat.valueClassName,
+                      ]}
+                      {...(stat.valueAttributes ?? {})}
+                    >
+                      {stat.value ?? "--"}
+                    </strong>
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {secondaryStats.length > 0 && (
+          <div
+            class:list={[
+              "tool-runtime-secondary-stats",
+              "sm:order-5",
+              dockStatsSpanClass(secondaryStats.length),
+              dockCountClass(
+                "tool-runtime-secondary-stats",
+                secondaryStats.length,
+              ),
+              secondaryStats.length === 1 &&
+                "tool-runtime-secondary-stats--single",
+              secondaryStats.length % 2 === 1 &&
+                "tool-runtime-secondary-stats--odd",
+            ]}
+          >
+            {secondaryStats.map((stat) => (
+              <span
+                class:list={["tool-runtime-pill", stat.className]}
+                {...(stat.attributes ?? {})}
+              >
+                <span
+                  class="tool-runtime-pill-label"
+                  {...(stat.labelAttributes ?? {})}
+                >
+                  {stat.label}
+                </span>
+                <strong
+                  class:list={["tool-runtime-pill-value", stat.valueClassName]}
+                  {...(stat.valueAttributes ?? {})}
+                >
+                  {stat.value ?? "--"}
+                </strong>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {hasDockSecondary && (
+          <div
+            class:list={[
+              "tool-runtime-dock-secondary",
+              "sm:order-6",
+              dockSpanClass(dockSecondaryItemCount),
+            ]}
+          >
+            <slot name="dockSecondary" />
+          </div>
+        )}
+      </div>
+    )
+  }
+</tool-runtime-shell>
+
+<script>
+  import { lockScroll, unlockScroll } from "@/utils/site/scrollLock";
+
+  type FullscreenElementWithPrefixes = HTMLElement & {
+    msRequestFullscreen?: () => Promise<void> | void;
+    webkitRequestFullscreen?: () => Promise<void> | void;
+  };
+
+  type FullscreenDocumentWithPrefixes = Document & {
+    msFullscreenElement?: Element | null;
+    msExitFullscreen?: () => Promise<void> | void;
+    webkitFullscreenElement?: Element | null;
+    webkitExitFullscreen?: () => Promise<void> | void;
+  };
+
+  function getFullscreenElement(): Element | null {
+    const documentWithPrefixes = document as FullscreenDocumentWithPrefixes;
+    return (
+      document.fullscreenElement ??
+      documentWithPrefixes.webkitFullscreenElement ??
+      documentWithPrefixes.msFullscreenElement ??
+      null
+    );
+  }
+
+  async function requestElementFullscreen(
+    target: HTMLElement,
+  ): Promise<boolean> {
+    const targetWithPrefixes = target as FullscreenElementWithPrefixes;
+
+    if (typeof target.requestFullscreen === "function") {
+      await target.requestFullscreen();
+      return true;
+    }
+
+    if (typeof targetWithPrefixes.webkitRequestFullscreen === "function") {
+      await targetWithPrefixes.webkitRequestFullscreen();
+      return true;
+    }
+
+    if (typeof targetWithPrefixes.msRequestFullscreen === "function") {
+      await targetWithPrefixes.msRequestFullscreen();
+      return true;
+    }
+
+    return false;
+  }
+
+  async function exitDocumentFullscreen(): Promise<boolean> {
+    const documentWithPrefixes = document as FullscreenDocumentWithPrefixes;
+
+    if (typeof document.exitFullscreen === "function") {
+      await document.exitFullscreen();
+      return true;
+    }
+
+    if (typeof documentWithPrefixes.webkitExitFullscreen === "function") {
+      await documentWithPrefixes.webkitExitFullscreen();
+      return true;
+    }
+
+    if (typeof documentWithPrefixes.msExitFullscreen === "function") {
+      await documentWithPrefixes.msExitFullscreen();
+      return true;
+    }
+
+    return false;
+  }
+
+  class ToolRuntimeShell extends HTMLElement {
+    #controller: AbortController | null = null;
+    #scrollLocked = false;
+    #hideTimer = 0;
+    #lastToggleAt = 0;
+    #pointerToggleAt = 0;
+    #controlsAutoHide = false;
+    #fullscreenButton: HTMLButtonElement | null = null;
+
+    connectedCallback(): void {
+      const button = this.querySelector<HTMLButtonElement>(
+        "[data-tool-runtime-fullscreen]",
+      );
+      if (!button) return;
+
+      this.#fullscreenButton = button;
+      this.#controlsAutoHide = this.dataset.controlsAutoHide === "true";
+
+      this.#controller = new AbortController();
+      const { signal } = this.#controller;
+
+      button.addEventListener(
+        "pointerup",
+        (event) => void this.#handleToggle(event),
+        { capture: true, signal },
+      );
+      button.addEventListener(
+        "click",
+        (event) => void this.#handleToggle(event),
+        { signal },
+      );
+
+      for (const eventName of [
+        "pointerdown",
+        "mousedown",
+        "touchstart",
+      ] as const) {
+        button.addEventListener(eventName, (event) => event.stopPropagation(), {
+          signal,
+        });
+      }
+
+      for (const eventName of ["mousemove", "touchstart"] as const) {
+        this.addEventListener(eventName, this.#showControls, {
+          passive: true,
+          signal,
+        });
+      }
+
+      this.addEventListener("tool-runtime:show-controls", this.#showControls, {
+        signal,
+      });
+
+      document.addEventListener(
+        "fullscreenchange",
+        this.#handleFullscreenChange,
+        { signal },
+      );
+      document.addEventListener(
+        "webkitfullscreenchange",
+        this.#handleFullscreenChange,
+        { signal },
+      );
+      document.addEventListener(
+        "MSFullscreenChange",
+        this.#handleFullscreenChange,
+        { signal },
+      );
+      document.addEventListener("keydown", this.#handleKeydown, { signal });
+
+      this.dataset.fullscreen = "false";
+      this.dataset.controlsVisible = "false";
+      this.#syncLabel();
+    }
+
+    disconnectedCallback(): void {
+      this.#controller?.abort();
+      this.#controller = null;
+      this.#clearHideTimer();
+      this.#releaseScrollLock();
+    }
+
+    #isExpandedView = (): boolean =>
+      getFullscreenElement() === this || this.classList.contains("is-expanded");
+
+    #syncLabel = (): void => {
+      this.#fullscreenButton?.setAttribute(
+        "aria-label",
+        this.#isExpandedView() ? "Close fullscreen" : "Open fullscreen",
+      );
+    };
+
+    #notifyStateChange = (): void => {
+      const isExpanded = this.#isExpandedView();
+      this.dataset.fullscreen = isExpanded ? "true" : "false";
+
+      document.documentElement.style.scrollbarGutter = isExpanded ? "auto" : "";
+      this.dispatchEvent(
+        new CustomEvent("tool-runtime:fullscreen-change", {
+          bubbles: true,
+          detail: { isExpanded, isNative: getFullscreenElement() === this },
+        }),
+      );
+    };
+
+    #clearHideTimer = (): void => {
+      if (this.#hideTimer === 0) return;
+      window.clearTimeout(this.#hideTimer);
+      this.#hideTimer = 0;
+    };
+
+    #setControlsVisible = (active: boolean): void => {
+      this.dataset.controlsVisible = active ? "true" : "false";
+    };
+
+    #showControls = (): void => {
+      if (!this.#controlsAutoHide || !this.#isExpandedView()) return;
+      this.#setControlsVisible(true);
+      this.#clearHideTimer();
+      this.#hideTimer = window.setTimeout(() => {
+        this.#setControlsVisible(false);
+        this.#hideTimer = 0;
+      }, 2200);
+    };
+
+    #acquireScrollLock = (): void => {
+      if (this.#scrollLocked) return;
+      lockScroll();
+      this.#scrollLocked = true;
+    };
+
+    #releaseScrollLock = (): void => {
+      if (!this.#scrollLocked) return;
+      unlockScroll();
+      this.#scrollLocked = false;
+    };
+
+    #setExpandedFallback = (active: boolean): void => {
+      this.classList.toggle("is-expanded", active);
+      if (active) {
+        this.#acquireScrollLock();
+      } else {
+        this.#releaseScrollLock();
+        this.#setControlsVisible(false);
+        this.#clearHideTimer();
+      }
+      this.#syncLabel();
+      this.#notifyStateChange();
+    };
+
+    #toggleFullscreen = async (): Promise<void> => {
+      const now = Date.now();
+      if (now - this.#lastToggleAt < 350) return;
+      this.#lastToggleAt = now;
+
+      try {
+        if (getFullscreenElement() === this) {
+          const exitedNativeFullscreen = await exitDocumentFullscreen().catch(
+            () => false,
+          );
+          if (!exitedNativeFullscreen) {
+            this.#showControls();
+          }
+          this.#syncLabel();
+          this.#notifyStateChange();
+        } else if (this.classList.contains("is-expanded")) {
+          this.#setExpandedFallback(false);
+        } else {
+          const enteredNativeFullscreen = await requestElementFullscreen(this);
+          try {
+            if (enteredNativeFullscreen && getFullscreenElement() === this) {
+              this.classList.remove("is-expanded");
+              this.#releaseScrollLock();
+            } else {
+              this.#setExpandedFallback(true);
+            }
+          } catch {
+            this.#setExpandedFallback(true);
+          }
+          this.#syncLabel();
+          this.#notifyStateChange();
+        }
+      } catch {
+        this.#setExpandedFallback(!this.classList.contains("is-expanded"));
+      }
+
+      this.#showControls();
+    };
+
+    #handleToggle = async (event: Event): Promise<void> => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.type === "pointerup") {
+        this.#pointerToggleAt = Date.now();
+      } else if (
+        event.type === "click" &&
+        Date.now() - this.#pointerToggleAt < 450
+      ) {
+        return;
+      }
+
+      await this.#toggleFullscreen();
+    };
+
+    #handleFullscreenChange = (): void => {
+      if (getFullscreenElement() !== this) {
+        if (
+          this.classList.contains("is-expanded") ||
+          this.dataset.fullscreen === "true"
+        ) {
+          this.#setExpandedFallback(false);
+        } else {
+          this.dataset.fullscreen = "false";
+          this.#syncLabel();
+        }
+        return;
+      }
+
+      this.classList.remove("is-expanded");
+      this.#syncLabel();
+      this.#notifyStateChange();
+      this.#showControls();
+    };
+
+    #handleKeydown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && this.classList.contains("is-expanded")) {
+        this.#setExpandedFallback(false);
+      }
+    };
+  }
+
+  if (!customElements.get("tool-runtime-shell")) {
+    customElements.define("tool-runtime-shell", ToolRuntimeShell);
+  }
+</script>
+
+<style>
+  @reference "#app.css";
+
+  .tool-runtime {
+    @apply relative grid w-full gap-6 self-start;
+
+    &:fullscreen,
+    &.is-expanded {
+      @apply block h-svh w-dvw p-0;
+    }
+  }
+
+  .tool-runtime-screen {
+    @apply border-accent-line from-violet-950/20 via-violet-950/40 to-violet-950/20 shadow-accent-glow relative h-[420px] w-full overflow-hidden rounded-2xl border bg-black bg-radial shadow-md sm:h-150;
+
+    .tool-runtime[data-runtime-screen-overflow="visible"] & {
+      @apply overflow-visible;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply h-svh w-dvw rounded-none border-0 shadow-none;
+    }
+
+    :is(
+        .tool-runtime:fullscreen,
+        .tool-runtime.is-expanded
+      )[data-fullscreen-screen-touch="none"]
+      & {
+      @apply touch-none;
+    }
+  }
+
+  .tool-runtime-fullscr-btn {
+    @apply border-accent-line absolute right-4 bottom-4 z-10 inline-grid size-10 cursor-pointer touch-manipulation place-items-center rounded-full border-2 bg-black/50 text-lg text-white;
+
+    &:hover {
+      @apply bg-accent-500/50;
+    }
+
+    .tool-runtime[data-fullscreen-button-muted="true"] & {
+      @apply opacity-50;
+    }
+
+    :is(
+        .tool-runtime:fullscreen,
+        .tool-runtime.is-expanded
+      )[data-controls-auto-hide="true"][data-controls-visible="false"]
+      & {
+      @apply pointer-events-none opacity-0;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  .tool-runtime-dock-primary {
+    @apply border-accent-line bg-custom-100 shadow-accent-glow text-small grid w-full min-w-0 grid-cols-1 items-center gap-3 overflow-visible rounded-2xl border px-3 py-4 text-center shadow-md sm:grid-flow-row-dense sm:grid-cols-8 sm:px-4 sm:py-5 dark:bg-custom-700;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply absolute inset-x-4 bottom-4 z-20 m-0 mx-auto w-fit max-w-full grid-cols-1 gap-2 rounded-full border-0 bg-transparent bg-none p-0 shadow-none;
+      left: calc(1rem + env(safe-area-inset-left, 0px));
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    :is(
+        .tool-runtime:fullscreen,
+        .tool-runtime.is-expanded
+      )[data-controls-auto-hide="true"][data-controls-visible="false"]
+      & {
+      @apply pointer-events-none -translate-x-1/2 translate-y-2 opacity-0;
+    }
+  }
+
+  .tool-runtime-dock-head {
+    @apply grid w-full min-w-0 items-center justify-items-stretch;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply col-span-full text-center;
+    }
+  }
+
+  .tool-runtime-dock-lead {
+    @apply text-xsmall border-accent-line inline-flex h-full w-full min-w-0 items-start gap-2 rounded-xl border bg-transparent p-3 text-left leading-snug text-slate-800 dark:text-slate-200;
+
+    :global(:where(p, span, strong)) {
+      @apply text-xsmall m-0 leading-snug;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply hidden;
+    }
+  }
+
+  .tool-runtime-dock-secondary-buttons {
+    @apply grid w-full min-w-0 items-center justify-items-stretch;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply col-span-full text-center;
+    }
+  }
+
+  .tool-runtime-dock-tabs {
+    @apply flex w-full min-w-0 justify-start;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply hidden;
+    }
+  }
+
+  .tool-runtime-dock-extra {
+    @apply grid h-full w-full min-w-0 justify-items-stretch gap-3;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply hidden;
+    }
+  }
+
+  .tool-runtime-dock-secondary {
+    @apply grid w-full min-w-0 gap-3;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply hidden;
+    }
+  }
+
+  .tool-runtime :global(input[type="range"]) {
+    @apply w-full min-w-0 max-w-full;
+  }
+
+  .tool-runtime-button-group {
+    @apply grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply w-max max-w-full gap-2;
+    }
+  }
+
+  .tool-runtime-dock-tip-copy {
+    @apply grid min-w-0 gap-0.5;
+  }
+
+  .tool-runtime-button-group--count-1 {
+    @apply grid-cols-1 sm:grid-cols-1;
+  }
+
+  .tool-runtime-button-group--count-2 {
+    @apply sm:grid-cols-2;
+  }
+
+  .tool-runtime-button-group--count-3 {
+    @apply sm:grid-cols-3;
+  }
+
+  .tool-runtime-button-group--count-4 {
+    @apply sm:grid-cols-4;
+  }
+
+  .tool-runtime-button-group--odd > .tool-runtime-button:last-child {
+    @apply col-span-2 sm:col-span-1;
+  }
+
+  .tool-runtime-stats-group,
+  .tool-runtime-secondary-stats {
+    @apply m-0 flex w-full min-w-0 flex-wrap justify-center gap-2 sm:gap-3;
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
+      @apply hidden;
+    }
+  }
+
+  :is(.tool-runtime-stats-group, .tool-runtime-secondary-stats)
+    > .tool-runtime-pill {
+    width: calc((100% - 0.5rem) / 2);
+    flex: 0 0 calc((100% - 0.5rem) / 2);
+  }
+
+  :is(
+      .tool-runtime-stats-group--count-1,
+      .tool-runtime-secondary-stats--count-1
+    )
+    > .tool-runtime-pill {
+    @apply w-full basis-full;
+  }
+
+  @media (width >= 40rem) {
+    :is(
+        .tool-runtime-stats-group--count-2,
+        .tool-runtime-secondary-stats--count-2
+      )
+      > .tool-runtime-pill {
+      width: calc((100% - 0.75rem) / 2);
+      flex-basis: calc((100% - 0.75rem) / 2);
+    }
+
+    :is(
+        .tool-runtime-stats-group--count-3,
+        .tool-runtime-secondary-stats--count-3
+      )
+      > .tool-runtime-pill {
+      width: calc((100% - 1.5rem) / 3);
+      flex-basis: calc((100% - 1.5rem) / 3);
+    }
+
+    :is(
+        .tool-runtime-stats-group--count-4,
+        .tool-runtime-secondary-stats--count-4
+      )
+      > .tool-runtime-pill {
+      width: calc((100% - 2.25rem) / 4);
+      flex-basis: calc((100% - 2.25rem) / 4);
+    }
+  }
+
+  .tool-runtime-pill {
+    @apply border-accent-line inline-grid h-10 w-full min-w-0 content-center items-center justify-items-center gap-2 rounded-xl border bg-transparent px-3 py-2 text-center sm:px-4 md:h-12;
+
+    .tool-runtime-stats-group &,
+    .tool-runtime-secondary-stats & {
+      @apply grid-cols-[auto_minmax(0,max-content)] justify-items-stretch rounded-xl;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+      .tool-runtime-stats-group
+      & {
+      @apply h-10 w-16 p-2;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+      .tool-runtime-stage-stats--fullscreen-only
+      & {
+      @apply grid h-auto min-h-0 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-none border-0 bg-transparent bg-none px-0 py-0.5 text-left shadow-none;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+      .tool-runtime-floating-stats
+      & {
+      @apply grid h-10 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-violet-500/50 bg-black/50 bg-none px-3 py-2 text-left shadow-md;
+    }
+  }
+
+  .tool-runtime-pill-label {
+    .tool-runtime-stats-group &,
+    .tool-runtime-secondary-stats & {
+      @apply text-xsmall self-center justify-self-start truncate leading-normal font-medium text-slate-800 dark:text-slate-200;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+      :is(
+        .tool-runtime-floating-stats,
+        .tool-runtime-stage-stats--fullscreen-only
+      )
+      & {
+      @apply text-xsmall min-w-0 justify-self-start truncate text-left leading-normal font-medium tracking-wide text-slate-200;
+    }
+  }
+
+  .tool-runtime-pill-value {
+    .tool-runtime-stats-group &,
+    .tool-runtime-secondary-stats & {
+      @apply text-xsmall self-center justify-self-end truncate leading-normal font-normal text-slate-700 dark:text-slate-300;
+    }
+
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+      :is(
+        .tool-runtime-floating-stats,
+        .tool-runtime-stage-stats--fullscreen-only
+      )
+      & {
+      @apply text-xsmall min-w-0 justify-self-end truncate text-right leading-normal font-normal text-slate-300;
+    }
+  }
+
+  .tool-runtime-button {
+    @apply text-small inline-flex h-10 w-full min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-full px-3 py-2 leading-none font-bold whitespace-nowrap text-white transition duration-200 disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50 disabled:grayscale;
+
+    &:hover {
+      @apply -translate-y-px brightness-105;
+    }
+  }
+
+  .tool-runtime-stage-stats {
+    @apply flex min-w-0 flex-wrap justify-center gap-2;
+
+    &.tool-runtime-stage-stats--fullscreen-only {
+      @apply hidden;
+    }
+
+    &.tool-runtime-stage-stats--fill-mobile .tool-runtime-pill {
+      @apply min-w-0 flex-1;
+    }
+  }
+
+  .tool-runtime-floating-stats {
+    @apply hidden;
+  }
+
+  :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+    .tool-runtime-stage-stats--fullscreen-only {
+    @apply pointer-events-none fixed top-4 left-4 z-10 grid w-44 max-w-full grid-cols-1 transform-none justify-center gap-2 overflow-hidden rounded-xl border border-violet-500/50 bg-black/50 p-2 text-left transition duration-200;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+  }
+
+  :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded)
+    .tool-runtime-floating-stats {
+    @apply pointer-events-none fixed top-4 left-4 z-10 grid w-52 max-w-[calc(100vw-2rem)] grid-cols-1 justify-center overflow-visible rounded-none border-0 bg-transparent p-0 text-left transition duration-200;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+  }
+
+  :is(
+      .tool-runtime:fullscreen,
+      .tool-runtime.is-expanded
+    )[data-controls-auto-hide="true"][data-controls-visible="false"]
+    :is(
+      .tool-runtime-floating-stats,
+      .tool-runtime-stage-stats--fullscreen-only
+    ) {
+    @apply pointer-events-none -translate-y-2 opacity-0;
+  }
+</style>

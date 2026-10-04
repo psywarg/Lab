@@ -1,0 +1,196 @@
+---
+// src/pages/phones/explainers/[...explain].astro
+
+export const prerender = true;
+
+import Icons from "@/assets/icons/content-sprites.svg?url";
+import Sidebar from "@/components/site/Sidebar.astro";
+import ExplainerSidebar from "@/components/phones/explainers/Sidebar.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createTechArticleStructuredData } from "@/utils/site/schema";
+import type { GetStaticPaths } from "astro";
+import { Picture } from "astro:assets";
+import type { CollectionEntry } from "astro:content";
+import { getCollection, render } from "astro:content";
+
+export const getStaticPaths = (async () => {
+  const allExplainers = (await getCollection("explainers")).filter(
+    (entry) => !entry.data.draft,
+  );
+  return allExplainers.map((entry) => ({
+    params: { explain: entry.id },
+    props: { entry },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  entry: CollectionEntry<"explainers">;
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+const {
+  title,
+  heading,
+  metaDescription,
+  publishedAt,
+  updatedAt,
+  authorName = "Sorted Tech Editorial",
+  authorUrl = "/editorial",
+  image,
+} = entry.data;
+
+const articleDateModified = updatedAt ?? publishedAt ?? null;
+const displayUpdatedAt = articleDateModified?.toLocaleDateString("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+const displayDateLabel = updatedAt ? "Last Updated" : "Published";
+const h2Headings = headings.filter((entryHeading) => entryHeading.depth === 2);
+
+const siteUrl = Astro.site?.origin ?? "";
+const ogImage = image.src;
+const structuredData = createTechArticleStructuredData({
+  title,
+  description: metaDescription,
+  image: ogImage,
+  urlPath: `/phones/explainers/${entry.id}`,
+  publishedAt,
+  updatedAt: articleDateModified,
+  authorName,
+  authorUrl,
+  siteOrigin: siteUrl || undefined,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  ogType="article"
+>
+  <div
+    class="lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)] lg:items-start lg:gap-5 xl:grid-cols-4"
+  >
+    <article class="min-w-0 xl:col-span-3">
+      <header class="header-shapes mb-6">
+        {
+          image ? (
+            <div class="relative h-42 bg-transparent sm:h-52 md:h-62 lg:h-72">
+              <div class="drop-shadow-accent-glow absolute inset-y-0 left-0 isolate w-[70%] drop-shadow-md">
+                <div
+                  aria-hidden="true"
+                  class="bg-accent-500 absolute inset-0 [clip-path:var(--shape-left)]"
+                />
+                <div class="to-custom-100 dark:to-custom-700 from-accent-500 absolute inset-px bg-linear-to-r [clip-path:var(--shape-left)]" />
+              </div>
+              <div class="relative z-10 flex h-42 w-[60%] items-center px-3 py-4 sm:h-52 sm:px-6 md:h-62 md:py-0 lg:h-72">
+                <h1 class="text-body sm:text-h3 md:text-h1 mb-0 max-w-2xl">
+                  {heading}
+                </h1>
+              </div>
+              <div class="drop-shadow-accent-glow absolute inset-y-0 right-0 isolate w-[36%] drop-shadow-md">
+                <div
+                  aria-hidden="true"
+                  class="bg-accent-500 absolute inset-0 [clip-path:var(--shape-right)]"
+                />
+                <div class="bg-cyan-950 absolute inset-px flex items-center justify-center overflow-hidden [clip-path:var(--shape-right)]">
+                  <Picture
+                    src={image}
+                    alt={heading}
+                    formats={["avif"]}
+                    fallbackFormat="png"
+                    layout="none"
+                    sizes="(min-width: 1280px) 300px, (min-width: 768px) 30vw, 30vw"
+                    widths={[360, 480, 640, 720, 960]}
+                    fit="cover"
+                    position="center"
+                    priority
+                    pictureAttributes={{ class: "absolute inset-0 block" }}
+                    class="block h-full w-full object-cover object-center"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <h1 class="mb-0">{heading}</h1>
+          )
+        }
+        <div
+          class="text-small mt-4 mb-4 flex flex-wrap items-center gap-4"
+        >
+          <span>
+            <strong>Author: </strong>{" "}
+            <a
+              href={authorUrl}
+              title={`Learn more about ${authorName}`}
+              class="hover:text-accent-ink underline decoration-dotted underline-offset-4 lg:decoration-0"
+            >
+              {authorName}
+            </a>
+          </span>
+          {
+            displayUpdatedAt && (
+              <>
+                <span aria-hidden="true" class="hidden sm:inline">
+                  |
+                </span>
+                <div class="flex items-center gap-2">
+                  <svg
+                    class="text-accent-ink h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <use href={`${Icons}#calendar`} />
+                  </svg>
+                  <span>
+                    <strong>{displayDateLabel}:</strong> {displayUpdatedAt}
+                  </span>
+                </div>
+              </>
+            )
+          }
+        </div>
+      </header>
+      <div
+        class="mdx-content article-body"
+      >
+        <Content />
+      </div>
+    </article>
+    <Sidebar
+      panelLabel="Explainer index"
+      mobileAriaLabel="Open explainer index"
+      mobileLabel="Index"
+      closeOnAction
+    >
+      <ExplainerSidebar currentSlug={entry.id} headings={h2Headings} />
+    </Sidebar>
+  </div>
+</BaseLayout>
+
+<style>
+  .header-shapes {
+    --shape-left: shape(
+      from 0 25px,
+      arc to 25px 0 of 25px cw small,
+      line to 100% 0,
+      line to 90% 50%,
+      line to 100% 100%,
+      line to 25px 100%,
+      arc to 0 calc(100% - 25px) of 25px cw small,
+      close
+    );
+    --shape-right: shape(
+      from 20% 0,
+      line to calc(100% - 25px) 0,
+      arc to 100% 25px of 25px cw small,
+      line to 100% calc(100% - 25px),
+      arc to calc(100% - 25px) 100% of 25px cw small,
+      line to 20% 100%,
+      line to 0 50%,
+      close
+    );
+  }
+</style>

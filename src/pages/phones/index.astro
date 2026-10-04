@@ -1,0 +1,129 @@
+---
+// src/pages/phones/index.astro
+
+export const prerender = true;
+
+import Icons from "@/assets/icons/content-sprites.svg?url";
+import explainersImage from "@/assets/images/phones/explainers.avif";
+import toolsImage from "@/assets/images/phones/tools.avif";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { SITE_ORIGIN } from "@/utils/site/schema";
+import { Picture } from "astro:assets";
+
+const meta = {
+  title: "Smartphone Explainers & Tools - Sorted Tech",
+  metaDescription:
+    "Understand smartphone hardware with clear, practical explainers, then test your display, touch, audio, and sensors using free browser-based tools.",
+  heading: "Smartphones, explained and tested.",
+  description:
+    "Understand the technology inside your smartphone through clear, practical explainers, then use browser-based tools to check your device. Learn how key components work and test your screen, touch input, speakers, microphone, motion sensors, and more without installing an app.",
+  ogImage: DEFAULT_OG_IMAGE,
+};
+
+const cards = [
+  {
+    title: "Explainers",
+    label: "Learn the hardware",
+    description:
+      "Clear breakdowns of SoCs, displays, cameras, charging, and the specs that change how a phone feels.",
+    cta: "Read Explainers",
+    href: "/phones/explainers",
+    cardImage: explainersImage,
+    accent: "explainers" as const,
+    labelClass: "text-accent-ink",
+  },
+  {
+    title: "Tools",
+    label: "Browser utilities",
+    description:
+      "Run on-device checks for screen colors, stuck pixels, touch input, speakers, microphones, and sensors.",
+    cta: "Open Tools",
+    href: "/phones/tools",
+    cardImage: toolsImage,
+    accent: "tools" as const,
+    labelClass: "text-accent-ink",
+  },
+];
+const { title, metaDescription, ogImage, heading, description } = meta;
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: heading,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/phones`,
+  mainEntity: {
+    "@type": "ItemList",
+    numberOfItems: cards.length,
+    itemListElement: cards.map((card, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: card.title,
+      url: `${SITE_ORIGIN}${card.href}`,
+    })),
+  },
+};
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+>
+  <section class="page-column">
+    <h1>{heading}</h1>
+    <p>{description}</p>
+
+    <div
+      class="mt-6 grid grid-cols-1 gap-5 md:mt-12 md:grid-cols-2"
+    >
+      {
+        cards.map((card) => (
+          <a
+            href={card.href}
+            data-astro-prefetch="viewport"
+            data-accent={card.accent}
+            class="border-accent-line shadow-accent-glow hover:border-accent-500 group bg-custom-100 dark:bg-custom-700 flex flex-col overflow-hidden rounded-xl border shadow-md transition duration-300 ease-out hover:-translate-y-1"
+          >
+            <div class="border-accent-line aspect-40/21 overflow-hidden border-b">
+              <Picture
+                src={card.cardImage}
+                alt=""
+                formats={["avif"]}
+                fallbackFormat="jpeg"
+                layout={IMAGE_PRESETS["index-card"].layout}
+                sizes={IMAGE_PRESETS["index-card"].sizes}
+                widths={IMAGE_PRESETS["index-card"].widths}
+                class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+            <div class="from-accent-wash flex flex-1 flex-col bg-linear-to-br to-transparent p-4">
+              <span
+                class:list={[
+                  "text-xsmall mb-2 block font-bold uppercase",
+                  card.labelClass,
+                ]}
+              >
+                {card.label}
+              </span>
+              <h2 class="text-h3 mb-2">{card.title}</h2>
+              <p class="text-small mb-4">{card.description}</p>
+              <div class="mt-auto flex justify-end">
+                <span class="text-small inline-flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+                  {card.cta}
+                  <svg class="h-5 w-5" aria-hidden="true">
+                    <use href={`${Icons}#open-card`} />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>

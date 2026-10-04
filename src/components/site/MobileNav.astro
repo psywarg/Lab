@@ -1,0 +1,326 @@
+---
+// src/components/site/MobileNav.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+import { MAIN_NAV_ITEMS } from "@/utils/site/navigation";
+
+const navId = "mobile-nav";
+type MobileNavLink = { href: string; label: string };
+
+function getMobileNavLinks(
+  submenu: (typeof MAIN_NAV_ITEMS)[number]["submenu"],
+): MobileNavLink[] {
+  return submenu.flatMap((sub): MobileNavLink[] => {
+    if (Array.isArray(sub.items)) return sub.items;
+    if (typeof sub.href === "string") {
+      return [{ href: sub.href, label: sub.label }];
+    }
+    return [];
+  });
+}
+
+const mobileNavItems = MAIN_NAV_ITEMS.map((menu) => ({
+  ...menu,
+  panelId: `${navId}-${menu.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+  links: getMobileNavLinks(menu.submenu),
+}));
+---
+
+<div class="relative z-40 lg:hidden">
+  <button
+    type="button"
+    class="btn-base mobile-menu-btn relative"
+    aria-label="Open mobile menu"
+    aria-expanded="false"
+    aria-controls={navId}
+    aria-haspopup="dialog"
+  >
+    <svg
+      class="menu-icon h-5.5 w-5.5 text-inherit transition-opacity duration-300"
+      aria-hidden="true"
+    >
+      <use href={`${Icons}#menu`}></use>
+    </svg>
+    <svg
+      class="close-icon absolute inset-0 m-auto h-3 w-3 opacity-0 transition-opacity duration-300"
+      aria-hidden="true"
+    >
+      <use href={`${Icons}#close`}></use>
+    </svg>
+  </button>
+</div>
+
+<mobile-nav
+  id={navId}
+  class="bg-custom-light dark:bg-custom-dark shadow-accent-glow fixed inset-y-0 left-0 z-35 max-h-svh w-75 -translate-x-full overflow-y-auto shadow-[4px_0_4px_-1px_var(--tw-shadow-color)] transition-transform duration-300 sm:w-80 lg:hidden"
+  aria-label="Mobile navigation"
+  aria-hidden="true"
+  aria-modal="true"
+  role="dialog"
+  tabindex="-1"
+  inert
+>
+  <div class="p-6 pt-16">
+    <ul
+      class="mobile-menu-list divide-custom-800 dark:divide-custom-200 divide-y"
+    >
+      <li class="py-2">
+        <a
+          href="/"
+          class="text-body flex w-full items-center gap-2 rounded-xl py-2 text-left font-medium tracking-widest text-accent-ink hover:bg-accent-500/20 active:bg-accent-500/40 active:scale-95 uppercase"
+          data-astro-prefetch="tap"
+        >
+          <svg
+            class="h-5 w-10 shrink-0 transition-opacity duration-300"
+            aria-hidden="true"
+          >
+            <use href={`${Icons}#hex-none`}></use>
+          </svg>
+          <span>Home</span>
+        </a>
+      </li>
+
+      {
+        mobileNavItems.map((menu) => (
+          <li class="py-2">
+            <div class="flex items-center" data-mobile-menu-row>
+              <button
+                type="button"
+                class="text-accent-ink hover:bg-accent-500/20 active:bg-accent-500/40 active:scale-95 grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                data-toggle="accordion"
+                aria-label={`Toggle ${menu.label} submenu`}
+                aria-expanded="true"
+                aria-controls={menu.panelId}
+              >
+                <svg
+                  class="hex-plus h-5 w-10 shrink-0 transition-opacity duration-300"
+                  aria-hidden="true"
+                >
+                  <use href={`${Icons}#hex-plus`} />
+                </svg>
+                <svg
+                  class="hex-minus hidden h-5 w-10 shrink-0 transition-opacity duration-300"
+                  aria-hidden="true"
+                >
+                  <use href={`${Icons}#hex-minus`} />
+                </svg>
+              </button>
+              <a
+                href={menu.href}
+                class="text-body flex h-10 flex-1 items-center rounded-xl pl-2 font-medium tracking-widest text-accent-ink hover:bg-accent-500/20 active:bg-accent-500/40 active:scale-95 uppercase"
+                data-astro-prefetch="tap"
+              >
+                <span>{menu.label}</span>
+              </a>
+            </div>
+
+            <div
+              id={menu.panelId}
+              class="accordion-panel text-body pb-2 pl-5 font-medium"
+            >
+              {menu.links.map((link) => (
+                <a
+                  href={link.href}
+                  class="text-body text-accent-ink hover:bg-accent-500/20 active:bg-accent-500/40 active:scale-95 flex items-center gap-2 rounded-xl py-2 font-medium"
+                  data-astro-prefetch="tap"
+                >
+                  <svg
+                    class="h-5 w-10 shrink-0 transition-opacity duration-300"
+                    aria-hidden="true"
+                  >
+                    <use href={`${Icons}#hex-none`} />
+                  </svg>
+                  <span>{link.label}</span>
+                </a>
+              ))}
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</mobile-nav>
+
+<div
+  class="mobile-backdrop bg-custom-100/80 dark:bg-custom-900/80 fixed inset-0 z-30 hidden lg:hidden"
+  aria-hidden="true"
+>
+</div>
+
+<script>
+  import { lockScroll, unlockScroll } from "@/utils/site/scrollLock";
+
+  class MobileNav extends HTMLElement {
+    private controller: AbortController | null = null;
+    private triggerButton: HTMLElement | null = null;
+    private scrollLocked = false;
+
+    connectedCallback() {
+      const btn = document.querySelector<HTMLElement>(".mobile-menu-btn");
+      const backdrop = document.querySelector(".mobile-backdrop");
+      const menuIcon = btn?.querySelector(".menu-icon");
+      const closeIcon = btn?.querySelector(".close-icon");
+      const firstInteractive = this.querySelector<HTMLElement>("a, button");
+
+      if (!btn || !backdrop) return;
+      this.triggerButton = btn;
+
+      this.controller = new AbortController();
+      const { signal } = this.controller;
+
+      const setAccordionOpen = (open: boolean) => {
+        this.querySelectorAll<HTMLElement>(".accordion-panel").forEach(
+          (panel) => {
+            panel.classList.toggle("hidden", !open);
+          },
+        );
+        this.querySelectorAll<HTMLElement>('[data-toggle="accordion"]').forEach(
+          (button) => {
+            button.setAttribute("aria-expanded", String(open));
+            button
+              .querySelector(".hex-plus")
+              ?.classList.toggle("hidden", !open);
+            button
+              .querySelector(".hex-minus")
+              ?.classList.toggle("hidden", open);
+          },
+        );
+      };
+
+      const openSidebar = () => {
+        setAccordionOpen(true);
+        this.classList.remove("-translate-x-full");
+        this.classList.add("translate-x-0");
+        this.setAttribute("aria-hidden", "false");
+        this.removeAttribute("inert");
+        backdrop.classList.remove("hidden");
+        if (!this.scrollLocked) {
+          lockScroll();
+          this.scrollLocked = true;
+        }
+        btn.setAttribute("aria-expanded", "true");
+        btn.setAttribute("aria-label", "Close mobile menu");
+        menuIcon?.classList.add("opacity-0");
+        closeIcon?.classList.remove("opacity-0");
+        requestAnimationFrame(() => {
+          (firstInteractive ?? this).focus();
+        });
+      };
+
+      btn.addEventListener(
+        "click",
+        () => {
+          if (this.getAttribute("aria-hidden") === "true") {
+            openSidebar();
+          } else {
+            this.close();
+          }
+        },
+        { signal },
+      );
+
+      backdrop.addEventListener("click", () => this.close(), { signal });
+
+      const focusableSelector =
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+      document.addEventListener(
+        "keydown",
+        (e) => {
+          if (this.getAttribute("aria-hidden") !== "false") return;
+
+          if (e.key === "Escape") {
+            this.close();
+            return;
+          }
+
+          if (e.key !== "Tab") return;
+
+          const focusable = Array.from(
+            this.querySelectorAll<HTMLElement>(focusableSelector),
+          ).filter((el) => el.offsetParent !== null);
+          if (focusable.length === 0) return;
+
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          const active = document.activeElement;
+
+          if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+          } else if (!this.contains(active)) {
+            e.preventDefault();
+            first.focus();
+          }
+        },
+        { signal },
+      );
+
+      this.querySelector(".mobile-menu-list")?.addEventListener(
+        "click",
+        (e: Event) => {
+          if ((e.target as Element).closest("a")) {
+            this.close();
+            return;
+          }
+
+          const btnTop = (e.target as Element).closest(
+            '[data-toggle="accordion"]',
+          );
+          if (btnTop) {
+            const panel = btnTop.closest(
+              "[data-mobile-menu-row]",
+            )?.nextElementSibling;
+            if (panel) togglePanel(btnTop as HTMLElement, panel as HTMLElement);
+            return;
+          }
+        },
+        { signal },
+      );
+
+      this.close = () => {
+        this.classList.remove("translate-x-0");
+        this.classList.add("-translate-x-full");
+        this.setAttribute("aria-hidden", "true");
+        this.setAttribute("inert", "");
+        backdrop.classList.add("hidden");
+        if (this.scrollLocked) {
+          unlockScroll();
+          this.scrollLocked = false;
+        }
+        btn.setAttribute("aria-expanded", "false");
+        btn.setAttribute("aria-label", "Open mobile menu");
+        menuIcon?.classList.remove("opacity-0");
+        closeIcon?.classList.add("opacity-0");
+        this.triggerButton?.focus();
+      };
+
+      const togglePanel = (button: HTMLElement, panel: HTMLElement) => {
+        const isOpen = !panel.classList.contains("hidden");
+
+        button.setAttribute("aria-expanded", String(!isOpen));
+        panel.classList.toggle("hidden", isOpen);
+        button.querySelector(".hex-plus")?.classList.toggle("hidden", isOpen);
+        button.querySelector(".hex-minus")?.classList.toggle("hidden", !isOpen);
+      };
+    }
+
+    close(): void {}
+
+    disconnectedCallback() {
+      this.controller?.abort();
+      this.controller = null;
+      if (this.scrollLocked) {
+        unlockScroll();
+        this.scrollLocked = false;
+      }
+    }
+  }
+
+  if (!customElements.get("mobile-nav")) {
+    customElements.define("mobile-nav", MobileNav);
+  }
+</script>

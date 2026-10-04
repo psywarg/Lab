@@ -1,0 +1,93 @@
+---
+// src/pages/phones/tools/index.astro
+
+export const prerender = true;
+
+import Icons from "@/assets/icons/content-sprites.svg?url";
+import { toolsIndex } from "@/content/phones/tools";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
+import { SITE_ORIGIN } from "@/utils/site/schema";
+import { Picture } from "astro:assets";
+
+const title = "Free Online Phone Hardware Test: Screen, Touch, Audio & Sensors";
+const metaDescription =
+  "Test your phone's display, touchscreen, speakers, microphone, accelerometer, and gyroscope with seven browser-based diagnostic tools. No app or account required.";
+
+const heading = "Online Phone Diagnostic Tools";
+
+const description =
+  "Check a phone or tablet with seven browser-based diagnostic tools. Inspect display quality, diagnose and attempt to fix stuck pixels, test touchscreen coverage and multi-touch, check speaker output and microphone input, and view accelerometer and gyroscope readings. Each tool runs locally on your device, requires no installation or account, and explains what its browser-based results can and cannot show.";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: heading,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/phones/tools`,
+  mainEntity: {
+    "@type": "ItemList",
+    numberOfItems: toolsIndex.length,
+    itemListElement: toolsIndex.map((tool, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: tool.title,
+      url: `${SITE_ORIGIN}${tool.href}`,
+    })),
+  },
+};
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{ tools: "Tools" }}
+>
+  <section class="page-column">
+    <h1>{heading}</h1>
+    <p class="mb-6 lg:mb-8">{description}</p>
+
+    <div
+      class="grid grid-cols-1 justify-center gap-5 sm:grid-cols-[repeat(auto-fill,minmax(0,20rem))]"
+    >
+      {
+        toolsIndex.map((tool) => (
+          <a
+            href={tool.href}
+            data-astro-prefetch="viewport"
+            class="group bg-custom-100 dark:bg-custom-800 border-accent-line shadow-accent-glow hover:border-accent-500 flex flex-col overflow-hidden rounded-xl border shadow-md transition duration-300 ease-out hover:-translate-y-1"
+          >
+            <div class="border-accent-line aspect-40/21 overflow-hidden border-b">
+              <Picture
+                src={tool.image}
+                alt=""
+                formats={["avif"]}
+                fallbackFormat="png"
+                layout={IMAGE_PRESETS["index-card"].layout}
+                sizes={IMAGE_PRESETS["index-card"].sizes}
+                widths={IMAGE_PRESETS["index-card"].widths}
+                loading="lazy"
+                class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
+              />
+            </div>
+
+            <div class="to-custom-100 dark:to-custom-900 flex flex-1 flex-col bg-linear-to-br from-violet-500/25 p-3 dark:from-violet-500/15">
+              <h2 class="text-body mb-1">{tool.title}</h2>
+              <p class="text-xsmall mb-1">{tool.description}</p>
+              <div class="mt-auto flex justify-end">
+                <span class="text-small inline-flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                  Open Tool
+                  <svg class="h-4 w-4" aria-hidden="true">
+                    <use href={`${Icons}#open-card`} />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>

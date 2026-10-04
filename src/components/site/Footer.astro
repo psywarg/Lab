@@ -1,0 +1,70 @@
+---
+// src/components/site/Footer.astro
+---
+
+<footer
+  class="text-small from-custom-100 to-custom-300 dark:from-custom-700 dark:to-custom-900 border-accent-500 relative z-20 w-full border-t bg-linear-to-b px-4 py-4 text-center md:px-6"
+>
+  <div
+    class="flex flex-col items-center justify-center gap-x-2 gap-y-0.5 sm:flex-row"
+  >
+    <span class="font-medium">
+      © {new Date().getFullYear()} Sorted Tech
+    </span>
+    <span aria-hidden="true" class="hidden sm:inline">•</span>
+    <span>Insights Beyond Influence</span>
+  </div>
+
+  <hr class="bg-custom-500 mx-auto mt-4 h-px w-60 border-none opacity-50" />
+
+  <div
+    class="text-small mt-4 flex flex-col items-center justify-center gap-x-2 gap-y-1 sm:flex-row"
+  >
+    <div class="flex items-center gap-2">
+      <a
+        href="/about"
+        class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
+        >About</a
+      >
+      <span aria-hidden="true">•</span>
+      <a
+        href="/contact"
+        class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
+        >Contact</a
+      >
+      <span aria-hidden="true">•</span>
+      <a
+        href="/editorial"
+        class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
+        >Editorial Standards</a
+      >
+    </div>
+    <span aria-hidden="true" class="hidden sm:inline">•</span>
+    <div class="flex items-center gap-2">
+      <a
+        href="/privacy"
+        class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
+        >Privacy Policy</a
+      >
+      <span aria-hidden="true">•</span>
+      <a
+        href="/terms"
+        class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
+        >Terms of Service</a
+      >
+    </div>
+  </div>
+
+  <div
+    class="text-xsmall text-custom-500 mt-2 px-4 leading-relaxed"
+  >
+    Our content is independent, backed by data, and fueled by late-night coffee.
+    <a
+      href="/disclaimer"
+      class="text-custom-500 hover:text-accent-500 hover:decoration-accent-500 underline decoration-dotted"
+      aria-label="Read full disclaimer"
+    >
+      View Disclaimer.
+    </a>
+  </div>
+</footer>

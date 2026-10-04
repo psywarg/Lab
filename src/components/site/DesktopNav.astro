@@ -1,0 +1,262 @@
+---
+// src/components/site/DesktopNav.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+import { MAIN_NAV_ITEMS } from "@/utils/site/navigation";
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<nav
+  class:list={["relative z-40 flex flex-row items-center gap-8", className]}
+  aria-label="Main navigation"
+>
+  <a
+    href="/"
+    class="btn-base text-small font-bold tracking-widest uppercase"
+    data-astro-prefetch="hover">Home</a
+  >
+
+  {
+    MAIN_NAV_ITEMS.map((menu) => (
+      <desktop-menu class="relative">
+        <a
+          href={menu.href}
+          data-nav-toggle
+          class="btn-base text-small flex items-center gap-2 font-bold tracking-widest uppercase"
+          aria-haspopup="true"
+          aria-expanded="false"
+          data-astro-prefetch="hover"
+        >
+          {menu.label}
+          <svg
+            class="h-3 w-3 rotate-180 transition-transform duration-300"
+            data-chevron
+            aria-hidden="true"
+          >
+            <use href={`${Icons}#chevron`} />
+          </svg>
+        </a>
+
+        <div class="nav-dropdown border-custom-300 dark:border-custom-900 bg-custom-light dark:bg-custom-dark shadow-accent-glow invisible absolute left-1/2 mt-4 w-40 origin-top -translate-x-1/2 scale-95 rounded-2xl border py-2 text-[16px] font-medium opacity-0 shadow-md transition-all duration-300 ease-out">
+          {menu.submenu.map((sub) =>
+            sub.items ? (
+              <div class="nav-submenu-wrapper relative">
+                <button
+                  type="button"
+                  class="nav-submenu-toggle text-accent-ink hover:bg-accent-500/20 active:scale-95 group flex w-full items-center justify-start px-6 py-1.5 text-[16px] font-medium"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  {sub.label}
+                  <svg
+                    class="absolute right-4 h-3 w-3 shrink-0 rotate-90 transition-transform duration-300 group-hover:translate-x-1"
+                    aria-hidden="true"
+                  >
+                    <use href={`${Icons}#chevron`} />
+                  </svg>
+                </button>
+                <div class="nav-submenu divide-custom-500 border-custom-300 dark:border-custom-900 bg-custom-light dark:bg-custom-dark shadow-accent-glow invisible absolute -top-2.5 left-full ml-1 flex w-40 origin-left scale-95 items-center justify-center divide-y rounded-2xl border py-2 text-[16px] font-medium opacity-0 shadow-md transition-all duration-300 ease-out">
+                  {sub.items.map((item) => (
+                    <a
+                      href={item.href}
+                      class="text-accent-ink block px-6 py-1.5 transition hover:bg-accent-500/20 active:scale-95"
+                      data-astro-prefetch="hover"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <a
+                href={sub.href}
+                class="text-accent-ink hover:bg-accent-500/20 active:scale-95 block w-full px-6 py-1.5 text-left"
+                data-astro-prefetch="hover"
+              >
+                {sub.label}
+              </a>
+            ),
+          )}
+        </div>
+      </desktop-menu>
+    ))
+  }
+</nav>
+
+<script>
+  class DesktopMenu extends HTMLElement {
+    private closeTimeout: ReturnType<typeof setTimeout> | null = null;
+    private controller: AbortController | null = null;
+
+    private showMenu(menu: HTMLElement) {
+      menu.classList.remove("invisible", "opacity-0", "scale-95");
+      menu.classList.add("visible", "opacity-100", "scale-100");
+    }
+
+    private hideMenu(menu: HTMLElement) {
+      menu.classList.remove("visible", "opacity-100", "scale-100");
+      menu.classList.add("invisible", "opacity-0", "scale-95");
+    }
+
+    private openChevron(chevron: HTMLElement | null) {
+      chevron?.classList.remove("rotate-180");
+      chevron?.classList.add("rotate-0");
+    }
+
+    private closeChevron(chevron: HTMLElement | null) {
+      chevron?.classList.remove("rotate-0");
+      chevron?.classList.add("rotate-180");
+    }
+
+    connectedCallback() {
+      const toggle = this.querySelector<HTMLElement>("[data-nav-toggle]");
+      const dropdown = this.querySelector<HTMLElement>(".nav-dropdown");
+      const chevron = this.querySelector<HTMLElement>("[data-chevron]");
+
+      if (!toggle || !dropdown) return;
+
+      this.controller = new AbortController();
+      const { signal } = this.controller;
+
+      const openDropdown = () => {
+        if (this.closeTimeout) {
+          clearTimeout(this.closeTimeout);
+          this.closeTimeout = null;
+        }
+        this.closest("nav")
+          ?.querySelectorAll<HTMLElement>("desktop-menu .nav-dropdown.open")
+          .forEach((d) => {
+            if (d === dropdown) return;
+            d.classList.remove("open");
+            this.hideMenu(d);
+            d.previousElementSibling?.setAttribute("aria-expanded", "false");
+            this.closeChevron(
+              d.closest("desktop-menu")?.querySelector("[data-chevron]") ??
+                null,
+            );
+          });
+
+        dropdown.classList.add("open");
+        this.showMenu(dropdown);
+        toggle.setAttribute("aria-expanded", "true");
+        this.openChevron(chevron ?? null);
+      };
+
+      const closeDropdown = (immediate = false) => {
+        const doClose = () => {
+          dropdown.classList.remove("open");
+          this.hideMenu(dropdown);
+          toggle.setAttribute("aria-expanded", "false");
+          this.closeChevron(chevron ?? null);
+          this.querySelectorAll(".nav-submenu.open").forEach((el) => {
+            el.classList.remove("open");
+            this.hideMenu(el as HTMLElement);
+            el.previousElementSibling?.setAttribute("aria-expanded", "false");
+          });
+        };
+        if (immediate) {
+          doClose();
+        } else {
+          this.closeTimeout = setTimeout(doClose, 300);
+        }
+      };
+
+      this.addEventListener("mouseenter", () => openDropdown(), { signal });
+      this.addEventListener("mouseleave", () => closeDropdown(), { signal });
+      this.addEventListener("focusin", () => openDropdown(), { signal });
+      this.addEventListener(
+        "focusout",
+        (e: FocusEvent) => {
+          if (!this.contains(e.relatedTarget as Node | null)) closeDropdown();
+        },
+        { signal },
+      );
+
+      toggle.addEventListener(
+        "keydown",
+        (e: KeyboardEvent) => {
+          if (e.key === "ArrowDown" || e.key === " ") {
+            e.preventDefault();
+            openDropdown();
+            dropdown.querySelector<HTMLElement>("a, button")?.focus();
+          } else if (e.key === "Escape") {
+            closeDropdown(true);
+          }
+        },
+        { signal },
+      );
+
+      this.querySelectorAll(".nav-submenu-wrapper").forEach((wrapper) => {
+        const btn = wrapper.querySelector<HTMLElement>(".nav-submenu-toggle");
+        const submenu = wrapper.querySelector<HTMLElement>(".nav-submenu");
+        if (!btn || !submenu) return;
+
+        const openSubmenu = () => {
+          this.querySelectorAll(".nav-submenu").forEach((el) => {
+            if (el === submenu) return;
+            el.classList.remove("open");
+            this.hideMenu(el as HTMLElement);
+            el.previousElementSibling?.setAttribute("aria-expanded", "false");
+          });
+          submenu.classList.add("open");
+          this.showMenu(submenu);
+          btn.setAttribute("aria-expanded", "true");
+        };
+
+        const closeSubmenu = () => {
+          submenu.classList.remove("open");
+          this.hideMenu(submenu);
+          btn.setAttribute("aria-expanded", "false");
+        };
+
+        wrapper.addEventListener("mouseenter", openSubmenu, { signal });
+        wrapper.addEventListener("mouseleave", closeSubmenu, { signal });
+
+        btn.addEventListener(
+          "click",
+          (e) => {
+            e.preventDefault();
+            if (submenu.classList.contains("open")) {
+              closeSubmenu();
+            } else {
+              openSubmenu();
+            }
+          },
+          { signal },
+        );
+
+        btn.addEventListener(
+          "keydown",
+          (e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              if (submenu.classList.contains("open")) {
+                closeSubmenu();
+              } else {
+                openSubmenu();
+              }
+            } else if (e.key === "Escape") {
+              closeSubmenu();
+            }
+          },
+          { signal },
+        );
+      });
+    }
+
+    disconnectedCallback() {
+      if (this.closeTimeout) clearTimeout(this.closeTimeout);
+      this.controller?.abort();
+      this.controller = null;
+    }
+  }
+
+  if (!customElements.get("desktop-menu")) {
+    customElements.define("desktop-menu", DesktopMenu);
+  }
+</script>

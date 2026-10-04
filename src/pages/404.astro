@@ -1,0 +1,89 @@
+---
+// src/pages/404.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import NotFound404 from "@/assets/images/sorto/notfound-404.svg";
+import Sorto404 from "@/assets/images/sorto/sorto-404.svg";
+import Icons from "@/assets/icons/site-sprites.svg?url";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+
+const title = "404 - Page Not Found";
+const metaDescription =
+  "Looks like this page took a wrong turn in the cloud. Let's get you back to the tech insights that actually exist.";
+const ogImage = DEFAULT_OG_IMAGE;
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} robots="noindex, follow">
+  <style>
+    @keyframes float-scale {
+      0%,
+      100% {
+        transform: translateY(0) scale(1);
+      }
+      50% {
+        transform: translateY(-14px) scale(1.06);
+      }
+    }
+    .float-animation {
+      animation: float-scale 10s ease-in-out infinite;
+      will-change: transform;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .float-animation {
+        animation: none;
+      }
+    }
+  </style>
+
+  <section
+    class="relative flex flex-col items-center justify-center overflow-hidden text-center"
+  >
+    <h1 class="sr-only">404 - Page Not Found</h1>
+
+    <div
+      class="relative flex h-88 items-center justify-center overflow-visible sm:h-96 md:h-104 lg:h-112 xl:h-120"
+    >
+      <div class="absolute inset-0 z-0 flex items-center justify-center">
+        <NotFound404
+        class="float-animation absolute top-[30%] left-1/2 z-0 w-[18rem] -translate-x-1/2 -translate-y-1/2 opacity-50 sm:top-[28%] sm:w-[20rem] md:top-[26%] md:w-[24rem] lg:top-[24%] lg:w-[28rem] xl:top-[22%] xl:w-[32rem]"
+          role="img"
+          aria-label="404 Not Found"
+        />
+      </div>
+      <Sorto404
+        class="relative z-10 w-40 translate-y-16 sm:w-48 sm:translate-y-18 md:w-[16rem] md:translate-y-20 lg:w-[20rem] lg:translate-y-22 xl:w-[24rem] xl:translate-y-24"
+        role="img"
+        aria-label="Sorto, Keeper of the Code"
+      />
+    </div>
+
+    <div
+      class="relative z-20 flex flex-wrap justify-center gap-4 pt-4 sm:pt-6 md:pt-8 lg:pt-10 xl:pt-12"
+    >
+      <button
+        type="button"
+        id="go-back-button"
+        class="btn-base transform duration-300 hover:-translate-x-1 hover:shadow-lg active:-translate-x-1 active:shadow-lg"
+      >
+        <svg class="h-4 w-4 -rotate-90" aria-hidden="true">
+          <use href={`${Icons}#chevron`}></use>
+        </svg>
+        Go Back
+      </button>
+      <a href="/" class="btn-base">Home</a>
+    </div>
+  </section>
+
+  <script>
+    document.getElementById("go-back-button")?.addEventListener("click", () => {
+      if (history.length > 1) {
+        history.back();
+      } else {
+        window.location.assign("/");
+      }
+    });
+  </script>
+</BaseLayout>

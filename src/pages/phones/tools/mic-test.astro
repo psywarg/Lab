@@ -1,0 +1,1339 @@
+---
+// src/pages/phones/tools/mic-test.astro
+
+export const prerender = true;
+
+import { getToolBySlug } from "@/content/phones/tools";
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+
+const tool = getToolBySlug("mic-test");
+const ogImage = tool.image.src;
+const title = "Free Online Microphone Test: Level, Waveform & Playback";
+const metaDescription =
+  "Check microphone input level, noise floor, SNR, peak and clipping, view waveform, spectrum and level graphs, then record and play back a 10-second sample.";
+
+const referenceItems = [
+  {
+    label: "Access",
+    check: "Start the mic and allow browser permission before speaking.",
+    reading:
+      "Listening means the browser is receiving a local microphone stream. The input capsule may show sample rate in Hz and channel count as ch; neither value is a loudness score.",
+    good: "Status changes to Listening, the meter wakes up, and device info appears.",
+    concern:
+      "Permission is denied, the browser never starts input, or the page stays idle.",
+  },
+  {
+    label: "Speech Level",
+    check: "Speak normally from your usual phone distance for a few seconds.",
+    reading:
+      "Level is a relative digital peak from 0% to 100%, and Peak is the same measurement in dBFS, where 0 dBFS is the loudest value the browser can record. Neither is a calibrated real-world volume. The browser or operating system may also apply automatic gain, noise suppression, or echo cancellation, so use the values as same-device comparisons rather than universal pass limits.",
+    good:
+      "As a rough guide, ordinary speech often peaks below 0 dBFS without clipping; consistency and clean playback matter more than a specific number.",
+    concern:
+      "Input stays very weak, clips quickly, or drops out between words.",
+  },
+  {
+    label: "Noise Floor",
+    check: "Stay silent for about five seconds and let the reading settle.",
+    reading:
+      "Noise floor is the quietest level the mic keeps sending while nothing is happening, measured in dBFS. It is relative to this device's own recording scale, not a room-noise measurement in decibels SPL.",
+    good:
+      "There is no universal pass value. A useful result is a low, steady floor that remains well below your normal speech level.",
+    concern:
+      "A high or wandering floor points to background noise, wind, case blockage, or a noisy mic path.",
+  },
+  {
+    label: "Signal To Noise",
+    check:
+      "After the floor settles, speak normally for a few seconds and watch SNR.",
+    reading:
+      "SNR is the gap between your speech level and the noise floor, in decibels. A bigger gap means your voice stands further clear of the background.",
+    good:
+      "A larger, stable gap is better; around 30 dB can be a useful same-session result, not a calibrated pass mark.",
+    concern:
+      "A small gap means voice and background sit close together, but browser processing can change the number.",
+  },
+  {
+    label: "Clipping",
+    check:
+      "Speak loudly, or move close to the mic, and watch the clipping count.",
+    reading:
+      "Clipping counts moments where the waveform hit the top of the scale and got flattened. That distortion is recorded permanently and cannot be turned back down afterwards.",
+    good: "None at normal speaking distance and volume.",
+    concern:
+      "Clipping during ordinary speech means the input gain is too high or the mic is too close.",
+  },
+  {
+    label: "Views",
+    check:
+      "Compare Waveform, Spectrum, and Level Graph while speaking steadily, then pause.",
+    reading:
+      "Waveform shows signal shape and clipping, Spectrum shows relative energy by frequency, and Level Graph shows level over time against the estimated noise floor. They visualize the same browser stream and are not calibrated acoustic measurements.",
+    good:
+      "All three views respond smoothly to speech and settle when you stop.",
+    concern:
+      "A view freezes, stays flat with confirmed microphone access, or shows repeated flat-topped waveform peaks.",
+  },
+  {
+    label: "Playback",
+    check: "Record a short sample and listen back on the same page.",
+    reading:
+      "The Record and Play buttons show remaining time while running. Playback volume changes only the recorded sample you hear; it does not change microphone sensitivity or system volume.",
+    good: "Speech is understandable, balanced, and free of obvious crackle or missing sections.",
+    concern:
+      "Audio sounds muffled, clipped, hollow, or cuts out during playback.",
+  },
+];
+
+const viewOptions = [
+  {
+    id: "waveform",
+    label: "Waveform",
+    tip: "Speak normally and look for a smooth waveform without flat clipped peaks.",
+  },
+  {
+    id: "spectrum",
+    label: "Spectrum",
+    tip: "Speak steadily and check that the frequency bars respond without freezing.",
+  },
+  {
+    id: "levels",
+    label: "Level graph",
+    tip: "Speak, pause, and confirm the level rises and returns toward the noise floor.",
+  },
+];
+
+const stageCardClasses =
+  "rounded-3xl bg-linear-to-b from-blue-300/50 to-blue-500/50 p-3 sm:rounded-4xl sm:p-4";
+
+const viewButtonClasses =
+  "text-2xsmall sm:text-xsmall h-9 rounded-full border border-white/50 bg-blue-500/10 px-2 text-center leading-tight font-bold text-white transition duration-200 aria-pressed:border-white aria-pressed:bg-blue-500 aria-pressed:shadow-md aria-pressed:shadow-blue-600/40 aria-pressed:ring-1 aria-pressed:ring-white/10";
+
+const sliderLabelClasses =
+  "to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash flex h-15 w-full flex-wrap items-center gap-x-3 self-center rounded-2xl border bg-linear-to-b px-3 py-2";
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{ tools: "Tools", "mic-test": "Microphone Test" }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Online Mic Testing Tool</h1>
+        <p>
+          Allow microphone access to verify the active input and view its sample
+          rate and channel count. Watch the live level meter, peak in dBFS,
+          estimated noise floor, signal-to-noise gap, and clipping count while
+          switching between Waveform, Spectrum, and Level Graph views. Record a
+          10-second sample, adjust its playback volume, and listen for low
+          levels, background noise, distortion, muffling, or dropouts. Audio
+          analysis and recording stay in the browser. Readings are relative
+          digital measurements that may be affected by browser or
+          operating-system processing, so they are not calibrated sound-pressure
+          or microphone-quality scores.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="mic-shell"
+          actionBarLabel="Microphone test actions"
+          dockPrimaryItemCount={1}
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              className: "min-w-24 justify-center",
+              attributes: { id: "mic-start" },
+            },
+            {
+              label: "Record",
+              tone: "danger",
+              className: "min-w-28 justify-center",
+              disabled: true,
+              attributes: { id: "mic-sample" },
+            },
+            {
+              label: "Play",
+              className: "min-w-24 justify-center",
+              disabled: true,
+              attributes: { id: "mic-play" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Input",
+              value: "Not started",
+              valueAttributes: { id: "mic-run-input" },
+            },
+            {
+              label: "Level",
+              value: "0%",
+              valueAttributes: { id: "mic-run-level" },
+            },
+          ]}
+          secondaryStats={[
+            {
+              label: "Noise floor",
+              value: "--",
+              valueAttributes: { id: "mic-stat-floor" },
+            },
+            {
+              label: "SNR",
+              value: "--",
+              valueAttributes: { id: "mic-stat-snr" },
+            },
+            {
+              label: "Peak",
+              value: "--",
+              valueAttributes: { id: "mic-stat-peak" },
+            },
+            {
+              label: "Clipping",
+              value: "None",
+              valueAttributes: { id: "mic-stat-clip" },
+            },
+          ]}
+        >
+          <div id="mic-stage" class="relative size-full">
+            <div
+              class="absolute inset-0 grid content-center gap-3 px-4 sm:gap-6 sm:px-8 md:gap-8 md:px-12"
+            >
+              <div class={stageCardClasses}>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <span
+                    class="text-xsmall sm:text-small font-bold tracking-widest text-white uppercase"
+                    >Level</span
+                  >
+                  <strong
+                    id="mic-meter-value"
+                    class="text-small font-bold text-white">0%</strong
+                  >
+                </div>
+                <div
+                  class="relative h-4 overflow-hidden rounded-full border border-white/50 bg-white/10"
+                >
+                  <div id="mic-meter-fill" class="mic-meter-fill"></div>
+                  <span id="mic-meter-peak" class="mic-meter-peak"></span>
+                </div>
+                <div
+                  class="text-2xsmall sm:text-xsmall mt-2 grid grid-cols-3 gap-2 text-center font-bold tracking-widest text-white uppercase"
+                >
+                  <span>Quiet</span>
+                  <span>Good</span>
+                  <span>Hot</span>
+                </div>
+              </div>
+
+              <div
+                class="grid gap-3 rounded-3xl bg-linear-to-t from-blue-300/50 to-blue-500/50 p-3 sm:gap-4 sm:rounded-4xl sm:p-4"
+              >
+                <div
+                  class="grid grid-cols-3 gap-1.5 sm:gap-2"
+                  role="group"
+                  aria-label="Analysis view"
+                >
+                  {
+                    viewOptions.map((view, index) => (
+                      <button
+                        type="button"
+                        class={viewButtonClasses}
+                        data-mic-view={view.id}
+                        data-mic-tip={view.tip}
+                        aria-pressed={index === 0 ? "true" : "false"}
+                      >
+                        {view.label}
+                      </button>
+                    ))
+                  }
+                </div>
+                <canvas
+                  id="mic-canvas"
+                  class="h-28 w-full rounded-2xl border border-white/50 bg-white/10 sm:h-40 sm:rounded-3xl md:h-52"
+                  aria-hidden="true"></canvas>
+                <p
+                  id="mic-stage-copy"
+                  class="text-xsmall sm:text-small m-0 text-center leading-relaxed text-balance text-white"
+                >
+                  Ready to test microphone access and local recording.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <p slot="dockLead" id="mic-dock-tip">
+            {viewOptions[0]?.tip}
+          </p>
+
+          <Fragment slot="dockPrimary">
+            <label class={sliderLabelClasses} for="mic-volume">
+              <span
+                class="text-xsmall shrink-0 leading-tight font-bold tracking-widest uppercase"
+                >Playback</span
+              >
+              <input
+                class="mic-volume-input text-accent-ink order-3 m-0 h-4 basis-full bg-transparent p-0 accent-current"
+                id="mic-volume"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+              />
+              <strong
+                id="mic-run-volume"
+                class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
+                >100%</strong
+              >
+            </label>
+            <audio id="mic-playback" preload="metadata" hidden></audio>
+          </Fragment>
+        </ToolRuntime>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="lg:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          panelLabel="Microphone check and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    .mic-meter-fill {
+      @apply absolute inset-0 rounded-full bg-linear-to-r from-white via-green-500 to-red-500 transition-all duration-75 ease-linear;
+      clip-path: inset(0 100% 0 0);
+    }
+
+    .mic-meter-peak {
+      @apply pointer-events-none absolute inset-y-0 w-0.5 rounded-full bg-white opacity-0 transition-[left] duration-100 ease-out;
+      left: var(--mic-peak, 0%);
+    }
+
+    .mic-meter-peak[data-visible="true"] {
+      @apply opacity-90;
+    }
+
+    :global(#mic-start[data-active="true"]) {
+      @apply from-red-600 to-red-400;
+    }
+
+    :global(#mic-stat-clip[data-alert="true"]) {
+      @apply font-bold text-red-600 dark:text-red-400;
+    }
+
+    :global(#mic-shell .tool-runtime-dock-head) {
+      @apply md:col-span-6 md:col-start-1;
+    }
+
+    :global(#mic-shell .tool-runtime-dock-extra) {
+      @apply md:col-span-2 md:col-start-7;
+    }
+
+    .mic-volume-input {
+      -webkit-appearance: none;
+      appearance: none;
+      --volume-track-bg: --alpha(var(--accent-500) / 50%);
+      --volume-thumb-bg: var(--color-custom-700);
+
+      @variant dark {
+        --volume-thumb-bg: var(--color-custom-100);
+      }
+    }
+
+    .mic-volume-input::-webkit-slider-runnable-track {
+      @apply h-1 rounded-full;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--volume-track-bg);
+    }
+
+    .mic-volume-input::-webkit-slider-thumb {
+      @apply -mt-1 size-4 rounded-full border-0;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--volume-thumb-bg);
+    }
+
+    .mic-volume-input::-moz-range-track {
+      @apply h-1 rounded-full;
+      background-color: var(--volume-track-bg);
+    }
+
+    .mic-volume-input::-moz-range-thumb {
+      @apply size-4 rounded-full border-0;
+      background-color: var(--volume-thumb-bg);
+    }
+  </style>
+
+  <script>
+    import {
+      onPageHide,
+      observeResize,
+      type ResizeHandle,
+    } from "@/utils/phones/tools/lifecycle";
+    import { describeMediaError } from "@/utils/phones/tools/capabilities";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      SILENCE_DBFS,
+      amplitudeToDbfs,
+      averageBandLevel,
+      computePeakAmplitude,
+      computeRmsDbfs,
+      createLogBands,
+      detectClipping,
+      getAudioContextClass,
+      onAudioContextStateChange,
+      percentile,
+      rampParam,
+      type FrequencyBand,
+    } from "@/utils/phones/tools/audio";
+
+    type MicView = "waveform" | "spectrum" | "levels";
+
+    const RECORD_DURATION_MS = 10000;
+    const MIC_PERMISSION_TIMEOUT_MS = 15000;
+    const FFT_SIZE = 1024;
+    const DRAW_INTERVAL_MS = 1000 / 30;
+    const METRIC_INTERVAL_MS = 200;
+    const HISTORY_SAMPLES = 360;
+    const MEASURE_SAMPLES = 150;
+    const GRAPH_FLOOR_DBFS = -80;
+    const SPECTRUM_BANDS = 28;
+    const SPECTRUM_MIN_HZ = 40;
+    const SPECTRUM_MAX_HZ = 16000;
+    const IDLE_COPY = "Ready to test microphone access and local recording.";
+    const RECORDER_MIME_TYPES = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/ogg;codecs=opus",
+    ];
+
+    const startButton = document.getElementById(
+      "mic-start",
+    ) as HTMLButtonElement | null;
+    const sampleButton = document.getElementById(
+      "mic-sample",
+    ) as HTMLButtonElement | null;
+    const playButton = document.getElementById(
+      "mic-play",
+    ) as HTMLButtonElement | null;
+    const stageCopy = document.getElementById("mic-stage-copy");
+    const runInput = document.getElementById("mic-run-input");
+    const runLevel = document.getElementById("mic-run-level");
+    const statFloor = document.getElementById("mic-stat-floor");
+    const statSnr = document.getElementById("mic-stat-snr");
+    const statPeak = document.getElementById("mic-stat-peak");
+    const statClip = document.getElementById("mic-stat-clip");
+    const volumeInput = document.getElementById(
+      "mic-volume",
+    ) as HTMLInputElement | null;
+    const runVolume = document.getElementById("mic-run-volume");
+    const meterFill = document.getElementById("mic-meter-fill");
+    const meterPeak = document.getElementById("mic-meter-peak");
+    const meterValue = document.getElementById("mic-meter-value");
+    const canvas = document.getElementById(
+      "mic-canvas",
+    ) as HTMLCanvasElement | null;
+    const playback = document.getElementById(
+      "mic-playback",
+    ) as HTMLAudioElement | null;
+    const viewButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-mic-view]"),
+    );
+    const dockTip = document.getElementById("mic-dock-tip");
+
+    const pageController = new AbortController();
+    const { signal } = pageController;
+    const wakeLock = createWakeLock({ signal });
+
+    let stream: MediaStream | null = null;
+    let audioContext: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let stopStateWatch: (() => void) | null = null;
+    let recorder: MediaRecorder | null = null;
+    let chunks: BlobPart[] = [];
+    let animationFrame = 0;
+    let lastDraw = 0;
+    let lastMetricPaint = 0;
+    let sampleUrl: string | null = null;
+    let recordStopTimer: number | null = null;
+    let recordCountdownTimer: number | null = null;
+    let playbackCountdownTimer: number | null = null;
+    let recordStartedAt = 0;
+    let recordedDurationMs = 0;
+    let isStartingMic = false;
+    let micStartRequestId = 0;
+    let micPermissionTimeout: number | null = null;
+    let canvasResizeObserver: ResizeHandle | null = null;
+    let discardRecording = false;
+
+    let activeView: MicView = "waveform";
+    let timeData: Float32Array | null = null;
+    let frequencyData: Uint8Array | null = null;
+    let spectrumBands: FrequencyBand[] = [];
+    let levelHistory: number[] = [];
+    let measureWindow: number[] = [];
+    let noiseFloorDb = SILENCE_DBFS;
+    let speechDb = SILENCE_DBFS;
+    let peakDb = SILENCE_DBFS;
+    let peakHoldAmplitude = 0;
+    let peakHoldAt = 0;
+    let clipEvents = 0;
+    let lastClipAt = 0;
+
+    let canvasContext: CanvasRenderingContext2D | null = null;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    let waveformStroke: string | CanvasGradient = "#ffffff";
+    let barFill: string | CanvasGradient = "#93c5fd";
+
+    let playbackContext: AudioContext | null = null;
+    let playbackGain: GainNode | null = null;
+    let playbackGraphReady = false;
+
+    function setStatus(text: string): void {
+      if (stageCopy) stageCopy.textContent = text;
+    }
+
+    function setInput(text: string): void {
+      if (runInput) runInput.textContent = text;
+    }
+
+    function isRecording(): boolean {
+      return recorder?.state === "recording";
+    }
+
+    function isPlayingBack(): boolean {
+      return Boolean(playback && !playback.paused && !playback.ended);
+    }
+
+    function formatSeconds(milliseconds: number): string {
+      return (Math.max(0, milliseconds) / 1000).toFixed(1);
+    }
+
+    function syncStartButton(): void {
+      if (!startButton) return;
+      const listening = Boolean(stream);
+      startButton.disabled = isStartingMic;
+      startButton.textContent = isStartingMic
+        ? "Waiting"
+        : listening
+          ? "Stop"
+          : "Start";
+      startButton.dataset.active = String(listening);
+      startButton.setAttribute("aria-pressed", String(listening));
+      startButton.setAttribute("aria-busy", String(isStartingMic));
+    }
+
+    function syncSampleButton(remainingMs: number | null = null): void {
+      if (!sampleButton) return;
+      sampleButton.disabled = !stream;
+      sampleButton.textContent = isRecording()
+        ? `Stop ${remainingMs === null ? formatSeconds(RECORD_DURATION_MS) : formatSeconds(remainingMs)}s`
+        : "Record";
+    }
+
+    function syncPlayButton(remainingMs: number | null = null): void {
+      if (!playButton) return;
+      playButton.disabled = !sampleUrl || isRecording();
+      playButton.textContent = isPlayingBack()
+        ? `Pause ${formatSeconds(remainingMs ?? recordedDurationMs)}s`
+        : "Play";
+    }
+
+    function syncButtons(): void {
+      syncStartButton();
+      syncSampleButton();
+      syncPlayButton();
+    }
+
+    function ensurePlaybackGraph(): void {
+      if (playbackGraphReady || !playback) return;
+      const ContextClass = getAudioContextClass();
+      if (!ContextClass) return;
+      try {
+        const context = new ContextClass();
+        const gain = context.createGain();
+        context
+          .createMediaElementSource(playback)
+          .connect(gain)
+          .connect(context.destination);
+        playbackContext = context;
+        playbackGain = gain;
+        playbackGraphReady = true;
+        syncPlaybackVolume();
+      } catch {
+        playbackContext = null;
+        playbackGain = null;
+        playbackGraphReady = false;
+      }
+    }
+
+    function syncPlaybackVolume(): void {
+      const nextVolume = Math.min(
+        100,
+        Math.max(0, Number(volumeInput?.value ?? 100)),
+      );
+      const gainValue = nextVolume / 100;
+      if (playbackGain && playbackContext) {
+        rampParam(playbackGain.gain, gainValue, playbackContext, 0.02);
+      } else if (playback) {
+        playback.volume = gainValue;
+      }
+      if (runVolume) runVolume.textContent = `${Math.round(nextVolume)}%`;
+      volumeInput?.setAttribute(
+        "aria-label",
+        `Playback volume ${Math.round(nextVolume)}%`,
+      );
+    }
+
+    function resizeCanvas(): void {
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      canvasWidth = Math.max(1, Math.round(rect.width));
+      canvasHeight = Math.max(1, Math.round(rect.height));
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(canvasWidth * ratio);
+      canvas.height = Math.round(canvasHeight * ratio);
+      canvasContext = canvas.getContext("2d");
+      canvasContext?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (!canvasContext) {
+        waveformStroke = "#ffffff";
+        barFill = "#93c5fd";
+        return;
+      }
+      const horizontal = canvasContext.createLinearGradient(
+        0,
+        0,
+        canvasWidth,
+        0,
+      );
+      horizontal.addColorStop(0, "#ffffff");
+      horizontal.addColorStop(0.5, "#93c5fd");
+      horizontal.addColorStop(1, "#2563eb");
+      waveformStroke = horizontal;
+      const vertical = canvasContext.createLinearGradient(
+        0,
+        canvasHeight,
+        0,
+        0,
+      );
+      vertical.addColorStop(0, "#2563eb");
+      vertical.addColorStop(0.6, "#93c5fd");
+      vertical.addColorStop(1, "#ffffff");
+      barFill = vertical;
+      drawActiveView();
+    }
+
+    function clearCanvas(): CanvasRenderingContext2D | null {
+      if (!canvasContext || canvasWidth <= 0) return null;
+      canvasContext.clearRect(0, 0, canvasWidth, canvasHeight);
+      return canvasContext;
+    }
+
+    function drawWaveform(): void {
+      const context = clearCanvas();
+      if (!context || !timeData) return;
+      context.strokeStyle = waveformStroke;
+      context.lineWidth = 2;
+      context.beginPath();
+      const middle = canvasHeight / 2;
+      for (let index = 0; index < timeData.length; index += 1) {
+        const x = (index / (timeData.length - 1)) * canvasWidth;
+        const y = middle - (timeData[index] ?? 0) * middle;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.stroke();
+    }
+
+    function drawSpectrum(): void {
+      const context = clearCanvas();
+      if (!context || !frequencyData || spectrumBands.length === 0) return;
+      const gap = canvasWidth < 320 ? 2 : 3;
+      const barWidth = Math.max(
+        1,
+        (canvasWidth - gap * (spectrumBands.length + 1)) / spectrumBands.length,
+      );
+      context.fillStyle = barFill;
+      spectrumBands.forEach((band, index) => {
+        const level = averageBandLevel(frequencyData as Uint8Array, band);
+        const height = Math.max(2, level * (canvasHeight - 6));
+        const x = gap + index * (barWidth + gap);
+        context.beginPath();
+        context.roundRect(
+          x,
+          canvasHeight - height - 3,
+          barWidth,
+          height,
+          barWidth / 2,
+        );
+        context.fill();
+      });
+    }
+
+    function levelToY(dbfs: number): number {
+      const clamped = Math.min(0, Math.max(GRAPH_FLOOR_DBFS, dbfs));
+      const ratio = (clamped - GRAPH_FLOOR_DBFS) / -GRAPH_FLOOR_DBFS;
+      return canvasHeight - ratio * (canvasHeight - 4) - 2;
+    }
+
+    function drawLevels(): void {
+      const context = clearCanvas();
+      if (!context) return;
+
+      context.lineWidth = 1;
+      context.strokeStyle = "rgba(255,255,255,0.18)";
+      context.setLineDash([]);
+      for (const gridDb of [-60, -40, -20]) {
+        const y = levelToY(gridDb);
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(canvasWidth, y);
+        context.stroke();
+      }
+
+      if (noiseFloorDb > SILENCE_DBFS) {
+        context.setLineDash([4, 4]);
+        context.strokeStyle = "rgba(255,255,255,0.65)";
+        const floorY = levelToY(noiseFloorDb);
+        context.beginPath();
+        context.moveTo(0, floorY);
+        context.lineTo(canvasWidth, floorY);
+        context.stroke();
+        context.setLineDash([]);
+      }
+
+      if (levelHistory.length < 2) return;
+      context.strokeStyle = waveformStroke;
+      context.lineWidth = 2;
+      context.beginPath();
+      const step = canvasWidth / (HISTORY_SAMPLES - 1);
+      const offset = HISTORY_SAMPLES - levelHistory.length;
+      levelHistory.forEach((value, index) => {
+        const x = (index + offset) * step;
+        const y = levelToY(value);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.stroke();
+    }
+
+    function drawActiveView(): void {
+      if (activeView === "spectrum") drawSpectrum();
+      else if (activeView === "levels") drawLevels();
+      else drawWaveform();
+    }
+
+    function formatDbfs(value: number): string {
+      return value <= SILENCE_DBFS + 0.5 ? "--" : `${value.toFixed(1)} dBFS`;
+    }
+
+    function resetMeasurements(): void {
+      levelHistory = [];
+      measureWindow = [];
+      noiseFloorDb = SILENCE_DBFS;
+      speechDb = SILENCE_DBFS;
+      peakDb = SILENCE_DBFS;
+      peakHoldAmplitude = 0;
+      peakHoldAt = 0;
+      clipEvents = 0;
+      lastClipAt = 0;
+      if (meterFill) meterFill.style.clipPath = "inset(0 100% 0 0)";
+      if (meterPeak) meterPeak.dataset.visible = "false";
+      if (runLevel) runLevel.textContent = "0%";
+      if (meterValue) meterValue.textContent = "0%";
+      if (statFloor) statFloor.textContent = "--";
+      if (statSnr) statSnr.textContent = "--";
+      if (statPeak) statPeak.textContent = "--";
+      if (statClip) {
+        statClip.textContent = "None";
+        statClip.dataset.alert = "false";
+      }
+      clearCanvas();
+    }
+
+    function paintMetrics(): void {
+      if (statFloor) statFloor.textContent = formatDbfs(noiseFloorDb);
+      if (statPeak) statPeak.textContent = formatDbfs(peakDb);
+      if (statSnr) {
+        const usable =
+          noiseFloorDb > SILENCE_DBFS && speechDb > noiseFloorDb + 1;
+        statSnr.textContent = usable
+          ? `${Math.round(speechDb - noiseFloorDb)} dB`
+          : "--";
+      }
+      if (statClip) {
+        statClip.textContent =
+          clipEvents === 0
+            ? "None"
+            : `${clipEvents} ${clipEvents === 1 ? "event" : "events"}`;
+        statClip.dataset.alert = String(clipEvents > 0);
+      }
+    }
+
+    function measure(now: number): void {
+      if (!analyser || !timeData) return;
+      analyser.getFloatTimeDomainData(timeData as Float32Array<ArrayBuffer>);
+      if (frequencyData && activeView === "spectrum") {
+        analyser.getByteFrequencyData(frequencyData as Uint8Array<ArrayBuffer>);
+      }
+
+      const peakAmplitude = computePeakAmplitude(timeData);
+      const rmsDb = computeRmsDbfs(timeData);
+      const framePeakDb = amplitudeToDbfs(peakAmplitude);
+      if (framePeakDb > peakDb) peakDb = framePeakDb;
+
+      const level = Math.min(100, Math.round(peakAmplitude * 100));
+      if (meterFill) meterFill.style.clipPath = `inset(0 ${100 - level}% 0 0)`;
+      if (runLevel) runLevel.textContent = `${level}%`;
+      if (meterValue) meterValue.textContent = `${level}%`;
+
+      if (peakAmplitude >= peakHoldAmplitude || now - peakHoldAt > 1500) {
+        peakHoldAmplitude = peakAmplitude;
+        peakHoldAt = now;
+      }
+      if (meterPeak) {
+        meterPeak.style.setProperty(
+          "--mic-peak",
+          `${Math.min(100, Math.round(peakHoldAmplitude * 100))}%`,
+        );
+        meterPeak.dataset.visible = String(peakHoldAmplitude > 0.01);
+      }
+
+      if (detectClipping(timeData) && now - lastClipAt > 250) {
+        clipEvents += 1;
+        lastClipAt = now;
+      }
+
+      levelHistory.push(rmsDb);
+      if (levelHistory.length > HISTORY_SAMPLES) levelHistory.shift();
+      measureWindow.push(rmsDb);
+      if (measureWindow.length > MEASURE_SAMPLES) measureWindow.shift();
+
+      if (measureWindow.length >= 30) {
+        noiseFloorDb = percentile(measureWindow, 0.1);
+        speechDb = percentile(measureWindow, 0.95);
+      }
+    }
+
+    function renderFrame(now: number): void {
+      if (!analyser || document.hidden) {
+        animationFrame = 0;
+        return;
+      }
+      animationFrame = requestAnimationFrame(renderFrame);
+      if (now - lastDraw < DRAW_INTERVAL_MS) return;
+      lastDraw = now;
+      measure(now);
+      drawActiveView();
+      if (now - lastMetricPaint >= METRIC_INTERVAL_MS) {
+        lastMetricPaint = now;
+        paintMetrics();
+      }
+    }
+
+    function startRendering(): void {
+      if (animationFrame !== 0 || !analyser || document.hidden) return;
+      lastDraw = 0;
+      lastMetricPaint = 0;
+      animationFrame = requestAnimationFrame(renderFrame);
+    }
+
+    function stopRendering(): void {
+      if (animationFrame === 0) return;
+      cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
+    }
+
+    function clearMicPermissionTimeout(): void {
+      if (micPermissionTimeout === null) return;
+      window.clearTimeout(micPermissionTimeout);
+      micPermissionTimeout = null;
+    }
+
+    function clearRecordStopTimer(): void {
+      if (recordStopTimer === null) return;
+      window.clearTimeout(recordStopTimer);
+      recordStopTimer = null;
+    }
+
+    function clearRecordCountdownTimer(): void {
+      if (recordCountdownTimer === null) return;
+      window.clearInterval(recordCountdownTimer);
+      recordCountdownTimer = null;
+    }
+
+    function clearPlaybackCountdownTimer(): void {
+      if (playbackCountdownTimer === null) return;
+      window.clearInterval(playbackCountdownTimer);
+      playbackCountdownTimer = null;
+    }
+
+    function updateRecordTimer(): void {
+      if (!recordStartedAt) return;
+      const elapsed = Math.min(
+        RECORD_DURATION_MS,
+        performance.now() - recordStartedAt,
+      );
+      syncSampleButton(RECORD_DURATION_MS - elapsed);
+    }
+
+    function updatePlaybackTimer(): void {
+      if (!playback) return;
+      const durationMs =
+        Number.isFinite(playback.duration) && playback.duration > 0
+          ? playback.duration * 1000
+          : recordedDurationMs;
+      syncPlayButton(Math.max(0, durationMs - playback.currentTime * 1000));
+    }
+
+    function stopStreamTracks(target: MediaStream | null): void {
+      target?.getTracks().forEach((track) => track.stop());
+    }
+
+    function clearPlaybackSample(): void {
+      clearPlaybackCountdownTimer();
+      playback?.pause();
+      if (playback) {
+        playback.removeAttribute("src");
+        playback.load();
+      }
+      if (sampleUrl) URL.revokeObjectURL(sampleUrl);
+      sampleUrl = null;
+      recordedDurationMs = 0;
+      syncButtons();
+    }
+
+    function toggleMic(): void {
+      if (stream) {
+        stopMic();
+        return;
+      }
+      void startMic();
+    }
+
+    function handleContextState(state: AudioContextState): void {
+      if (!stream) return;
+      if (state === "running") {
+        startRendering();
+        setStatus("Listening. Speak normally and watch the level meter.");
+        return;
+      }
+      stopRendering();
+      setStatus(
+        "Audio input was interrupted by the system, likely a call or another app. Press Stop then Start to resume.",
+      );
+    }
+
+    async function startMic(): Promise<void> {
+      if (stream) return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus(
+          "This browser does not expose microphone access to web pages.",
+        );
+        return;
+      }
+      const ContextClass = getAudioContextClass();
+      if (!ContextClass) {
+        setStatus("Audio analysis is unavailable in this browser.");
+        return;
+      }
+
+      const requestId = micStartRequestId + 1;
+      micStartRequestId = requestId;
+      isStartingMic = true;
+      syncButtons();
+      setStatus("Waiting for microphone permission in the browser prompt.");
+      setInput("Requesting");
+
+      let nextStream: MediaStream | null = null;
+      let nextAudioContext: AudioContext | null = null;
+      try {
+        const mediaRequest = navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        mediaRequest
+          .then((lateStream) => {
+            if (requestId !== micStartRequestId) stopStreamTracks(lateStream);
+          })
+          .catch(() => undefined);
+
+        const permissionResult = await Promise.race([
+          mediaRequest.then((permissionStream) => ({
+            status: "granted" as const,
+            stream: permissionStream,
+          })),
+          new Promise<{ status: "timeout" }>((resolve) => {
+            micPermissionTimeout = window.setTimeout(
+              () => resolve({ status: "timeout" }),
+              MIC_PERMISSION_TIMEOUT_MS,
+            );
+          }),
+        ]);
+        clearMicPermissionTimeout();
+
+        if (permissionResult.status === "timeout") {
+          if (requestId === micStartRequestId) {
+            micStartRequestId += 1;
+            isStartingMic = false;
+            setStatus(
+              "Microphone permission is still waiting. Close or approve the browser prompt, then press Start again.",
+            );
+            setInput("No input");
+            syncButtons();
+          }
+          return;
+        }
+
+        if (requestId !== micStartRequestId) {
+          stopStreamTracks(permissionResult.stream);
+          return;
+        }
+
+        nextStream = permissionResult.stream;
+        nextAudioContext = new ContextClass();
+        if (nextAudioContext.state === "suspended") {
+          await nextAudioContext.resume().catch(() => undefined);
+        }
+        const nextAnalyser = nextAudioContext.createAnalyser();
+        nextAnalyser.fftSize = FFT_SIZE;
+        nextAnalyser.smoothingTimeConstant = 0.7;
+        const nextSource = nextAudioContext.createMediaStreamSource(nextStream);
+        nextSource.connect(nextAnalyser);
+
+        stream = nextStream;
+        audioContext = nextAudioContext;
+        analyser = nextAnalyser;
+        source = nextSource;
+        timeData = new Float32Array(nextAnalyser.fftSize);
+        frequencyData = new Uint8Array(nextAnalyser.frequencyBinCount);
+        spectrumBands = createLogBands(
+          SPECTRUM_BANDS,
+          SPECTRUM_MIN_HZ,
+          SPECTRUM_MAX_HZ,
+          nextAudioContext.sampleRate,
+          nextAnalyser.frequencyBinCount,
+        );
+        stopStateWatch = onAudioContextStateChange(
+          nextAudioContext,
+          handleContextState,
+        );
+
+        const settings = nextStream.getAudioTracks()[0]?.getSettings();
+        const sampleRate = settings?.sampleRate
+          ? `${settings.sampleRate} Hz`
+          : "Live";
+        const channels = settings?.channelCount
+          ? `${settings.channelCount} ch`
+          : "";
+        setInput([sampleRate, channels].filter(Boolean).join(" / "));
+        setStatus(
+          "Listening. Stay quiet for a few seconds to settle the noise floor, then speak normally.",
+        );
+        isStartingMic = false;
+        resetMeasurements();
+        syncButtons();
+        resizeCanvas();
+        startRendering();
+        wakeLock.request();
+      } catch (error) {
+        clearMicPermissionTimeout();
+        stopStreamTracks(nextStream);
+        void nextAudioContext?.close().catch(() => undefined);
+        if (requestId === micStartRequestId) {
+          isStartingMic = false;
+          setStatus(describeMediaError(error).message);
+          setInput("No input");
+          syncButtons();
+        }
+      }
+    }
+
+    function stopMic(): void {
+      micStartRequestId += 1;
+      wakeLock.release();
+      clearMicPermissionTimeout();
+      isStartingMic = false;
+      discardRecording = true;
+      if (isRecording()) recorder?.stop();
+      stopRendering();
+      clearRecordStopTimer();
+      clearRecordCountdownTimer();
+      clearPlaybackCountdownTimer();
+
+      stopStreamTracks(stream);
+      stream = null;
+
+      stopStateWatch?.();
+      stopStateWatch = null;
+      source?.disconnect();
+      analyser?.disconnect();
+      const closingContext = audioContext;
+      audioContext = null;
+      analyser = null;
+      source = null;
+      timeData = null;
+      frequencyData = null;
+      spectrumBands = [];
+      void closingContext?.close().catch(() => undefined);
+
+      chunks = [];
+      recordStartedAt = 0;
+      recordedDurationMs = 0;
+      resetMeasurements();
+      setStatus(IDLE_COPY);
+      setInput("Not started");
+      syncButtons();
+    }
+
+    function getRecorderOptions(): MediaRecorderOptions | undefined {
+      if (!("MediaRecorder" in window)) return undefined;
+      if (typeof MediaRecorder.isTypeSupported !== "function") return undefined;
+      const mimeType = RECORDER_MIME_TYPES.find((type) =>
+        MediaRecorder.isTypeSupported(type),
+      );
+      return mimeType ? { mimeType } : undefined;
+    }
+
+    function handleRecorderStop(
+      recorderOptions: MediaRecorderOptions | undefined,
+    ): void {
+      clearRecordStopTimer();
+      clearRecordCountdownTimer();
+      const finishedRecorder = recorder;
+      recorder = null;
+
+      if (discardRecording) {
+        chunks = [];
+        recordStartedAt = 0;
+        syncButtons();
+        return;
+      }
+
+      recordedDurationMs = recordStartedAt
+        ? Math.min(RECORD_DURATION_MS, performance.now() - recordStartedAt)
+        : 0;
+      recordStartedAt = 0;
+
+      const sampleMimeType =
+        finishedRecorder?.mimeType || recorderOptions?.mimeType || "audio/webm";
+      const blob = new Blob(chunks, { type: sampleMimeType });
+      chunks = [];
+
+      if (blob.size === 0) {
+        setStatus(
+          "The recording came back empty. Check that the microphone is not muted or in use by another app, then try again.",
+        );
+        syncButtons();
+        return;
+      }
+
+      sampleUrl = URL.createObjectURL(blob);
+      if (playback) {
+        playback.src = sampleUrl;
+        playback.load();
+      }
+      setStatus(
+        "Sample ready. Play it back and listen for muffling or clipping.",
+      );
+      syncButtons();
+    }
+
+    async function recordSample(): Promise<void> {
+      if (!stream) await startMic();
+      if (!stream) return;
+      if (!("MediaRecorder" in window)) {
+        setStatus(
+          "This browser cannot record audio, but the live meter and analysis still work.",
+        );
+        return;
+      }
+
+      clearPlaybackSample();
+      clearRecordStopTimer();
+      clearRecordCountdownTimer();
+      chunks = [];
+      discardRecording = false;
+
+      const recorderOptions = getRecorderOptions();
+      try {
+        recorder = new MediaRecorder(stream, recorderOptions);
+      } catch (error) {
+        recorder = null;
+        setStatus(describeMediaError(error).message);
+        return;
+      }
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      recorder.addEventListener("stop", () =>
+        handleRecorderStop(recorderOptions),
+      );
+      recorder.start();
+
+      recordStartedAt = performance.now();
+      recordedDurationMs = 0;
+      updateRecordTimer();
+      recordCountdownTimer = window.setInterval(updateRecordTimer, 100);
+      setStatus("Recording for 10 seconds. Speak normally.");
+      syncButtons();
+      recordStopTimer = window.setTimeout(() => {
+        if (isRecording()) recorder?.stop();
+      }, RECORD_DURATION_MS);
+    }
+
+    async function togglePlayback(): Promise<void> {
+      if (!playback || !sampleUrl) return;
+      ensurePlaybackGraph();
+      if (playbackContext?.state === "suspended") {
+        await playbackContext.resume().catch(() => undefined);
+      }
+      syncPlaybackVolume();
+      if (!playback.paused) {
+        playback.pause();
+        return;
+      }
+      await playback.play().catch(() => {
+        setStatus("Playback could not start in this browser.");
+        syncButtons();
+      });
+    }
+
+    function setView(view: MicView): void {
+      activeView = view;
+      viewButtons.forEach((button) => {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.micView === view),
+        );
+      });
+      const activeViewButton = viewButtons.find(
+        (button) => button.dataset.micView === view,
+      );
+      if (dockTip && activeViewButton?.dataset.micTip) {
+        dockTip.textContent = activeViewButton.dataset.micTip;
+      }
+      drawActiveView();
+    }
+
+    startButton?.addEventListener("click", toggleMic, { signal });
+    sampleButton?.addEventListener(
+      "click",
+      () => {
+        if (isRecording()) {
+          recorder?.stop();
+          return;
+        }
+        void recordSample();
+      },
+      { signal },
+    );
+    playButton?.addEventListener("click", () => void togglePlayback(), {
+      signal,
+    });
+    viewButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const view = button.dataset.micView;
+          if (view === "waveform" || view === "spectrum" || view === "levels") {
+            setView(view);
+          }
+        },
+        { signal },
+      );
+    });
+
+    if (playback) {
+      playback.addEventListener(
+        "play",
+        () => {
+          clearPlaybackCountdownTimer();
+          updatePlaybackTimer();
+          playbackCountdownTimer = window.setInterval(updatePlaybackTimer, 100);
+          syncButtons();
+        },
+        { signal },
+      );
+      playback.addEventListener(
+        "pause",
+        () => {
+          clearPlaybackCountdownTimer();
+          syncButtons();
+        },
+        { signal },
+      );
+      playback.addEventListener(
+        "ended",
+        () => {
+          playback.currentTime = 0;
+          clearPlaybackCountdownTimer();
+          syncButtons();
+          setStatus(
+            "Playback complete. Record another short sample if needed.",
+          );
+        },
+        { signal },
+      );
+    }
+
+    volumeInput?.addEventListener("input", syncPlaybackVolume, { signal });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden) stopRendering();
+        else if (stream) startRendering();
+      },
+      { signal },
+    );
+
+    canvasResizeObserver = observeResize(canvas, resizeCanvas);
+    onPageHide(() => {
+      stopMic();
+      clearPlaybackSample();
+      canvasResizeObserver?.disconnect();
+      canvasResizeObserver = null;
+      void playbackContext?.close().catch(() => undefined);
+      playbackContext = null;
+      playbackGain = null;
+      playbackGraphReady = false;
+      pageController.abort();
+    });
+
+    resizeCanvas();
+    syncPlaybackVolume();
+    setView("waveform");
+    resetMeasurements();
+    syncButtons();
+    setStatus(IDLE_COPY);
+    setInput("Not started");
+  </script>
+</BaseLayout>

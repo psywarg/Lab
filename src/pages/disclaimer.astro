@@ -1,0 +1,138 @@
+---
+// src/pages/disclaimer.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { ORGANIZATION_ID, SITE_ORIGIN } from "@/utils/site/schema";
+
+const title = "Disclaimer - Sorted Tech";
+const metaDescription =
+  "Sorted Tech is transparent. See how we ensure content accuracy, handle sponsorships, and provide unbiased guidance.";
+const ogImage = DEFAULT_OG_IMAGE;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: "Disclaimer",
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/disclaimer`,
+  publisher: {
+    "@id": ORGANIZATION_ID,
+  },
+};
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card rounded-none">
+    <h1>Disclaimer</h1>
+
+    <p class="text-small mb-4">
+      <strong>Effective Date:</strong> 10th October 2025.
+    </p>
+
+    <p>
+      This page explains how you should interpret the information published on
+      Sorted Tech (sortedtech.net).
+    </p>
+
+    <p class="mb-4 lg:mb-6">
+      We'll keep this brief. The details below are what lawyers care about, even
+      if no one else ever reads them.
+    </p>
+
+    <h2>1. General Information & Content Accuracy</h2>
+    <p>
+      Sorted Tech aims to help readers make smarter tech decisions by presenting
+      clear, independent, and data-backed information. While we work hard to
+      research, test, and verify everything we publish, the content on this site
+      is still general information and not formal, certified advice.
+    </p>
+    <p>
+      Technology evolves quickly. Prices change, firmware updates roll out,
+      products get revised or discontinued, and details can shift over time. As
+      a result, we cannot guarantee that every piece of information on the site
+      will always be complete, current, or error-free.
+    </p>
+    <p>
+      Our content consists of independent assessments based on research,
+      testing, and real-world evaluation. We strive for objectivity and
+      transparency, but these assessments ultimately reflect our judgment at the
+      time of publication. They are guides to help you make informed decisions,
+      not definitive conclusions.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      If you notice something that seems inaccurate or outdated, don't hesitate
+      to contact us with a correction.
+    </p>
+
+    <h2>2. Product Availability, Pricing & External Changes</h2>
+    <p>
+      Sorted Tech does not control product availability, pricing, shipping,
+      warranty terms, platform policies, or any decisions made by third-party
+      sellers or manufacturers. Any product details mentioned on the site are
+      subject to change without notice.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      Before making a purchase, please verify important information, such as
+      price, availability, specifications, and warranty terms, directly with the
+      manufacturer or retailer.
+    </p>
+
+    <h2>3. Interactive Checks & Results</h2>
+    <p>
+      Our tools let you run checks directly in your browser. These are practical
+      utilities designed to help you observe things like display behavior, touch
+      input, audio output, microphone input, and motion sensor response.
+    </p>
+    <p>
+      These checks depend on your device hardware, browser support, permissions,
+      operating system behavior, and current environment. They are not
+      calibrated lab instruments and should not be treated as a repair
+      diagnosis, warranty certificate, or proof that a device is defect-free.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      Use them as a helpful first look. If your device shows a serious or
+      repeated issue, confirm it with the manufacturer, service center, or
+      another qualified technician.
+    </p>
+
+    <h2>4. Affiliations, Compensation & Independence</h2>
+    <p>
+      Currently, Sorted Tech does not accept sponsorships, paid placements, or
+      affiliate commissions. If this changes in the future, we will clearly
+      disclose any such relationships on a per-page basis, where relevant.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      Regardless of any future partnerships, our goal will always be to maintain
+      transparency, integrity, and independence in all evaluations.
+    </p>
+
+    <h2>5. External Links</h2>
+    <p>
+      Sorted Tech may link to external websites for reference or convenience. We
+      do not have control over the content, policies, or practices of those
+      third-party sites and cannot take responsibility for their accuracy,
+      safety, or reliability.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      Visiting external sites is at your own discretion.
+    </p>
+
+    <h2>6. Limitation of Liability</h2>
+    <p>
+      Sorted Tech is not liable for any loss, damage, or inconvenience arising
+      from:
+    </p>
+    <ul class="mb-6 list-disc pl-6 lg:mb-8">
+      <li>reliance on information published on the site,</li>
+      <li>errors or outdated information, or</li>
+      <li>actions taken based on our reviews, rankings, or recommendations.</li>
+    </ul>
+    <p>
+      Use the information here as a helpful guide. The final decision is always
+      yours. Thank you for visiting Sorted Tech.
+    </p>
+  </section>
+</BaseLayout>

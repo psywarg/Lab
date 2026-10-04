@@ -1,0 +1,658 @@
+---
+// src/pages/contact.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SortoContact from "@/assets/images/sorto/sorto-contact.svg";
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { ORGANIZATION_ID, SITE_ORIGIN, WEBSITE_ID } from "@/utils/site/schema";
+
+const CONTACT_SUBJECT_OPTIONS = [
+  "General Enquiry",
+  "Correction or Typo",
+  "Press & Partnerships",
+  "Privacy or Legal",
+] as const;
+
+type ContactSubject = (typeof CONTACT_SUBJECT_OPTIONS)[number];
+
+const title = "Contact - Sorted Tech";
+const metaDescription =
+  "Have feedback or a story to share? Get in touch with Sorted Tech. We'd love to hear from you.";
+const ogImage = DEFAULT_OG_IMAGE;
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY as string;
+
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    "@id": `${SITE_ORIGIN}/contact#webpage`,
+    name: "Contact Sorted Tech",
+    description: metaDescription,
+    url: `${SITE_ORIGIN}/contact`,
+    isPartOf: { "@id": WEBSITE_ID },
+    mainEntity: { "@id": ORGANIZATION_ID },
+    publisher: { "@id": ORGANIZATION_ID },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": ORGANIZATION_ID,
+    contactPoint: [
+      {
+        "@type": "ContactPoint",
+        contactType: "Feedback",
+        availableLanguage: "English",
+      },
+    ],
+  },
+];
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card page-column rounded-none">
+    <div
+      class="mx-auto mt-4 mb-4 w-65 sm:float-right sm:w-70 md:w-75 lg:w-80 xl:w-85"
+    >
+      <SortoContact
+        class="block h-auto w-full"
+        role="img"
+        aria-label="Sorto, Keeper of the Code"
+      />
+    </div>
+
+    <div class="max-w-xl space-y-8">
+      <h1>Got a question, a suggestion or some feedback?</h1>
+      <p>
+        Hoot me a message below. I read everything, though I might not reply
+        instantly (I might be knee-deep in benchmarks or hunting for a midnight
+        snack).
+      </p>
+      <form
+        id="contactForm"
+        action="/api/contact"
+        method="POST"
+        class="space-y-8"
+      >
+        <div>
+          <label for="contact-name" class="text-body block font-medium"
+            >Name</label
+          >
+          <input
+            type="text"
+            id="contact-name"
+            name="name"
+            required
+            class="bg-custom-100 dark:bg-custom-900 border-accent-line block w-full rounded-xl border p-2 text-slate-800 dark:text-slate-200"
+          />
+        </div>
+        <div>
+          <label for="contact-email" class="text-body block font-medium"
+            >Email</label
+          >
+          <input
+            type="email"
+            id="contact-email"
+            name="email"
+            required
+            class="bg-custom-100 dark:bg-custom-900 border-accent-line block w-full rounded-xl border p-2 text-slate-800 dark:text-slate-200"
+          />
+        </div>
+        <div>
+          <label
+            id="contact-subject-label"
+            for="contact-subject"
+            class="text-body block font-medium">Subject</label
+          >
+
+          <!-- Real form field: always submitted as `subject`, and the
+               entire experience if JS never runs. The empty disabled
+               option means `required` genuinely blocks submission
+               (native tooltip) exactly like the other fields. -->
+          <select
+            id="contact-subject"
+            name="subject"
+            required
+            class="bg-custom-100 dark:bg-custom-900 border-accent-line block w-full rounded-xl border p-2 text-slate-800 dark:text-slate-200"
+          >
+            <option value="" disabled selected>Select a subject</option>
+            {
+              CONTACT_SUBJECT_OPTIONS.map((subject: ContactSubject) => (
+                <option value={subject}>{subject}</option>
+              ))
+            }
+          </select>
+
+          <!-- Progressive enhancement: hidden until JS confirms it can
+               run the widget, then it replaces the select visually. -->
+          <div class="relative hidden" data-subject-enhanced>
+            <button
+              type="button"
+              id="contact-subject-trigger"
+              class="group bg-custom-100 dark:bg-custom-900 border-accent-line flex w-full items-center justify-between gap-2 rounded-xl border p-2 text-left"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="contact-subject-listbox"
+              aria-labelledby="contact-subject-label contact-subject-display"
+              aria-describedby="contact-subject-error"
+              aria-invalid="false"
+            >
+              <span
+                id="contact-subject-display"
+                class="text-slate-500 dark:text-slate-400"
+              >
+                Select a subject
+              </span>
+              <svg
+                class="h-3 w-3 shrink-0 text-slate-500 transition-transform group-aria-expanded:rotate-180 dark:text-slate-400"
+                aria-hidden="true"
+              >
+                <use href={`${SiteIcons}#chevron`}></use>
+              </svg>
+            </button>
+            <ul
+              id="contact-subject-listbox"
+              role="listbox"
+              tabindex="-1"
+              aria-labelledby="contact-subject-label"
+              class="bg-custom-100 dark:bg-custom-900 border-accent-line absolute z-10 mt-1 hidden max-h-60 w-full overflow-auto rounded-xl border py-1 shadow-md focus:outline-none"
+            >
+              {
+                CONTACT_SUBJECT_OPTIONS.map(
+                  (subject: ContactSubject, index) => (
+                    <li
+                      role="option"
+                      id={`contact-subject-option-${index}`}
+                      data-value={subject}
+                      aria-selected="false"
+                      class="hover:bg-accent-500/10 aria-selected:bg-accent-500/20 dark:hover:bg-accent-500/20 cursor-pointer px-3 py-2 text-slate-800 select-none aria-selected:font-medium dark:text-slate-200"
+                    >
+                      {subject}
+                    </li>
+                  ),
+                )
+              }
+            </ul>
+          </div>
+
+          <p
+            id="contact-subject-error"
+            role="alert"
+            class="text-danger-ink mt-1 hidden text-sm"
+          >
+          </p>
+        </div>
+        <div>
+          <label for="contact-message" class="text-body block font-medium"
+            >Message</label
+          >
+          <textarea
+            id="contact-message"
+            name="message"
+            rows="4"
+            required
+            class="bg-custom-100 dark:bg-custom-900 border-accent-line block w-full rounded-xl border p-2 text-slate-800 dark:text-slate-200"
+          ></textarea>
+        </div>
+        <div class="hidden" aria-hidden="true">
+          <label for="contact-company">Company</label>
+          <input
+            type="text"
+            id="contact-company"
+            name="company"
+            tabindex="-1"
+            autocomplete="off"
+          />
+        </div>
+        <div id="contact-turnstile" data-sitekey={turnstileSiteKey}></div>
+        <button
+          type="submit"
+          class="btn-base bg-accent-500 hover:bg-accent-600 w-full rounded-2xl p-2 text-white disabled:pointer-events-none disabled:opacity-50"
+        >
+          Send Message
+        </button>
+      </form>
+      <p
+        id="status"
+        class="text-body mt-4 hidden rounded-xl border p-4 font-medium"
+        role="status"
+        aria-live="polite"
+      >
+      </p>
+    </div>
+
+    <div class="clear-both"></div>
+  </section>
+
+  <script>
+    type TurnstileController = {
+      ensureLoaded: () => void;
+      waitForToken: (timeoutMs?: number) => Promise<string>;
+      reset: () => void;
+    };
+
+    function initTurnstile(): TurnstileController | null {
+      const containerEl = document.getElementById("contact-turnstile");
+      if (!(containerEl instanceof HTMLElement)) return null;
+
+      const container = containerEl;
+      const sitekey = container.dataset.sitekey ?? "";
+      let widgetId: string | undefined;
+      let currentToken = "";
+      let scriptRequested = false;
+      let pendingResolvers: Array<(token: string) => void> = [];
+
+      function resolveToken(token: string): void {
+        currentToken = token;
+        const resolvers = pendingResolvers;
+        pendingResolvers = [];
+        resolvers.forEach((resolve) => resolve(token));
+      }
+
+      function renderWidget(): void {
+        widgetId = window.turnstile?.render(container, {
+          sitekey,
+          theme: "auto",
+          callback: resolveToken,
+          "expired-callback": () => {
+            currentToken = "";
+          },
+          "error-callback": () => {
+            currentToken = "";
+          },
+        });
+      }
+
+      function ensureLoaded(): void {
+        if (scriptRequested) return;
+        scriptRequested = true;
+
+        window.onloadTurnstileCallback = renderWidget;
+
+        const script = document.createElement("script");
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback&render=explicit";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+
+      function waitForToken(timeoutMs = 8000): Promise<string> {
+        if (currentToken) return Promise.resolve(currentToken);
+
+        ensureLoaded();
+
+        return new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(""), timeoutMs);
+          pendingResolvers.push((token) => {
+            clearTimeout(timer);
+            resolve(token);
+          });
+        });
+      }
+
+      function reset(): void {
+        currentToken = "";
+        if (widgetId) window.turnstile?.reset(widgetId);
+      }
+
+      return { ensureLoaded, waitForToken, reset };
+    }
+
+    type SubjectSelectController = {
+      isEmpty: () => boolean;
+      showError: () => void;
+      clearError: () => void;
+      focusTrigger: () => void;
+    };
+
+    function initSubjectSelect(): SubjectSelectController | null {
+      const selectEl = document.getElementById("contact-subject");
+      const enhancedWrapper = document.querySelector<HTMLElement>(
+        "[data-subject-enhanced]",
+      );
+      const triggerEl = document.getElementById("contact-subject-trigger");
+      const listboxEl = document.getElementById("contact-subject-listbox");
+      const displayEl = document.getElementById("contact-subject-display");
+      const errorEl = document.getElementById("contact-subject-error");
+
+      if (
+        !(selectEl instanceof HTMLSelectElement) ||
+        !(enhancedWrapper instanceof HTMLElement) ||
+        !(triggerEl instanceof HTMLButtonElement) ||
+        !(listboxEl instanceof HTMLUListElement) ||
+        !(displayEl instanceof HTMLElement) ||
+        !(errorEl instanceof HTMLElement)
+      ) {
+        return null;
+      }
+
+      const select = selectEl;
+      const wrapper = enhancedWrapper;
+      const trigger = triggerEl;
+      const listbox = listboxEl;
+      const display = displayEl;
+      const error = errorEl;
+
+      const options = Array.from(
+        listbox.querySelectorAll<HTMLLIElement>('[role="option"]'),
+      );
+      let activeIndex = -1;
+      let isOpen = false;
+
+      select.classList.add("hidden");
+      select.setAttribute("aria-hidden", "true");
+      select.removeAttribute("required");
+      wrapper.classList.remove("hidden");
+
+      function reflectSelection(): void {
+        const value = select.value;
+        const matched = options.find(
+          (option) => option.dataset.value === value,
+        );
+
+        display.textContent = matched ? value : "Select a subject";
+        display.classList.toggle("text-slate-500", !matched);
+        display.classList.toggle("dark:text-slate-400", !matched);
+        display.classList.toggle("text-slate-800", Boolean(matched));
+        display.classList.toggle("dark:text-slate-200", Boolean(matched));
+
+        options.forEach((option) =>
+          option.setAttribute("aria-selected", String(option === matched)),
+        );
+      }
+
+      function clearActiveHighlight(): void {
+        options.forEach((option) =>
+          option.classList.remove("bg-accent-500/10", "dark:bg-accent-500/20"),
+        );
+      }
+
+      function setActiveIndex(index: number): void {
+        if (options.length === 0) return;
+        const nextIndex = (index + options.length) % options.length;
+
+        clearActiveHighlight();
+        activeIndex = nextIndex;
+        const activeOption = options[activeIndex];
+        activeOption?.classList.add("bg-accent-500/10", "dark:bg-accent-500/20");
+        listbox.setAttribute("aria-activedescendant", activeOption?.id ?? "");
+        activeOption?.scrollIntoView({ block: "nearest" });
+      }
+
+      function setOpen(next: boolean): void {
+        isOpen = next;
+        listbox.classList.toggle("hidden", !isOpen);
+        trigger.setAttribute("aria-expanded", String(isOpen));
+
+        if (isOpen) {
+          const selectedIndex = options.findIndex(
+            (option) => option.getAttribute("aria-selected") === "true",
+          );
+          setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+          listbox.focus();
+        } else {
+          clearActiveHighlight();
+          activeIndex = -1;
+        }
+      }
+
+      function selectOption(option: HTMLLIElement): void {
+        select.value = option.dataset.value ?? "";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        reflectSelection();
+        clearError();
+        setOpen(false);
+        trigger.focus();
+      }
+
+      function showError(): void {
+        error.textContent = "Please select a subject.";
+        error.classList.remove("hidden");
+        trigger.setAttribute("aria-invalid", "true");
+        trigger.classList.add("border-danger-line");
+        trigger.classList.remove("border-accent-line");
+      }
+
+      function clearError(): void {
+        error.textContent = "";
+        error.classList.add("hidden");
+        trigger.setAttribute("aria-invalid", "false");
+        trigger.classList.remove("border-danger-line");
+        trigger.classList.add("border-accent-line");
+      }
+
+      trigger.addEventListener("click", () => setOpen(!isOpen));
+
+      trigger.addEventListener("keydown", (e) => {
+        if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+          e.preventDefault();
+          setOpen(true);
+        }
+      });
+
+      listbox.addEventListener("keydown", (e) => {
+        switch (e.key) {
+          case "ArrowDown":
+            e.preventDefault();
+            setActiveIndex(activeIndex + 1);
+            break;
+          case "ArrowUp":
+            e.preventDefault();
+            setActiveIndex(activeIndex - 1);
+            break;
+          case "Home":
+            e.preventDefault();
+            setActiveIndex(0);
+            break;
+          case "End":
+            e.preventDefault();
+            setActiveIndex(options.length - 1);
+            break;
+          case "Enter":
+          case " ": {
+            e.preventDefault();
+            const option = options[activeIndex];
+            if (option) selectOption(option);
+            break;
+          }
+          case "Escape":
+            e.preventDefault();
+            setOpen(false);
+            trigger.focus();
+            break;
+          case "Tab":
+            setOpen(false);
+            break;
+          default:
+            break;
+        }
+      });
+
+      options.forEach((option) => {
+        option.addEventListener("click", () => selectOption(option));
+        option.addEventListener("mouseenter", () => {
+          const index = options.indexOf(option);
+          if (index >= 0) setActiveIndex(index);
+        });
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!isOpen) return;
+        const target = e.target;
+        if (
+          target instanceof Node &&
+          !trigger.contains(target) &&
+          !listbox.contains(target)
+        ) {
+          setOpen(false);
+        }
+      });
+
+      reflectSelection();
+
+      return {
+        isEmpty: () => select.value.length === 0,
+        showError,
+        clearError,
+        focusTrigger: () => trigger.focus(),
+      };
+    }
+
+    function initContactForm(): void {
+      const formEl = document.getElementById("contactForm");
+      const statusEl = document.getElementById("status");
+
+      if (
+        !(formEl instanceof HTMLFormElement) ||
+        !(statusEl instanceof HTMLElement)
+      ) {
+        return;
+      }
+
+      const submitBtn = formEl.querySelector<HTMLButtonElement>(
+        'button[type="submit"]',
+      );
+      const subjectSelect = initSubjectSelect();
+      const turnstile = initTurnstile();
+      formEl.addEventListener("focusin", () => turnstile?.ensureLoaded(), {
+        once: true,
+      });
+      const statusNode = statusEl;
+      const statusBaseClasses = [
+        "mt-4",
+        "text-body",
+        "font-medium",
+        "rounded-xl",
+        "border",
+        "px-4",
+        "py-3",
+      ];
+      const statusToneClasses = [
+        "hidden",
+        "border-accent-line",
+        "bg-accent-wash",
+        "text-accent-ink",
+        "border-ok-line",
+        "bg-ok-wash",
+        "text-ok-ink",
+        "border-danger-line",
+        "bg-danger-wash",
+        "text-danger-ink",
+      ];
+
+      function setStatus(
+        message: string,
+        tone: "info" | "success" | "error" = "info",
+      ): void {
+        statusNode.classList.remove(...statusToneClasses);
+        statusNode.classList.add(...statusBaseClasses);
+        statusNode.classList.remove("hidden");
+
+        if (tone === "info") {
+          statusNode.classList.add(
+            "border-accent-line",
+            "bg-accent-wash",
+            "text-accent-ink",
+          );
+        } else if (tone === "success") {
+          statusNode.classList.add("border-ok-line", "bg-ok-wash", "text-ok-ink");
+        } else {
+          statusNode.classList.add(
+            "border-danger-line",
+            "bg-danger-wash",
+            "text-danger-ink",
+          );
+        }
+
+        statusNode.textContent = message;
+      }
+
+      function syncStatusFromUrl(): void {
+        const params = new URLSearchParams(window.location.search);
+        const contactState = params.get("contact");
+        if (!contactState) return;
+
+        if (contactState === "sent") {
+          setStatus("\u2705 Message sent successfully.", "success");
+        } else if (contactState === "error") {
+          setStatus("\u274c Something went wrong. Try again later.", "error");
+        }
+
+        params.delete("contact");
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", nextUrl);
+      }
+
+      syncStatusFromUrl();
+
+      formEl.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        if (subjectSelect?.isEmpty()) {
+          subjectSelect.showError();
+          subjectSelect.focusTrigger();
+          return;
+        }
+        subjectSelect?.clearError();
+
+        setStatus("\u23f3 Sending...", "info");
+        submitBtn?.setAttribute("disabled", "true");
+
+        const turnstileToken = await turnstile?.waitForToken();
+        if (!turnstileToken) {
+          setStatus(
+            "\u274c Verification didn't complete. Please try again.",
+            "error",
+          );
+          submitBtn?.removeAttribute("disabled");
+          return;
+        }
+
+        const formData = new FormData(formEl);
+
+        try {
+          const res = await fetch(formEl.action, {
+            method: "POST",
+            body: formData,
+            headers: {
+              Accept: "application/json",
+              "X-Requested-With": "fetch",
+            },
+          });
+
+          const data = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            message?: string;
+          } | null;
+
+          if (res.ok && data?.ok) {
+            setStatus(
+              data?.message
+                ? `\u2705 ${data.message.replace(/^[✅❌⏳]\s*/, "")}`
+                : "\u2705 Message sent successfully.",
+              "success",
+            );
+            formEl.reset();
+          } else {
+            setStatus(
+              data?.message
+                ? `\u274c ${data.message.replace(/^[✅❌⏳]\s*/, "")}`
+                : "\u274c Something went wrong. Try again later.",
+              "error",
+            );
+          }
+        } catch {
+          setStatus("\u274c Could not reach the server.", "error");
+        } finally {
+          submitBtn?.removeAttribute("disabled");
+          turnstile?.reset();
+        }
+      });
+    }
+
+    initContactForm();
+  </script>
+</BaseLayout>

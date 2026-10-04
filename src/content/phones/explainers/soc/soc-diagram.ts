@@ -1,0 +1,42 @@
+import type { DiagramBlock } from "@/components/site/DiagramViewer.astro";
+
+export const socBlocks: DiagramBlock[] = [
+  // ── Internal SoC blocks
+  { id: "CPU", label: "Central Processing Unit" },
+  { id: "MODEM W/ GNSS", label: "Modem with GNSS" },
+  { id: "WI-FI / BT", label: "Wi-Fi / Bluetooth Digital Baseband" },
+  { id: "NPU", label: "Neural Processing Unit" },
+  { id: "DSP", label: "Digital Signal Processor" },
+  { id: "AOP / SENSOR", label: "Always-On Processor / Sensor Hub" },
+  { id: "AUDIO", label: "Audio Subsystem" },
+  { id: "ISP", label: "Image Signal Processor" },
+  { id: "VPU", label: "Video Processing Unit" },
+  { id: "DISPLAY PROCESSOR", label: "Display Processing Unit" },
+  { id: "GPU", label: "Graphical Processing Unit" },
+  { id: "NOC", label: "Network on Chip" },
+  { id: "SLC", label: "System Level Cache" },
+  { id: "MEMORY CONTROLLER", label: "Memory Controller" },
+  { id: "STORAGE CONTROLLER", label: "Storage Controller" },
+  { id: "USB CONTROLLER", label: "Universal Serial Bus Controller" },
+  { id: "SECURE SUBSYSTEM", label: "Secure Subsystem" },
+  { id: "SCU", label: "System Control Unit" },
+  { id: "TMU", label: "Thermal Management Unit" },
+  // ── SoC Edge interfaces
+  { id: "LPDDR", label: "Low Power Double Data Rate Interface" },
+  { id: "UFS", label: "Universal Flash Storage Interface" },
+  { id: "USB CN", label: "USB Connector" },
+  { id: "MIPI DSI", label: "Display Serial Interface" },
+  { id: "MIPI CSI", label: "Camera Serial Interface" },
+  { id: "I2S", label: "Inter-IC Sound Interface" },
+  { id: "MIPI RFFE", label: "MIPI RF Front-End Interface" },
+  { id: "I2C", label: "Inter-Integrated Circuit Interface" },
+  // ── Off-chip components
+  { id: "RAM", label: "Random Access Memory" },
+  { id: "NAND", label: "NAND Flash Storage" },
+  { id: "USB PHY", label: "USB Physical Layer" },
+  { id: "DISPLAY PANEL", label: "Display Panel" },
+  { id: "CAMERA SENSOR", label: "Camera Sensor" },
+  { id: "CODEC IC", label: "Coder Decoder Integrated Circuit" },
+  { id: "RFFE", label: "Radio Frequency Front End" },
+  { id: "PMIC", label: "Power Management Integrated Circuit" },
+];

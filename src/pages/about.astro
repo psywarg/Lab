@@ -1,0 +1,102 @@
+---
+// src/pages/about.astro
+
+export const prerender = true;
+
+import SortoAbout from "@/assets/images/sorto/sorto-about.svg";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { ORGANIZATION_ID, SITE_ORIGIN, WEBSITE_ID } from "@/utils/site/schema";
+
+const title = "About - Sorted Tech";
+const metaDescription =
+  "Our mission is to bring clarity to tech, empower users to make smarter decisions, and guide them with integrity, independence, and transparency.";
+const ogImage = DEFAULT_OG_IMAGE;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  "@id": `${SITE_ORIGIN}/about#webpage`,
+  name: "About Sorted Tech",
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/about`,
+  isPartOf: { "@id": WEBSITE_ID },
+  mainEntity: { "@id": ORGANIZATION_ID },
+  publisher: { "@id": ORGANIZATION_ID },
+};
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card rounded-none">
+    <div
+      class="mx-auto w-45 sm:float-right sm:ml-6 sm:w-50 md:w-55 lg:w-60 xl:w-65"
+    >
+      <SortoAbout
+        class="block h-auto w-full"
+        role="img"
+        aria-label="Sorto, Keeper of the Code"
+      />
+    </div>
+
+    <div>
+      <h1>Hello!</h1>
+      <p class="mb-4 font-medium lg:mb-6">
+        Welcome to Sorted Tech.<br />
+        You know that one friend everyone turns to when they're trying to pick a new
+        gadget or figure out whether it's actually worth it? That's essentially who
+        we are, only with clearer explanations and a lot more data behind the answers.
+      </p>
+      <h2>The Problem</h2>
+      <p class="mb-4 lg:mb-6">
+        Shopping for gadgets should be straightforward, but lately it feels more
+        like navigating through a hype storm. Half the "reviews" sound like
+        marketing scripts, while others simply narrate spec sheets with the
+        enthusiasm of late-night infomercial hosts. Every new launch brings more
+        buzzwords, less substance, and way too much noise. Even techies find it
+        exhausting, and for everyone else, it's borderline impossible.
+      </p>
+      <h2>Our Solution</h2>
+      <p class="mb-4 lg:mb-6">
+        Sorted Tech exists to equip everyday consumers with insights that help
+        them make confident, informed decisions about the technology they use.
+        Simply put, we are the change we wanted to see in the tech space.<br />
+        We build tools, conduct research, and take a hands-on approach to understanding
+        technology so we can turn complexity into clear, practical guidance. Learn
+        more by checking out our methodology and editorial standards.
+      </p>
+      <h2>Our Values</h2>
+      <ul class="mb-6 list-disc pl-6 lg:mb-8">
+        <li>
+          <strong>People First:</strong> We evaluate every product with real users
+          in mind, not brands or trends. We recognize the financial weight of the
+          decisions you make based on our advice.
+        </li>
+        <li>
+          <strong>Independent by Design:</strong> Our recommendations are shaped by
+          analysis and experience, never by paid requests or outside influence.
+        </li>
+        <li>
+          <strong>Full Transparency:</strong> We're open about how we keep things
+          running; if a link is an affiliate or a post is sponsored, you'll know about
+          it immediately.
+        </li>
+        <li>
+          <strong>Integrity Over Growth:</strong> We prioritize long-term trust over
+          short-term traffic. We won't cut corners on our standards.
+        </li>
+        <li>
+          <strong>High Standards, Low Pretension:</strong> We take our research and
+          advice very seriously, but never ourselves. The jokes and the mascot are
+          intentional, because we believe technical guidance should be engaging, not
+          dry.
+        </li>
+      </ul>
+      <p class="italic">
+        Now, let's get you sorted - before your smartwatch hits you with another
+        panicked "Breathe" alert for absolutely no reason.
+      </p>
+    </div>
+
+    <div class="clear-both"></div>
+  </section>
+</BaseLayout>

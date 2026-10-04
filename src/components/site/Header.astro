@@ -1,0 +1,76 @@
+---
+// src/components/site/Header.astro
+
+import ThemeToggle from "@/components/site/ThemeToggle.astro";
+import DesktopNav from "@/components/site/DesktopNav.astro";
+import MobileNav from "@/components/site/MobileNav.astro";
+import Logo from "@/components/site/Logo.astro";
+---
+
+<Logo definitionsOnly />
+
+<header
+  id="site-header"
+  class="from-custom-300 to-custom-100 dark:from-custom-900 dark:to-custom-700 lg:from-custom-100/60 lg:to-custom-100/30 lg:dark:from-custom-900/60 lg:dark:to-custom-900/30 border-accent-500 fixed top-0 right-0 left-0 z-40 h-[55px] border-b bg-linear-to-b transition-shadow md:h-[60px] lg:h-[65px] lg:bg-linear-to-b lg:backdrop-blur-md"
+>
+  <div
+    class="relative mx-auto flex h-full w-full max-w-7xl items-center justify-between gap-4 px-2 sm:px-4 md:px-6"
+  >
+    {/* LEFT: Mobile nav trigger + desktop logo */}
+    <div class="relative z-10 flex shrink-0 items-center gap-2">
+      <MobileNav />
+      <a
+        href="/"
+        data-astro-prefetch="hover"
+        aria-label="Sorted Tech - Home"
+        class="hidden items-center gap-2 filter hover:scale-105 hover:drop-shadow-[0_0_20px_rgba(43,127,255,0.2)] lg:flex dark:hover:drop-shadow-[0_0_20px_rgba(43,127,255,0.5)]"
+      >
+        <Logo variant="desktop" />
+      </a>
+    </div>
+
+    {/* CENTER: Mobile logo (absolute) + desktop nav */}
+    <div
+      class="absolute left-1/2 flex -translate-x-1/2 items-center justify-center lg:relative lg:left-auto lg:grow lg:translate-x-0"
+    >
+      <a
+        href="/"
+        data-astro-prefetch="hover"
+        aria-label="Sorted Tech - Home"
+        class="flex items-center gap-2 lg:hidden"
+      >
+        <Logo variant="mobile" />
+      </a>
+      <DesktopNav class="hidden lg:flex" />
+    </div>
+
+    {/* RIGHT: Theme toggle */}
+    <ThemeToggle />
+  </div>
+</header>
+
+<script>
+  let header: HTMLElement | null = null;
+  let shadowFrame = 0;
+  let hasShadow = false;
+
+  function syncShadow(): void {
+    const nextHasShadow = window.scrollY > 6;
+    if (nextHasShadow === hasShadow) return;
+
+    hasShadow = nextHasShadow;
+    header?.classList.toggle("shadow-md", hasShadow);
+  }
+
+  function scheduleShadowSync(): void {
+    if (shadowFrame !== 0) return;
+    shadowFrame = requestAnimationFrame(() => {
+      shadowFrame = 0;
+      syncShadow();
+    });
+  }
+
+  window.addEventListener("scroll", scheduleShadowSync, { passive: true });
+  header = document.getElementById("site-header");
+  syncShadow();
+</script>

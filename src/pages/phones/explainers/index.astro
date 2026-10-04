@@ -1,0 +1,213 @@
+---
+// src/pages/phones/explainers/index.astro
+
+export const prerender = true;
+
+import Icons from "@/assets/icons/content-sprites.svg?url";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { SITE_ORIGIN } from "@/utils/site/schema";
+import { Picture } from "astro:assets";
+import { getCollection } from "astro:content";
+
+const allExplainers = (await getCollection("explainers")).filter(
+  (entry) => !entry.data.draft,
+);
+
+const parents = allExplainers
+  .filter((entry) => entry.data.role === "overview")
+  .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+
+const series = parents.map((parent) => {
+  const children = allExplainers
+    .filter(
+      (entry) =>
+        entry.data.series === parent.data.series && entry.data.role === "part",
+    )
+    .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+  const related = allExplainers
+    .filter(
+      (entry) =>
+        entry.data.series === parent.data.series &&
+        entry.data.role === "related",
+    )
+    .sort(
+      (a, b) => (a.data.relatedOrder ?? 0) - (b.data.relatedOrder ?? 0),
+    );
+  return {
+    series: parent.data.series,
+    parentSlug: parent.id,
+    articles: [parent, ...children].map((e) => ({
+      slug: e.id,
+      cardTitle: e.data.cardTitle,
+      cardDescription: e.data.cardDescription,
+      heading: e.data.heading,
+      image: e.data.image,
+    })),
+    related: related.map((entry) => ({
+      slug: entry.id,
+      cardTitle: entry.data.cardTitle,
+      cardDescription: entry.data.cardDescription,
+      image: entry.data.image,
+    })),
+  };
+});
+
+const meta = {
+  title: "Tech Explainers: Deep Dives into Modern Smartphone Technology",
+  metaDescription:
+    "Clear, in-depth technical explainers for complex technology. From smartphone hardware architecture to emerging software trends. We strip away the jargon to give you a clear, simple understanding of how your tech works.",
+  heading: "Technical Explainers & Deep Dives",
+  description:
+    "Knowledge is power, but only if it's accessible. This hub is dedicated to making the complex technologies we use every day easy to understand. We strip away the jargon to explain the 'how' and 'why' behind your favorite tech in a way that actually makes sense.",
+  ogImage: DEFAULT_OG_IMAGE,
+};
+
+const { title, metaDescription, ogImage, heading, description } = meta;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: "Explainers",
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/phones/explainers`,
+  mainEntity: {
+    "@type": "ItemList",
+    numberOfItems: series.length,
+    itemListElement: series.map((s, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: s.series,
+      url: `${SITE_ORIGIN}/phones/explainers/${s.parentSlug}`,
+    })),
+  },
+};
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+>
+  <section class="page-column">
+    <h1>{heading}</h1>
+    <p class="mb-6 lg:mb-8">{description}</p>
+
+    <section class="space-y-10">
+      {
+        series.map((s) => (
+          <div>
+            <div class="relative z-10 mb-1 flex w-fit items-stretch">
+              <div class="bg-custom-100 dark:bg-custom-700 border-accent-line h-10 w-10 origin-bottom-right skew-x-[-20deg] rounded-tl-md border-t border-l" />
+              <h2 class="bg-custom-100 dark:bg-custom-700 border-accent-line text-accent-ink text-xsmall mb-0 inline-flex items-center border-x border-t p-2 font-bold tracking-wider uppercase">
+                <a
+                  href={`/phones/explainers/${s.parentSlug}`}
+                  class="text-inherit transition-colors"
+                >
+                  {s.series}
+                </a>
+              </h2>
+              <div class="bg-custom-100 dark:bg-custom-700 border-accent-line h-10 w-10 origin-bottom-left skew-x-20 rounded-tr-md border-t border-r" />
+            </div>
+
+            <div class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow rounded-tr-xl rounded-b-xl border p-4 shadow-md">
+              <div class="grid grid-cols-1 justify-center gap-5 sm:grid-cols-[repeat(auto-fill,minmax(0,20rem))]">
+                {s.articles.map((article) => (
+                  <a
+                    href={`/phones/explainers/${article.slug}`}
+                    data-astro-prefetch="viewport"
+                    class="border-accent-line shadow-accent-glow hover:border-accent-500 active:border-accent-500 group flex flex-col overflow-hidden rounded-xl border shadow-md transition duration-300 ease-out hover:-translate-y-1"
+                  >
+                    <div class="aspect-40/21 overflow-hidden">
+                      {article.image ? (
+                        <Picture
+                          src={article.image}
+                          alt=""
+                          formats={["avif"]}
+                          fallbackFormat="png"
+                          layout={IMAGE_PRESETS["index-card"].layout}
+                          sizes={IMAGE_PRESETS["index-card"].sizes}
+                          widths={IMAGE_PRESETS["index-card"].widths}
+                          class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div class="h-full w-full" />
+                      )}
+                    </div>
+
+                    <div class="from-accent-wash to-transparent flex flex-1 flex-col bg-linear-to-br p-2">
+                      <h3 class="text-body mb-1">{article.cardTitle}</h3>
+                      <p class="text-xsmall mb-1">{article.cardDescription}</p>
+                      <div class="mt-auto flex justify-end">
+                        <span class="text-small inline-flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+                          Read Explainer
+                          <svg class="h-4 w-4" aria-hidden="true">
+                            <use href={`${Icons}#open-card`} />
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+
+              {s.related.length > 0 && (
+                <section class="border-accent-line mt-5 border-t pt-4">
+                  <div class="mb-3">
+                    <h3 class="text-xsmall text-accent-ink mb-1 font-bold tracking-wider uppercase">
+                      Related articles
+                    </h3>
+                    <p class="text-xsmall mb-0 text-slate-600 dark:text-slate-400">
+                      Additional reading connected to this series
+                    </p>
+                  </div>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    {s.related.map((article) => (
+                      <a
+                        href={`/phones/explainers/${article.slug}`}
+                        data-astro-prefetch="viewport"
+                        class="border-accent-line from-accent-wash hover:border-accent-500 active:border-accent-500 group flex min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-linear-to-r to-transparent p-2 transition-colors"
+                      >
+                        <div class="h-16 w-24 shrink-0 overflow-hidden rounded-md">
+                          <Picture
+                            src={article.image}
+                            alt=""
+                            formats={["avif"]}
+                            fallbackFormat="png"
+                            layout="constrained"
+                            sizes="96px"
+                            widths={[96, 192]}
+                            class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <h4 class="text-small mb-0 leading-snug">
+                            {article.cardTitle}
+                          </h4>
+                          <p class="text-xsmall mt-1 mb-0 line-clamp-2 text-slate-600 dark:text-slate-400">
+                            {article.cardDescription}
+                          </p>
+                        </div>
+                        <svg
+                          class="text-accent-ink h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <use href={`${Icons}#open-card`} />
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+        ))
+      }
+    </section>
+  </section>
+</BaseLayout>

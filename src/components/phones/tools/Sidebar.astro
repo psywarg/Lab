@@ -1,0 +1,400 @@
+---
+// src/components/phones/tools/Sidebar.astro
+
+import Sidebar from "@/components/site/Sidebar.astro";
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+import { toolsIndex } from "@/content/phones/tools";
+
+type SidebarVisual =
+  | {
+      type: "icon";
+      spriteId: string;
+      spriteUrl: string;
+    }
+  | {
+      attributes?: Record<string, string>;
+      type: "swatch";
+      className?: string;
+      style?: string;
+      text?: string;
+      textColor?: string;
+    };
+
+type SidebarItem = {
+  active?: boolean;
+  attributes?: Record<string, string>;
+  disabled?: boolean;
+  label: string;
+  meta?: string;
+  visual: SidebarVisual;
+};
+
+type SidebarGroup = {
+  attributes?: Record<string, string>;
+  items: SidebarItem[];
+  openByDefault?: boolean;
+  title: string;
+};
+
+interface Props {
+  closeOnAction?: boolean;
+  currentSlug: string;
+  groups?: SidebarGroup[];
+  mobileAriaLabel?: string;
+  mobileLabel?: string;
+  panelLabel: string;
+  relatedTitle?: string;
+  sticky?: boolean;
+}
+
+const {
+  closeOnAction = true,
+  currentSlug,
+  groups = [],
+  mobileAriaLabel = "Open tool tests",
+  mobileLabel = "Tests",
+  panelLabel,
+  relatedTitle = "More phone testing tools",
+  sticky = false,
+} = Astro.props;
+
+const relatedTools = toolsIndex.filter((tool) => tool.slug !== currentSlug);
+const relatedTitleId = `tool-related-${currentSlug}`;
+
+const panelClasses =
+  "lg:rounded-xl lg:p-4 lg:bg-custom-100 lg:dark:bg-custom-700 lg:shadow-md lg:shadow-accent-glow";
+
+const accordionBaseClasses =
+  "tool-sidebar-accordion group border-accent-line from-accent-wash overflow-hidden rounded-xl border bg-linear-to-b to-transparent";
+
+const accordionSummaryClasses =
+  "flex cursor-pointer list-none items-center justify-between p-4 gap-2 text-xsmall font-bold uppercase tracking-wide text-slate-800 dark:text-slate-200 select-none [&::-webkit-details-marker]:hidden";
+
+const accordionChevronClasses =
+  "h-3 w-3 shrink-0 text-current transition-transform duration-300 group-[.is-open]:rotate-180";
+
+const groupItemButtonClasses =
+  "flex min-h-12 w-full min-w-0 items-center rounded-xl p-2 gap-2 border border-accent-line from-accent-wash to-custom-100 dark:to-custom-700 bg-linear-to-t text-left text-xsmall leading-tight text-slate-800 dark:text-slate-200 transition hover:border-accent-500 hover:bg-accent-500/50 aria-pressed:border-2 aria-pressed:border-accent-500 active:scale-95 active:border-accent-500";
+
+const groupItemIconWrapClasses = "text-accent-ink grid h-6 w-6 place-items-center";
+
+const groupItemSwatchClasses =
+  "grid h-6 w-6 place-items-center overflow-hidden rounded-full text-small font-bold leading-none";
+
+const groupItemLabelClasses = "text-accent-ink block";
+
+const relatedToolCardClasses =
+  "border-accent-line from-accent-wash hover:border-accent-500 hover:shadow-accent-glow active:border-accent-500 grid rounded-xl p-2 gap-2 border bg-linear-to-t to-transparent transition hover:-translate-y-0.5 hover:shadow-md active:scale-95";
+
+const viewAllToolsClasses =
+  "border-accent-line bg-accent-wash hover:border-accent-500 hover:shadow-accent-glow active:border-accent-500 inline-flex rounded-xl px-4 mt-4 min-h-10 w-full items-center justify-center border text-small font-bold text-center text-slate-800 dark:text-slate-200 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95";
+---
+
+<div class="tool-sidebar contents lg:grid lg:min-w-0 lg:content-start lg:gap-5">
+  <Sidebar
+    {closeOnAction}
+    {mobileAriaLabel}
+    {mobileLabel}
+    {panelLabel}
+    {sticky}
+    variant="tools"
+  >
+    {
+      groups.length > 0 && (
+        <nav class={panelClasses} aria-label={panelLabel}>
+          <div class="grid gap-2">
+            {groups.map((group) => (
+              <details
+                class:list={[
+                  accordionBaseClasses,
+                  group.openByDefault && "is-open",
+                ]}
+                open={group.openByDefault}
+                {...(group.attributes ?? {})}
+              >
+                <summary class={accordionSummaryClasses}>
+                  <span>{group.title}</span>
+                  <svg
+                    class={accordionChevronClasses}
+                    viewBox="0 0 24 24"
+                    focusable="false"
+                    aria-hidden="true"
+                  >
+                    <use href={`${SiteIcons}#chevron`} />
+                  </svg>
+                </summary>
+                <div class="hidden group-[.is-open]:block">
+                  <div
+                    class="grid grid-cols-2 gap-2 px-3 pt-0.5 pb-2"
+                    data-tool-sidebar-item-group
+                  >
+                    {group.items.map((item) => (
+                      <button
+                        type="button"
+                        class:list={[
+                          groupItemButtonClasses,
+                          item.meta && "col-span-2",
+                        ]}
+                        aria-pressed={item.active ? "true" : "false"}
+                        disabled={item.disabled}
+                        data-tool-sidebar-item
+                        {...(item.attributes ?? {})}
+                      >
+                        <span class="shrink-0" aria-hidden="true">
+                          {item.visual.type === "icon" ? (
+                            <span class={groupItemIconWrapClasses}>
+                              <svg
+                                class="block h-6 w-6"
+                                viewBox="0 0 24 24"
+                                focusable="false"
+                                aria-hidden="true"
+                              >
+                                <use
+                                  href={`${item.visual.spriteUrl}#${item.visual.spriteId}`}
+                                />
+                              </svg>
+                            </span>
+                          ) : (
+                            <span
+                              class:list={[
+                                groupItemSwatchClasses,
+                                item.visual.className,
+                              ]}
+                              data-badge-type="swatch"
+                              {...(item.visual.attributes ?? {})}
+                              style={
+                                [
+                                  item.visual.style,
+                                  item.visual.textColor
+                                    ? `color: ${item.visual.textColor};`
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ") || undefined
+                              }
+                            >
+                              {item.visual.text ?? ""}
+                            </span>
+                          )}
+                        </span>
+                        <span class="grid min-w-0 gap-px text-pretty wrap-normal">
+                          <strong class={groupItemLabelClasses}>
+                            {item.label}
+                          </strong>
+                          {item.meta && (
+                            <small class="text-xsmall block text-slate-700 dark:text-slate-300">
+                              {item.meta}
+                            </small>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            ))}
+          </div>
+        </nav>
+      )
+    }
+
+    {
+      relatedTools.length > 0 && (
+        <nav
+          class:list={[panelClasses, groups.length > 0 && "lg:mt-4"]}
+          aria-labelledby={relatedTitleId}
+        >
+          <h2
+            id={relatedTitleId}
+            class="text-accent-ink text-body mb-2 rounded-xl p-2 font-bold"
+          >
+            {relatedTitle}
+          </h2>
+          <div class="grid gap-2">
+            {relatedTools.map((tool) => (
+              <a
+                href={tool.href}
+                class={relatedToolCardClasses}
+                data-astro-prefetch="tap"
+              >
+                <strong class="text-small mb-1 block font-bold text-slate-800 dark:text-slate-200">
+                  {tool.title}
+                </strong>
+                <span class="text-xsmall block text-slate-500">
+                  {tool.description}
+                </span>
+              </a>
+            ))}
+          </div>
+
+          <a
+            href="/phones/tools"
+            class={viewAllToolsClasses}
+            data-astro-prefetch="tap"
+          >
+            View All Tools
+          </a>
+        </nav>
+      )
+    }
+  </Sidebar>
+</div>
+
+<script>
+  type ExclusiveAccordionGroup = {
+    closeAccordion: (accordion: HTMLDetailsElement) => void;
+    openAccordion: (accordion: HTMLDetailsElement) => void;
+  };
+
+  const TOOL_SIDEBAR_EVENT = "tool-sidebar:open-accordion";
+  const TOOL_SIDEBAR_ROOT_SELECTOR = ".tool-sidebar";
+  const TOOL_SIDEBAR_ACCORDION_SELECTOR = ".tool-sidebar-accordion";
+  const TOOL_SIDEBAR_ITEM_GROUP_SELECTOR = "[data-tool-sidebar-item-group]";
+  const TOOL_SIDEBAR_ITEM_SELECTOR = "[data-tool-sidebar-item]";
+
+  function initToolSidebarItemGroups(): void {
+    const groups = Array.from(
+      document.querySelectorAll<HTMLElement>(TOOL_SIDEBAR_ITEM_GROUP_SELECTOR),
+    );
+
+    groups.forEach((group) => {
+      const items = Array.from(
+        group.querySelectorAll<HTMLButtonElement>(TOOL_SIDEBAR_ITEM_SELECTOR),
+      );
+
+      items.forEach((item) => {
+        item.addEventListener("click", () => {
+          items.forEach((sibling) => {
+            sibling.setAttribute(
+              "aria-pressed",
+              sibling === item ? "true" : "false",
+            );
+          });
+        });
+      });
+    });
+  }
+
+  function createExclusiveAccordionGroup(
+    accordions: HTMLDetailsElement[],
+    closeDelayMs = 300,
+  ): ExclusiveAccordionGroup {
+    const closeTimers = new Map<HTMLDetailsElement, number>();
+    const openFrames = new Map<HTMLDetailsElement, number>();
+
+    function clearAccordionTimer(accordion: HTMLDetailsElement): void {
+      const timer = closeTimers.get(accordion);
+      if (timer === undefined) return;
+      window.clearTimeout(timer);
+      closeTimers.delete(accordion);
+    }
+
+    function closeAccordion(accordion: HTMLDetailsElement): void {
+      clearAccordionTimer(accordion);
+      clearAccordionFrame(accordion);
+      accordion.classList.remove("is-open");
+      const timer = window.setTimeout(() => {
+        if (!accordion.classList.contains("is-open")) {
+          accordion.open = false;
+        }
+        closeTimers.delete(accordion);
+      }, closeDelayMs);
+      closeTimers.set(accordion, timer);
+    }
+
+    function openAccordion(accordion: HTMLDetailsElement): void {
+      accordions.forEach((item) => {
+        if (item !== accordion) {
+          closeAccordion(item);
+        }
+      });
+      clearAccordionTimer(accordion);
+      clearAccordionFrame(accordion);
+      accordion.open = true;
+      const frame = window.requestAnimationFrame(() => {
+        openFrames.delete(accordion);
+        accordion.classList.add("is-open");
+      });
+      openFrames.set(accordion, frame);
+    }
+
+    function clearAccordionFrame(accordion: HTMLDetailsElement): void {
+      const frame = openFrames.get(accordion);
+      if (frame === undefined) return;
+      window.cancelAnimationFrame(frame);
+      openFrames.delete(accordion);
+    }
+
+    const initialIndex = accordions.findIndex(
+      (accordion) =>
+        accordion.classList.contains("is-open") ||
+        accordion.hasAttribute("open"),
+    );
+
+    accordions.forEach((accordion, index) => {
+      if (index === (initialIndex >= 0 ? initialIndex : 0)) {
+        openAccordion(accordion);
+      } else {
+        closeAccordion(accordion);
+      }
+
+      const summary = accordion.querySelector("summary");
+      summary?.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (accordion.classList.contains("is-open")) {
+          closeAccordion(accordion);
+        } else {
+          openAccordion(accordion);
+        }
+      });
+    });
+
+    return { closeAccordion, openAccordion };
+  }
+
+  function getAccordionFromTarget(
+    target: EventTarget | null,
+  ): HTMLDetailsElement | null {
+    if (target instanceof HTMLDetailsElement) return target;
+    if (target instanceof Element) {
+      return target.closest(TOOL_SIDEBAR_ACCORDION_SELECTOR);
+    }
+    return null;
+  }
+
+  function initToolSidebarAccordions(): void {
+    const roots = Array.from(
+      document.querySelectorAll<HTMLElement>(TOOL_SIDEBAR_ROOT_SELECTOR),
+    );
+
+    roots.forEach((root) => {
+      const accordions = Array.from(
+        root.querySelectorAll<HTMLDetailsElement>(
+          TOOL_SIDEBAR_ACCORDION_SELECTOR,
+        ),
+      );
+
+      if (accordions.length === 0) return;
+
+      const { openAccordion } = createExclusiveAccordionGroup(accordions);
+
+      root.addEventListener(TOOL_SIDEBAR_EVENT, (event) => {
+        const accordion = getAccordionFromTarget(event.target);
+        if (accordion) openAccordion(accordion);
+      });
+    });
+  }
+
+  function initToolSidebar(): void {
+    initToolSidebarAccordions();
+    initToolSidebarItemGroups();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initToolSidebar, {
+      once: true,
+    });
+  } else {
+    initToolSidebar();
+  }
+</script>

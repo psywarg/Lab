@@ -1,0 +1,107 @@
+---
+// src/pages/editorial.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import {
+  EDITORIAL_ID,
+  ORGANIZATION_ID,
+  SITE_ORIGIN,
+  editorialSchema,
+} from "@/utils/site/schema";
+
+const title = "Editorial Standards - Sorted Tech";
+const metaDescription =
+  "Sorted Tech Editorial Standards: learn about our research methods, verification process, and commitment to accurate, accessible information.";
+const ogImage = DEFAULT_OG_IMAGE;
+
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Editorial Standards",
+    description: metaDescription,
+    url: `${SITE_ORIGIN}/editorial`,
+    mainEntity: {
+      "@id": EDITORIAL_ID,
+    },
+    publisher: {
+      "@id": ORGANIZATION_ID,
+    },
+  },
+  editorialSchema,
+];
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card rounded-none">
+    <div>
+      <h1>Editorial Standards</h1>
+      <p class="mb-4 lg:mb-6">
+        At Sorted Tech, articles published under the Sorted Tech <strong
+          >Editorial</strong
+        > byline are created, reviewed, and maintained by our editorial team under
+        one shared standard. This helps ensure every piece of content on our site
+        meets consistent benchmarks for clarity, technical precision, and objectivity.
+      </p>
+      <p class="mb-4 lg:mb-6">
+        We believe that knowledge should be accurate, easy to understand, and
+        accessible to everyone. To maintain this standard, we adhere to the
+        editorial principles outlined below.
+      </p>
+      <h2>1. Research & Sourcing Integrity</h2>
+      <p class="mb-4 lg:mb-6">
+        We prioritize primary sources, such as official technical documentation,
+        whitepapers, and manufacturer specifications, to cut through marketing
+        jargon. Our research process involves synthesizing information from
+        technical books, industry journals, and historical records. By drawing
+        from multiple authoritative sources, we explain not just what a
+        technology is, but the engineering principles behind why it works.
+      </p>
+      <h2>2. Consistent Article Structure</h2>
+      <p class="mb-4 lg:mb-6">
+        Our explainers follow a consistent format across all topics. We start
+        with fundamental concepts and gradually build toward advanced technical
+        details. This predictable structure means that once you've read a few of
+        our articles, you'll intuitively know where to find definitions,
+        specifications, or practical applications. You can focus on learning the
+        content rather than figuring out how each article is organized.
+      </p>
+      <h2>3. Global Neutrality</h2>
+      <p class="mb-4 lg:mb-4">
+        Sorted Tech is created for a worldwide audience. We avoid regional bias
+        by using universal framing for costs and value within our written
+        articles. We focus on finding the right fit for specific needs rather
+        than making subjective value judgments. Our goal is to help readers make
+        informed decisions based on their own requirements.
+      </p>
+      <h2>4. Human-Led Editorial Process</h2>
+      <p class="mb-4 lg:mb-6">
+        Every article on Sorted Tech is written and edited by humans. While we
+        may use modern tools to assist with data organization or formatting, we
+        do not publish raw AI-generated content. We review every piece for
+        technical accuracy, tone, and clarity to ensure our high standards are
+        met before publication.
+      </p>
+      <h2>5. Corrections & Updates</h2>
+      <p class="mb-4 lg:mb-6">
+        We take accuracy seriously. If we discover an error in a published
+        article, we correct it promptly and note the update at the bottom of the
+        article with the date of correction.
+      </p>
+      <h2>6. Reader Feedback</h2>
+      <p class="mb-4 lg:mb-6">
+        We welcome questions, corrections, and suggestions from our readers. You
+        can reach us through our <a href="/contact" class="hover:underline"
+          >Contact</a
+        > page.
+      </p>
+      <p>
+        Thank you for letting Sorted Tech be your guide. We are committed to
+        providing the insights you need to stay informed and updated.
+      </p>
+    </div>
+  </section>
+</BaseLayout>

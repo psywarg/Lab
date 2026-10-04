@@ -1,0 +1,3056 @@
+---
+// src/pages/phones/tools/gyroscope-test.astro
+
+export const prerender = true;
+
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import { getToolBySlug } from "@/content/phones/tools";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+
+const tool = getToolBySlug("gyroscope-test");
+const ogImage = tool.image.src;
+const title = "Free Online Gyroscope Test: Rotation, Drift & 3D Tracking";
+const metaDescription =
+  "Check pitch, roll, yaw, X, Y, and Z rotation rates, twist direction, peak spin, and drift. Capture a local zero-rate offset directly in your browser.";
+
+const referenceItems = [
+  {
+    label: "Level",
+    check:
+      "Start while flat, then tilt slightly and watch the browser-reported orientation horizon show pitch and roll.",
+    reading:
+      "This check uses fused orientation angles rather than raw angular rate. Pitch is forward/backward tilt and roll is side-to-side tilt. Angles are shown in degrees.",
+    good: "The horizon moves and banks smoothly, then returns close to level when the phone is flat again.",
+    concern:
+      "The horizon jumps, drifts while still, or one tilt direction barely reacts.",
+  },
+  {
+    label: "Zero-rate",
+    check:
+      "After starting, place the phone flat and completely still, press Capture zero-rate, and keep it still for the three-second capture.",
+    reading:
+      "The tool averages the resting X, Y, and Z rotation rates and subtracts that offset from this page's readings. It does not recalibrate or repair the phone's gyroscope.",
+    good:
+      "The capture completes, resting rates move closer to zero, and the offset is reported as captured.",
+    concern:
+      "The capture is rejected, or a large resting rate returns immediately while the phone remains still.",
+  },
+  {
+    label: "Twist",
+    check:
+      "Place the phone flat and still for a moment, then rotate it around the center of its screen while watching the signed Z-axis rate gauge.",
+    reading:
+      "Z is the rotation axis pointing through the screen. Facing the screen, + CCW means a positive counter-clockwise turn and - CW means a negative clockwise turn. deg/s means degrees turned per second; the signs are directions, not scores.",
+    good: "From the screen-facing view, positive Z-rate moves counter-clockwise and negative Z-rate moves clockwise, then returns near zero when the phone stops.",
+    concern:
+      "The needle sticks, moves the wrong way, or stays far from zero after the phone stops.",
+  },
+  {
+    label: "Drift",
+    check:
+      "After capturing zero-rate, hold the phone flat and still, then watch whether the resting-spin dot stays near the center target.",
+    reading:
+      "The square maps corrected X and Y rotation rate to the moving dot. The Drift score combines X, Y, and Z axes after a small quiet-band filter.",
+    good: "The dot stays inside the center ring and the Drift score settles close to zero after movement stops.",
+    concern:
+      "The dot sits away from center or the Drift score keeps reporting rotation while the phone rests.",
+  },
+  {
+    label: "3D View",
+    check:
+      "Start the test, then tilt and rotate the phone slowly on each axis and watch the 3D model follow.",
+    reading:
+      "This view renders the phone's fused orientation (accelerometer, gyroscope, and compass where present), not an isolated gyroscope reading. It shows the orientation pipeline is working end to end.",
+    good: "The model tracks smoothly and matches the phone's real orientation on every axis, including flipping face-down.",
+    concern:
+      "The model sticks, tracks the wrong axis, or never responds to a slow, deliberate rotation.",
+  },
+];
+
+const gyroChecks = [
+  {
+    id: "level",
+    icon: "gyro-level",
+    label: "Level",
+    meta: "Pitch and roll response",
+    hint: "Start while flat, then tilt gently and watch whether the attitude horizon follows smoothly.",
+  },
+  {
+    id: "twist",
+    icon: "gyro-twist",
+    label: "Twist",
+    meta: "Z-axis turn rate",
+    hint: "Keep the phone flat and still briefly, then rotate it flat and confirm the signed Z-axis rate follows the marked direction, reverses, then returns to zero.",
+  },
+  {
+    id: "drift",
+    icon: "gyro-drift",
+    label: "Drift",
+    meta: "Zero-rate stability",
+    hint: "Keep the phone flat and still: X/Y should keep the dot near center, Z-rate should stay near zero, and the Drift score should settle after the quiet-band filter.",
+  },
+  {
+    id: "3d",
+    icon: "motion-3d",
+    label: "3D View",
+    meta: "Fused orientation model",
+    hint: "Tilt and rotate slowly and confirm the 3D model tracks the phone's real orientation.",
+  },
+];
+
+const sidebarGroups = [
+  {
+    title: "Select check",
+    openByDefault: true,
+    attributes: { "data-gyro-accordion": "" },
+    items: gyroChecks.map((check, index) => ({
+      label: check.label,
+      meta: check.meta,
+      visual: {
+        type: "icon" as const,
+        spriteUrl: ToolIcons,
+        spriteId: check.icon,
+      },
+      active: index === 0,
+      attributes: {
+        "data-gyro-check": check.id,
+        "data-gyro-tip": check.hint,
+      },
+    })),
+  },
+];
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{
+    tools: "Tools",
+    "gyroscope-test": "Gyroscope Sensor Check",
+  }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Gyroscope Tester: Rotation Sensor Checks</h1>
+        <p>
+          Test four aspects of phone rotation sensing directly in your browser.
+          Tilt the device to follow pitch and roll on the orientation horizon,
+          twist it to check the signed Z-axis rate and direction, hold it still
+          to examine X, Y, and Z drift, and rotate it to compare a fused 3D
+          orientation model. Capture a three-second zero-rate offset, then review
+          live sensor rate, tilt, yaw, peak rotation, axis readings, and rolling
+          data. The
+          zero-rate capture changes only this page's readings and does not
+          recalibrate the phone. The 3D view uses fused orientation data where
+          available, rather than the gyroscope alone, and browser readings are
+          not a hardware calibration or service test.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="gyro-shell"
+          fullscreenButtonId="gyro-fullscreen"
+          actionBarLabel="Gyroscope actions"
+          stageStatsMode="fullscreen-only"
+          stageStatsFillMobile={true}
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              attributes: { id: "gyro-start" },
+            },
+            {
+              label: "Capture zero-rate",
+              attributes: { id: "gyro-capture-bias", disabled: "true" },
+            },
+            {
+              label: "Reset",
+              tone: "danger",
+              attributes: { id: "gyro-reset" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Status",
+              value: "Ready",
+              attributes: { "data-stat-id": "status" },
+              valueAttributes: { id: "gyro-run-status" },
+            },
+            {
+              label: "Motion",
+              value: "Still",
+              attributes: { "data-stat-id": "motion" },
+              valueAttributes: { id: "gyro-run-motion" },
+            },
+            {
+              label: "Rate",
+              value: "-- Hz",
+              attributes: { "data-stat-id": "rate" },
+              valueAttributes: { id: "gyro-run-rate" },
+            },
+            {
+              label: "Tilt",
+              value: "0.0°",
+              attributes: { "data-stat-id": "tilt" },
+              valueAttributes: { id: "gyro-run-tilt" },
+            },
+            {
+              label: "Yaw",
+              value: "0.0°",
+              attributes: { "data-stat-id": "heading" },
+              valueAttributes: { id: "gyro-run-heading" },
+            },
+            {
+              label: "Z Rate",
+              value: "0 deg/s",
+              attributes: { "data-stat-id": "zrate" },
+              valueAttributes: { id: "gyro-run-z-rate" },
+            },
+            {
+              label: "Peak Z",
+              value: "0 deg/s",
+              attributes: { "data-stat-id": "peak" },
+              valueAttributes: { id: "gyro-run-peak" },
+            },
+            {
+              label: "Drift",
+              value: "0.0 deg/s",
+              attributes: { "data-stat-id": "drift" },
+              valueAttributes: { id: "gyro-run-drift" },
+            },
+          ]}
+          stageStats={[
+            {
+              label: "Check",
+              value: "Level",
+              attributes: { "data-stat-id": "check" },
+              valueAttributes: { id: "gyro-stage-check-legend" },
+            },
+            {
+              label: "Status",
+              value: "Ready",
+              attributes: { "data-stat-id": "status" },
+              valueAttributes: { id: "gyro-stage-status" },
+            },
+            {
+              label: "Motion",
+              value: "Still",
+              attributes: { "data-stat-id": "motion" },
+              valueAttributes: { id: "gyro-stage-motion" },
+            },
+            {
+              label: "Rate",
+              value: "-- Hz",
+              attributes: { "data-stat-id": "rate" },
+              valueAttributes: { id: "gyro-stage-rate" },
+            },
+            {
+              label: "Tilt",
+              value: "0.0°",
+              attributes: { "data-stat-id": "tilt" },
+              valueAttributes: { id: "gyro-stage-tilt" },
+            },
+            {
+              label: "Yaw",
+              value: "0.0°",
+              attributes: { "data-stat-id": "heading" },
+              valueAttributes: { id: "gyro-stage-heading" },
+            },
+            {
+              label: "Z Rate",
+              value: "0 deg/s",
+              attributes: { "data-stat-id": "zrate" },
+              valueAttributes: { id: "gyro-stage-z-rate" },
+            },
+            {
+              label: "Peak Z",
+              value: "0 deg/s",
+              attributes: { "data-stat-id": "peak" },
+              valueAttributes: { id: "gyro-stage-peak" },
+            },
+            {
+              label: "Drift",
+              value: "0.0 deg/s",
+              attributes: { "data-stat-id": "drift" },
+              valueAttributes: { id: "gyro-stage-drift" },
+            },
+          ]}
+        >
+          <div
+            id="gyro-stage"
+            class="gyro-stage"
+            data-check="level"
+            data-spin-direction="idle"
+            data-drift-state="waiting"
+          >
+            <div class="gyro-visual" aria-hidden="true">
+              <div class="gyro-check-visual gyro-check-visual--level">
+                <div class="gyro-attitude">
+                  <span class="gyro-attitude-horizon"></span>
+                  <span class="gyro-attitude-reticle"></span>
+                </div>
+              </div>
+              <div class="gyro-check-visual gyro-check-visual--twist">
+                <div class="gyro-twist-rate-gauge">
+                  <svg viewBox="0 0 320 220">
+                    <defs>
+                      <marker
+                        id="gyro-twist-arrow"
+                        class="gyro-twist-arrow-marker"
+                        viewBox="0 0 10 10"
+                        refX="8"
+                        refY="5"
+                        markerWidth="2.2"
+                        markerHeight="2.2"
+                        orient="auto"
+                      >
+                        <path d="M0 0 L10 5 L0 10 Z"></path>
+                      </marker>
+                    </defs>
+                    <path
+                      class="gyro-twist-scale"
+                      d="M38 176 A122 122 0 0 1 282 176"></path>
+                    <g class="gyro-twist-ticks">
+                      <line
+                        class="gyro-twist-tick gyro-twist-tick--major"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="76"
+                        transform="rotate(-90 160 176)"></line>
+                      <line
+                        class="gyro-twist-tick"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="73"
+                        transform="rotate(-60 160 176)"></line>
+                      <line
+                        class="gyro-twist-tick"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="73"
+                        transform="rotate(-30 160 176)"></line>
+                      <line
+                        class="gyro-twist-tick gyro-twist-tick--major"
+                        x1="160"
+                        y1="62"
+                        x2="160"
+                        y2="76"></line>
+                      <line
+                        class="gyro-twist-tick"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="73"
+                        transform="rotate(30 160 176)"></line>
+                      <line
+                        class="gyro-twist-tick"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="73"
+                        transform="rotate(60 160 176)"></line>
+                      <line
+                        class="gyro-twist-tick gyro-twist-tick--major"
+                        x1="160"
+                        y1="64"
+                        x2="160"
+                        y2="76"
+                        transform="rotate(90 160 176)"></line>
+                    </g>
+                    <text
+                      class="gyro-twist-scale-label gyro-twist-scale-label--counter"
+                      x="32"
+                      y="202">+ CCW</text
+                    >
+                    <text
+                      class="gyro-twist-scale-label gyro-twist-scale-label--zero"
+                      x="160"
+                      y="42">0</text
+                    >
+                    <text
+                      class="gyro-twist-scale-label gyro-twist-scale-label--clockwise"
+                      x="288"
+                      y="202">- CW</text
+                    >
+                    <path
+                      class="gyro-twist-direction-arc gyro-twist-direction-arc--counter"
+                      d="M160 54 A122 122 0 0 0 38 176"
+                      marker-end="url(#gyro-twist-arrow)"></path>
+                    <path
+                      class="gyro-twist-direction-arc gyro-twist-direction-arc--clockwise"
+                      d="M160 54 A122 122 0 0 1 282 176"
+                      marker-end="url(#gyro-twist-arrow)"></path>
+                    <line
+                      id="gyro-twist-needle"
+                      class="gyro-twist-needle"
+                      x1="160"
+                      y1="176"
+                      x2="160"
+                      y2="78"></line>
+                    <circle class="gyro-twist-hub" cx="160" cy="176" r="11"
+                    ></circle>
+                  </svg>
+                  <strong id="gyro-twist-rate-value">0 deg/s</strong>
+                </div>
+              </div>
+              <div class="gyro-check-visual gyro-check-visual--drift">
+                <div class="gyro-drift-scope">
+                  <div class="gyro-drift-target">
+                    <span class="gyro-drift-cross gyro-drift-cross--x"></span>
+                    <span class="gyro-drift-cross gyro-drift-cross--y"></span>
+                    <span class="gyro-drift-ring gyro-drift-ring--outer"></span>
+                    <span class="gyro-drift-ring gyro-drift-ring--inner"></span>
+                    <span class="gyro-drift-axis-label gyro-drift-axis-label--x"
+                      >X</span
+                    >
+                    <span class="gyro-drift-axis-label gyro-drift-axis-label--y"
+                      >Y</span
+                    >
+                    <span class="gyro-drift-axis-label gyro-drift-axis-label--z"
+                      >Z</span
+                    >
+                    <span id="gyro-drift-dot" class="gyro-drift-dot"></span>
+                  </div>
+                  <div class="gyro-drift-summary">
+                    <strong id="gyro-drift-state">Waiting</strong>
+                    <span>
+                      X/Y
+                      <b id="gyro-drift-xy-value">0.0 deg/s</b>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="gyro-check-visual gyro-check-visual--3d">
+                <div class="gyro-3d-scene">
+                  <div id="gyro-3d-stage" class="gyro-3d-stage">
+                    <span class="gyro-3d-face gyro-3d-face--front">
+                      <span class="gyro-3d-notch"></span>
+                    </span>
+                    <span class="gyro-3d-face gyro-3d-face--back"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              id="gyro-pause-notice"
+              class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-none absolute top-1/2 left-1/2 z-6 grid w-[min(18rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-1 rounded-2xl border px-4 py-3 text-center shadow-md"
+              hidden
+              role="status"
+              aria-live="polite"
+            >
+              <strong class="text-small leading-tight text-slate-800 dark:text-slate-200"
+                >Paused</strong
+              >
+              <span class="text-xsmall leading-snug text-slate-700 dark:text-slate-300"
+                >Press Resume to continue in fullscreen.</span
+              >
+            </div>
+            <span id="gyro-stage-info" class="sr-only">
+              Start while the phone is flat, then keep it level briefly before
+              each check.
+            </span>
+          </div>
+
+          <p slot="dockLead" id="gyro-dock-tip">
+            {gyroChecks[0]?.hint}
+          </p>
+        </ToolRuntime>
+
+        <div
+          id="gyro-readouts"
+          class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow grid gap-2 rounded-xl border p-2.5 shadow-md sm:gap-3 sm:rounded-2xl sm:p-3"
+          aria-label="Live gyroscope readouts"
+        >
+          <div class="grid gap-3 md:grid-cols-2">
+            <section
+              class="gyro-readout-panel--angles border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+              aria-label="Orientation angles"
+            >
+              <div class="flex min-w-0 items-baseline justify-between gap-3">
+                <strong class="sensor-panel-title">Orientation angles</strong>
+                <span id="orientation-mode" class="sensor-panel-unit"
+                  >Waiting</span
+                >
+              </div>
+              <div class="grid grid-cols-3 gap-1.5 sm:gap-3">
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">Alpha</span>
+                    <strong id="alpha-angle" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track"><i id="alpha-angle-bar"></i></div>
+                </div>
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">Beta</span>
+                    <strong id="beta-angle" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track"><i id="beta-angle-bar"></i></div>
+                </div>
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">Gamma</span>
+                    <strong id="gamma-angle" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track">
+                    <i id="gamma-angle-bar"></i>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section
+              class="gyro-readout-panel--rates border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+              aria-label="Rotation rate"
+            >
+              <div class="flex min-w-0 items-baseline justify-between gap-3">
+                <strong class="sensor-panel-title">Rotation rate</strong>
+                <span class="sensor-panel-unit">deg/s</span>
+              </div>
+              <div class="grid grid-cols-3 gap-1.5 sm:gap-3">
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">X</span>
+                    <strong id="x-rate" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track"><i id="x-rate-bar"></i></div>
+                </div>
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">Y</span>
+                    <strong id="y-rate" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track"><i id="y-rate-bar"></i></div>
+                </div>
+                <div class="axis-stat">
+                  <div class="axis-stat-row">
+                    <span class="axis-stat-label">Z</span>
+                    <strong id="z-rate" class="axis-stat-value">--</strong>
+                  </div>
+                  <div class="axis-track"><i id="z-rate-bar"></i></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section
+            class="border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+            aria-label="Diagnostic checks"
+          >
+            <div class="flex min-w-0 items-baseline justify-between gap-3">
+              <strong class="sensor-panel-title">Diagnostic checks</strong>
+              <span id="graph-window-label" class="sensor-panel-unit"
+                >Last 48 samples</span
+              >
+            </div>
+            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Peak spin</span>
+                  <strong id="peak-spin" class="gyro-diag-value">0 deg/s</strong
+                  >
+                </div>
+                <small id="peak-state" class="gyro-diag-state"
+                  >No spike yet</small
+                >
+              </div>
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Yaw drift</span>
+                  <strong id="heading-drift" class="gyro-diag-value"
+                    >0.0 deg</strong
+                  >
+                </div>
+                <small id="heading-state" class="gyro-diag-state">Stable</small>
+              </div>
+            </div>
+
+            <canvas
+              id="gyro-graph"
+              class="gyro-graph"
+              aria-label="Rolling gyroscope diagnostic graph"></canvas>
+          </section>
+
+          <section
+            class="border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+            aria-label="Measured evidence"
+          >
+            <div class="flex min-w-0 items-baseline justify-between gap-3">
+              <strong class="sensor-panel-title">Measured Evidence</strong>
+              <span id="evidence-source" class="sensor-panel-unit">--</span>
+            </div>
+            <p class="text-xsmall m-0 text-slate-700 dark:text-slate-300">
+              A browser cannot recalibrate gyroscope hardware. "Capture
+              zero-rate" measures the resting offset while the phone is held
+              still and subtracts it for this page only -- it does not touch the
+              device.
+            </p>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Axes present</span>
+                  <strong id="evidence-axes" class="gyro-diag-value">--</strong>
+                </div>
+                <small class="gyro-diag-state">X / Y / Z</small>
+              </div>
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Measured rate</span>
+                  <strong id="evidence-rate" class="gyro-diag-value"
+                    >-- Hz</strong
+                  >
+                </div>
+                <small class="gyro-diag-state">Sample delivery</small>
+              </div>
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Zero-rate offset</span>
+                  <strong id="noise-score" class="gyro-diag-value">--</strong>
+                </div>
+                <small id="noise-state" class="gyro-diag-state"
+                  >Not captured -- hold still and capture</small
+                >
+              </div>
+              <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Peak spin recorded</span>
+                  <strong id="evidence-peak" class="gyro-diag-value"
+                    >0 deg/s</strong
+                  >
+                </div>
+                <small class="gyro-diag-state">This session</small>
+              </div>
+            </div>
+          </section>
+        </div>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="lg:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Gyroscope checks and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    :global(#gyro-start.is-running) {
+      @apply bg-linear-to-br from-yellow-400 to-yellow-600;
+    }
+
+    .gyro-stage {
+      @apply relative grid size-full place-items-center [--gyro-pitch:0px] [--gyro-roll:0deg] [--gyro-z-angle:0deg];
+      container-type: size;
+    }
+
+    .gyro-visual {
+      @apply pointer-events-none relative z-1 aspect-square sm:aspect-video;
+      width: min(83.333%, 83.333cqh, 64rem);
+    }
+
+    @media (width >= 40rem) {
+      .gyro-visual {
+        width: min(83.333%, calc(83.333cqh * 16 / 9), 64rem);
+      }
+    }
+
+    .gyro-check-visual {
+      @apply absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 ease-out;
+    }
+
+    .gyro-attitude {
+      @apply relative aspect-square w-[80%] max-w-[350px] overflow-hidden rounded-full border-4 border-blue-500 bg-white/10 ring-10 ring-blue-300/10;
+    }
+
+    .gyro-attitude::before {
+      @apply pointer-events-none absolute inset-[10%] z-2 rounded-full border border-blue-300 bg-[linear-gradient(90deg,transparent_calc(50%-1px),rgb(142_197_255/0.25)_50%,transparent_calc(50%+1px)),linear-gradient(transparent_calc(50%-1px),rgb(142_197_255/0.50)_50%,transparent_calc(50%+1px))] content-[''];
+    }
+
+    .gyro-attitude-horizon {
+      @apply absolute top-[-30%] left-[-30%] h-[160%] w-[160%] bg-linear-to-b from-blue-300/80 from-49% via-blue-500/60 via-50% to-blue-300/40 to-51%;
+      @apply [transform:translateY(var(--gyro-pitch))_rotate(var(--gyro-roll))] shadow-inner transition-transform duration-[90ms] ease-linear;
+    }
+
+    .gyro-attitude-reticle {
+      @apply absolute top-1/2 left-1/2 z-3 h-0.5 w-[55%] rounded-full;
+      @apply bg-linear-to-r from-white from-30% via-transparent via-50% to-white to-70%;
+      @apply -translate-x-1/2 -translate-y-1/2;
+    }
+
+    .gyro-attitude-reticle::before {
+      @apply absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-white/50 content-[''];
+    }
+
+    .gyro-twist-rate-gauge {
+      @apply relative aspect-square w-[80%] max-w-[350px] rounded-4xl border border-blue-500 ring-10 ring-blue-300/10;
+    }
+
+    .gyro-twist-rate-gauge svg {
+      @apply absolute inset-0 h-full w-full overflow-visible;
+    }
+
+    .gyro-twist-scale {
+      @apply fill-none [stroke:rgb(142_197_255/0.4)] [stroke-width:4] [stroke-linecap:round] [vector-effect:non-scaling-stroke];
+    }
+
+    .gyro-twist-tick {
+      @apply [stroke:rgb(142_197_255/0.50)] [stroke-width:2] [stroke-linecap:round] [vector-effect:non-scaling-stroke];
+    }
+
+    .gyro-twist-tick--major {
+      @apply [stroke:rgb(142_197_255/0.50)] [stroke-width:6];
+    }
+
+    .gyro-twist-scale-label {
+      @apply [fill:rgb(255_255_255)] text-[12px] font-bold tracking-[0];
+    }
+
+    .gyro-twist-scale-label--counter {
+      @apply [text-anchor:start];
+    }
+
+    .gyro-twist-scale-label--zero {
+      @apply [text-anchor:middle];
+    }
+
+    .gyro-twist-scale-label--clockwise {
+      @apply [text-anchor:end];
+    }
+
+    .gyro-twist-direction-arc {
+      @apply fill-none [stroke:rgb(142_197_255/0.5)] [stroke-width:6] [stroke-linecap:round] opacity-50 [vector-effect:non-scaling-stroke];
+      transition:
+        opacity 140ms ease,
+        stroke 140ms ease,
+        stroke-width 140ms ease;
+    }
+
+    .gyro-twist-arrow-marker path {
+      @apply [fill:rgb(142_197_255)];
+    }
+
+    .gyro-stage[data-spin-direction="counter"]
+      .gyro-twist-direction-arc--counter,
+    .gyro-stage[data-spin-direction="clockwise"]
+      .gyro-twist-direction-arc--clockwise {
+      @apply [stroke:rgb(142_197_255/1)] [stroke-width:7] opacity-100;
+    }
+
+    .gyro-stage[data-spin-direction="counter"]
+      .gyro-twist-direction-arc--clockwise,
+    .gyro-stage[data-spin-direction="clockwise"]
+      .gyro-twist-direction-arc--counter {
+      @apply opacity-25;
+    }
+
+    .gyro-twist-needle {
+      @apply [stroke:rgb(255_255_255)] [stroke-width:4] [stroke-linecap:round] [vector-effect:non-scaling-stroke];
+      transform: rotate(var(--gyro-z-angle, 0deg));
+      transform-origin: 160px 176px;
+      transition:
+        transform 80ms linear,
+        stroke 120ms ease;
+    }
+
+    @supports (transform-box: view-box) {
+      .gyro-twist-needle {
+        transform-box: view-box;
+      }
+    }
+
+    .gyro-twist-hub {
+      @apply [fill:rgb(43_127_255)] [stroke:rgb(255_255_255)] [stroke-width:2] [vector-effect:non-scaling-stroke];
+    }
+
+    .gyro-twist-rate-gauge strong {
+      @apply text-small absolute bottom-10 left-1/2 leading-none text-blue-300;
+      transform: translateX(-50%);
+    }
+
+    .gyro-drift-scope {
+      @apply relative flex w-[80%] max-w-[350px] flex-col items-center gap-4 p-0 [--gyro-drift-x:0px] [--gyro-drift-y:0px];
+    }
+
+    .gyro-drift-summary {
+      @apply flex w-full min-w-0 items-center justify-between gap-2 rounded-full border border-blue-500 bg-blue-500/20 px-3 py-2;
+    }
+
+    .gyro-drift-summary strong {
+      @apply text-small leading-none text-white;
+    }
+
+    .gyro-drift-summary span {
+      @apply text-xsmall inline-flex items-baseline gap-2 leading-tight whitespace-nowrap text-white;
+    }
+
+    .gyro-drift-summary b {
+      @apply text-xsmall text-white;
+    }
+
+    .gyro-stage[data-drift-state="minor"] .gyro-drift-summary strong {
+      @apply text-blue-300;
+    }
+
+    .gyro-stage[data-drift-state="high"] .gyro-drift-summary strong {
+      @apply text-blue-500;
+    }
+
+    .gyro-drift-target {
+      @apply relative aspect-square w-full overflow-hidden rounded-4xl border border-blue-500 bg-[radial-gradient(circle_at_center,rgb(142_197_255/0.15)_0_35%,transparent_36%),radial-gradient(circle_at_center,transparent_0_55%,rgb(142_197_255/0.10)_56%)] ring-10 ring-blue-300/10;
+    }
+
+    .gyro-drift-cross,
+    .gyro-drift-ring,
+    .gyro-drift-axis-label,
+    .gyro-drift-dot {
+      @apply pointer-events-none absolute;
+    }
+
+    .gyro-drift-cross {
+      @apply bg-white/20;
+    }
+
+    .gyro-drift-cross--x {
+      @apply top-1/2 right-[10%] left-[10%] h-px -translate-y-1/2;
+    }
+
+    .gyro-drift-cross--y {
+      @apply top-[10%] bottom-[10%] left-1/2 w-px -translate-x-1/2;
+    }
+
+    .gyro-drift-ring {
+      @apply top-1/2 left-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border border-blue-300;
+      width: var(--gyro-drift-ring-size, 65%);
+    }
+
+    .gyro-drift-ring--inner {
+      @apply border-blue-300/50 bg-blue-300/10 [--gyro-drift-ring-size:32.5%];
+    }
+
+    .gyro-drift-ring--outer {
+      @apply border-dashed [--gyro-drift-ring-size:65%];
+    }
+
+    .gyro-drift-axis-label {
+      @apply text-2xsmall z-2 inline-grid size-5 place-items-center rounded-full border border-blue-300 bg-white/50 leading-none font-bold tracking-wide text-white/86;
+    }
+
+    .gyro-drift-axis-label--x {
+      @apply bottom-2 left-1/2 -translate-x-1/2;
+    }
+
+    .gyro-drift-axis-label--y {
+      @apply top-1/2 left-2 -translate-y-1/2;
+    }
+
+    .gyro-drift-axis-label--z {
+      @apply top-8 right-8;
+    }
+
+    .gyro-drift-dot {
+      @apply top-1/2 left-1/2 size-4 rounded-full border-2 border-white bg-blue-500 ring-4 ring-blue-300/10;
+      transform: translate(
+        calc(-50% + var(--gyro-drift-x)),
+        calc(-50% + var(--gyro-drift-y))
+      );
+      transition:
+        transform 150ms ease,
+        background 150ms ease,
+        box-shadow 150ms ease;
+    }
+
+    .gyro-stage[data-drift-state="waiting"] .gyro-drift-dot {
+      @apply bg-white ring-4 ring-white/10;
+    }
+
+    .gyro-stage[data-drift-state="minor"] .gyro-drift-dot {
+      @apply bg-blue-300 ring-4 ring-blue-300/10;
+    }
+
+    .gyro-stage[data-drift-state="high"] .gyro-drift-dot {
+      @apply bg-blue-500 ring-4 ring-blue-500/10;
+    }
+
+    .gyro-3d-scene {
+      @apply relative grid h-full w-full place-items-center;
+      perspective: 900px;
+    }
+
+    .gyro-3d-stage {
+      @apply relative h-44 w-22;
+      transform-style: preserve-3d;
+      transform: rotateZ(var(--gyro-3d-z, 0deg)) rotateX(var(--gyro-3d-x, 0deg))
+        rotateY(var(--gyro-3d-y, 0deg));
+      transition: transform 90ms linear;
+    }
+
+    .gyro-3d-face {
+      @apply absolute inset-0 rounded-3xl border-2 border-white bg-blue-500/30 ring-8 ring-blue-300/10;
+      backface-visibility: hidden;
+      transform: translateZ(0.5rem);
+    }
+
+    .gyro-3d-face--back {
+      @apply bg-blue-950/70;
+      transform: rotateY(180deg) translateZ(0.5rem);
+    }
+
+    .gyro-3d-notch {
+      @apply absolute top-2 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-white/80;
+    }
+
+    @supports not (translate: -50% -50%) {
+      .gyro-attitude-reticle,
+      .gyro-attitude-reticle::before,
+      .gyro-drift-ring,
+      .gyro-3d-notch {
+        transform: translate(-50%, -50%);
+      }
+
+      .axis-track i {
+        transform: translateY(-50%) translateX(var(--axis-offset, 0%))
+          scaleX(var(--axis-direction, 1));
+      }
+    }
+
+    .gyro-stage[data-check="level"] .gyro-check-visual--level,
+    .gyro-stage[data-check="twist"] .gyro-check-visual--twist,
+    .gyro-stage[data-check="drift"] .gyro-check-visual--drift,
+    .gyro-stage[data-check="3d"] .gyro-check-visual--3d {
+      @apply opacity-100;
+    }
+
+    :global(
+      #gyro-shell[data-check="level"]
+        ~ #gyro-readouts
+        .gyro-readout-panel--rates
+    ),
+    :global(
+      #gyro-shell[data-check="twist"]
+        ~ #gyro-readouts
+        .gyro-readout-panel--angles
+    ),
+    :global(
+      #gyro-shell[data-check="drift"]
+        ~ #gyro-readouts
+        .gyro-readout-panel--angles
+    ),
+    :global(
+      #gyro-shell[data-check="3d"] ~ #gyro-readouts .gyro-readout-panel--rates
+    ) {
+      @apply opacity-50;
+    }
+
+    .axis-track {
+      @apply border-accent-line bg-accent-wash relative h-4 w-full overflow-hidden rounded-full border;
+    }
+
+    .axis-track::before {
+      @apply absolute top-0 bottom-0 left-1/2 w-px bg-white/50 content-[''];
+    }
+
+    .axis-track i {
+      @apply absolute top-1/2 left-1/2 origin-left size-4 -translate-y-1/2 rounded-full border-4 border-slate-700 dark:border-slate-100;
+      width: var(--axis-width, 0%);
+      transform: translateX(var(--axis-offset, 0%))
+        scaleX(var(--axis-direction, 1));
+      transition:
+        width 80ms linear,
+        transform 80ms linear;
+    }
+
+    .axis-stat {
+      @apply border-accent-line grid gap-1.5 rounded-xl border bg-custom-100 px-2.5 py-2 sm:gap-2 sm:px-3 dark:bg-custom-700;
+    }
+
+    .axis-stat-row {
+      @apply flex items-center justify-between gap-2 sm:gap-4;
+    }
+
+    .axis-stat-label {
+      @apply text-xsmall font-bold text-slate-800 uppercase dark:text-slate-200;
+    }
+
+    .axis-stat-value {
+      @apply text-small sm:text-h4 text-slate-700 dark:text-slate-300;
+    }
+
+    .gyro-graph {
+      @apply border-accent-line text-accent-ink block h-15 sm:h-20 w-full rounded-xl border bg-custom-100 dark:bg-custom-700;
+    }
+
+    .gyro-diag-card {
+      @apply border-accent-line grid gap-2 rounded-xl border bg-custom-100 px-3 py-2 dark:bg-custom-700;
+    }
+
+    .gyro-diag-row {
+      @apply flex min-w-0 items-baseline justify-between gap-2;
+    }
+
+    .gyro-diag-label {
+      @apply text-xsmall min-w-0 font-medium text-slate-800 dark:text-slate-200;
+    }
+
+    .gyro-diag-value {
+      @apply text-small shrink-0 text-slate-700 dark:text-slate-300;
+    }
+
+    .gyro-diag-state {
+      @apply text-xsmall block text-slate-700 dark:text-slate-300;
+    }
+
+    .sensor-panel-title {
+      @apply text-small text-slate-800 dark:text-slate-200;
+    }
+
+    .sensor-panel-unit {
+      @apply text-xsmall text-right text-slate-700 dark:text-slate-300;
+    }
+  </style>
+
+  <script>
+    import { createSensorWatchdog } from "@/utils/phones/tools/sensor";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      onPageHide,
+      observeResize,
+      type ResizeHandle,
+    } from "@/utils/phones/tools/lifecycle";
+    import { createRafScheduler } from "@/utils/site/raf";
+    import {
+      requestMotionPermission,
+      requestOrientationPermission,
+      getMotionPermissionState,
+      describeSensorUnavailability,
+      type SensorPermissionReason,
+    } from "@/utils/phones/tools/capabilities";
+    import {
+      getScreenAngle,
+      onOrientationChange,
+      remapDeviceAxes,
+      type OrientationAngle,
+    } from "@/utils/phones/tools/orientation";
+
+    type GyroCheck = "level" | "twist" | "drift" | "3d";
+
+    type GraphSeries = {
+      values: readonly number[];
+      sampleCount: number;
+      min: number;
+      max: number;
+      baseline?: number;
+      label: string;
+    };
+
+    type FrameMetrics = {
+      recentRotationData: boolean;
+      recentAnyRotationData: boolean;
+      tiltMagnitude: number;
+      displayDriftX: number;
+      displayDriftY: number;
+      displayDriftZ: number;
+      spinMagnitude: number;
+      idleRate: number;
+      restingBias: number;
+      driftScore: number;
+      driftState: "waiting" | "calm" | "minor" | "high";
+    };
+
+    type GenericGyroscope = EventTarget & {
+      readonly x?: number;
+      readonly y?: number;
+      readonly z?: number;
+      start(): void;
+      stop(): void;
+    };
+    type GenericGyroscopeCtor = new (options?: {
+      frequency?: number;
+    }) => GenericGyroscope;
+    type WindowWithGyroscope = Window & { Gyroscope?: GenericGyroscopeCtor };
+    const RAD_TO_DEG = 180 / Math.PI;
+
+    const checkHints = {
+      level:
+        "Start while the phone is flat, then tilt gently and watch the attitude horizon follow pitch and roll.",
+      twist:
+        "Keep the phone flat and still for a moment, then rotate it flat. Positive Z-rate moves toward + CCW and negative Z-rate toward - CW.",
+      drift:
+        "Keep the phone flat and still. X/Y moves the dot and the Drift score should settle close to zero.",
+      "3d": "Tilt and rotate slowly and confirm the 3D model tracks the phone's real orientation.",
+    } as const;
+
+    const visibleStatsByCheck = {
+      level: ["check", "status", "motion", "rate", "tilt"] as const,
+      twist: ["check", "status", "motion", "rate", "zrate", "peak"] as const,
+      drift: ["check", "status", "motion", "rate", "zrate", "drift"] as const,
+      "3d": ["check", "status", "motion"] as const,
+    } as const;
+
+    const shell = document.getElementById(
+      "gyro-shell",
+    ) as HTMLDivElement | null;
+    const stage = document.getElementById(
+      "gyro-stage",
+    ) as HTMLDivElement | null;
+    const startButton = document.getElementById("gyro-start");
+    const resetButton = document.getElementById("gyro-reset");
+    const fullscreenButton = document.getElementById("gyro-fullscreen");
+    const pauseNotice = document.getElementById("gyro-pause-notice");
+    const captureBiasButton = document.getElementById(
+      "gyro-capture-bias",
+    ) as HTMLButtonElement | null;
+    const stageCheckLegend = document.getElementById("gyro-stage-check-legend");
+    const stageInfo = document.getElementById("gyro-stage-info");
+    const dockTip = document.getElementById("gyro-dock-tip");
+    const driftScope = document.querySelector<HTMLElement>(".gyro-drift-scope");
+    const driftStateLabel = document.getElementById("gyro-drift-state");
+    const driftXyValue = document.getElementById("gyro-drift-xy-value");
+    const gyro3dStage = document.getElementById("gyro-3d-stage");
+
+    const runStatus = document.getElementById("gyro-run-status");
+    const stageStatus = document.getElementById("gyro-stage-status");
+    const runMotionState = document.getElementById("gyro-run-motion");
+    const stageMotionState = document.getElementById("gyro-stage-motion");
+    const runRate = document.getElementById("gyro-run-rate");
+    const stageRate = document.getElementById("gyro-stage-rate");
+    const runTilt = document.getElementById("gyro-run-tilt");
+    const stageTilt = document.getElementById("gyro-stage-tilt");
+    const runHeading = document.getElementById("gyro-run-heading");
+    const stageHeading = document.getElementById("gyro-stage-heading");
+    const runZRate = document.getElementById("gyro-run-z-rate");
+    const stageZRate = document.getElementById("gyro-stage-z-rate");
+    const twistRateValue = document.getElementById("gyro-twist-rate-value");
+    const runPeak = document.getElementById("gyro-run-peak");
+    const stagePeak = document.getElementById("gyro-stage-peak");
+    const runDrift = document.getElementById("gyro-run-drift");
+    const stageDrift = document.getElementById("gyro-stage-drift");
+
+    const alphaAngle = document.getElementById("alpha-angle");
+    const betaAngle = document.getElementById("beta-angle");
+    const gammaAngle = document.getElementById("gamma-angle");
+    const alphaAngleBar = document.getElementById("alpha-angle-bar");
+    const betaAngleBar = document.getElementById("beta-angle-bar");
+    const gammaAngleBar = document.getElementById("gamma-angle-bar");
+    const orientationModeLabel = document.getElementById("orientation-mode");
+
+    const xRateLabel = document.getElementById("x-rate");
+    const yRateLabel = document.getElementById("y-rate");
+    const zRateLabel = document.getElementById("z-rate");
+    const xRateBar = document.getElementById("x-rate-bar");
+    const yRateBar = document.getElementById("y-rate-bar");
+    const zRateBar = document.getElementById("z-rate-bar");
+
+    const noiseScoreLabel = document.getElementById("noise-score");
+    const noiseStateLabel = document.getElementById("noise-state");
+    const headingDriftLabel = document.getElementById("heading-drift");
+    const headingStateLabel = document.getElementById("heading-state");
+    const peakSpinLabel = document.getElementById("peak-spin");
+    const peakStateLabel = document.getElementById("peak-state");
+    const graphWindowLabel = document.getElementById("graph-window-label");
+    const graphCanvas = document.getElementById(
+      "gyro-graph",
+    ) as HTMLCanvasElement | null;
+    const evidenceSourceLabel = document.getElementById("evidence-source");
+    const evidenceAxesLabel = document.getElementById("evidence-axes");
+    const evidenceRateLabel = document.getElementById("evidence-rate");
+    const evidencePeakLabel = document.getElementById("evidence-peak");
+    const runStats = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-stat-id]"),
+    );
+    const checkButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-gyro-check]"),
+    );
+
+    const pageController = new AbortController();
+    const { signal } = pageController;
+    const wakeLock = createWakeLock({ signal });
+
+    onPageHide(cleanupSensorPage);
+    let graphResizeObserver: ResizeHandle | null = null;
+    let driftVisualResizeObserver: ResizeHandle | null = null;
+    const gyroVisual = document.querySelector<HTMLElement>(".gyro-visual");
+
+    let visualScale = 1;
+    const VISUAL_SCALE_REFERENCE_HALF_EXTENT = 165;
+
+    function updateVisualScale(): void {
+      if (!gyroVisual) return;
+      const rect = gyroVisual.getBoundingClientRect();
+      const halfExtent = Math.min(rect.width, rect.height) / 2;
+      visualScale =
+        halfExtent > 0 ? halfExtent / VISUAL_SCALE_REFERENCE_HALF_EXTENT : 1;
+    }
+
+    let started = false;
+    let startInFlight = false;
+    let startCancelled = false;
+    let pausedForFullscreen = false;
+    let shouldResumeAfterFullscreen = false;
+    let motionPermissionGranted = false;
+    let orientationPermissionGranted = false;
+    let currentCheck: GyroCheck = "level";
+    let hasRotationData = false;
+    let hasAnyRotationData = false;
+    let rateXAvailable = false;
+    let rateYAvailable = false;
+    let rateZAvailable = false;
+    let orientationAbsolute = false;
+    let latestAlpha = 0;
+    let latestBeta = 0;
+    let latestGamma = 0;
+    let latestRawRateX = 0;
+    let latestRawRateY = 0;
+    let latestRawRateZ = 0;
+    let rateX = 0;
+    let rateY = 0;
+    let rateZ = 0;
+    let rateBiasX = 0;
+    let rateBiasY = 0;
+    let rateBiasZ = 0;
+    let rateBiasXReady = false;
+    let rateBiasYReady = false;
+    let rateBiasZReady = false;
+    let referenceAlpha = 0;
+    let referenceBeta = 0;
+    let referenceGamma = 0;
+    let orientationReferenceReady = false;
+    let visualTiltX = 0;
+    let visualTiltY = 0;
+    let visualRateZ = 0;
+    let visualDriftX = 0;
+    let visualDriftY = 0;
+    let peakSpin = 0;
+    let peakZSpin = 0;
+    let sampleCount = 0;
+    let orientationLastSampleTime = 0;
+    let rotationLastSampleTime = 0;
+    let alphaLastSampleTime = 0;
+    let betaLastSampleTime = 0;
+    let gammaLastSampleTime = 0;
+    let graphWidth = 0;
+    let graphHeight = 0;
+    const spinHistory: number[] = [];
+    const tiltHistory: number[] = [];
+    const twistRateHistory: number[] = [];
+    const rateXHistory: number[] = [];
+    const rateYHistory: number[] = [];
+    const rateZHistory: number[] = [];
+    const headingHistory: number[] = [];
+    const unwrappedHeadingHistory: number[] = [];
+    const orientationIntervals: number[] = [];
+    const rotationIntervals: number[] = [];
+    let lastDetailedRefresh = 0;
+    const detailedRefreshInterval = 1000 / 12;
+    const sensorFreshnessWindow = 1800;
+    const rateHistoryLimit = 48;
+    const rateResidualDeadband = 0.9;
+    const rateSmoothingFactor = 0.26;
+    const driftQuietRateThreshold = 2.4;
+    const twistQuietRateThreshold = 3.5;
+    const driftVisualScale = 8;
+
+    type BiasCaptureState = "idle" | "capturing" | "captured" | "rejected";
+    let biasCaptureState: BiasCaptureState = "idle";
+    let biasCaptureCountdown = 0;
+    let biasCaptureTimer = 0;
+    let lastCapturedBiasMagnitude = 0;
+    const captureRawX: number[] = [];
+    const captureRawY: number[] = [];
+    const captureRawZ: number[] = [];
+    const BIAS_CAPTURE_SECONDS = 3;
+    const BIAS_CAPTURE_MIN_SAMPLES = 20;
+    const BIAS_CAPTURE_MEAN_LIMIT = 6;
+    const BIAS_CAPTURE_NOISE_LIMIT = 1.4;
+
+    function showRuntimeControls(): void {
+      shell?.dispatchEvent(
+        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
+      );
+    }
+
+    let gyroscopeSensor: GenericGyroscope | null = null;
+    let usingGenericSensor = false;
+    let genericSensorLastSampleTime = 0;
+    let screenAngle: OrientationAngle = getScreenAngle();
+
+    let visualAnimationFrame = 0;
+
+    const uiScheduler = createRafScheduler(() => {
+      refreshStatusFromData();
+      const now = performance.now();
+      if (now - lastDetailedRefresh >= detailedRefreshInterval) {
+        lastDetailedRefresh = now;
+        const frameMetrics = computeFrameMetrics();
+        updateDiagnostics(frameMetrics);
+        updateStageInfo(frameMetrics);
+      }
+    });
+
+    function wrapDegrees(value: number): number {
+      return ((value + 540) % 360) - 180;
+    }
+
+    function finiteNumber(value: number | null | undefined): number | null {
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+
+    function average(values: number[]): number {
+      if (!values.length) return 0;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function rootMeanSquare(values: number[]): number {
+      if (!values.length) return 0;
+      return Math.sqrt(average(values.map((value) => value ** 2)));
+    }
+
+    function deviationRootMeanSquare(values: number[], center: number): number {
+      if (!values.length) return 0;
+      return rootMeanSquare(values.map((value) => value - center));
+    }
+
+    function pushLimited(
+      history: number[],
+      value: number,
+      limit = rateHistoryLimit,
+    ): void {
+      history.push(value);
+      if (history.length > limit) history.shift();
+    }
+
+    function currentHeading(): number {
+      return wrapDegrees(latestAlpha - referenceAlpha);
+    }
+
+    function currentTiltX(): number {
+      return latestGamma - referenceGamma;
+    }
+
+    function currentTiltY(): number {
+      return wrapDegrees(latestBeta - referenceBeta);
+    }
+
+    function currentTiltMagnitude(): number {
+      return Math.hypot(currentTiltX(), currentTiltY());
+    }
+
+    function setOrientationReferenceFromCurrent(): void {
+      if (!hasRecentTiltData()) return;
+      if (hasRecentAlphaData()) referenceAlpha = latestAlpha;
+      referenceBeta = latestBeta;
+      referenceGamma = latestGamma;
+      orientationReferenceReady = true;
+      tiltHistory.length = 0;
+      headingHistory.length = 0;
+      unwrappedHeadingHistory.length = 0;
+    }
+
+    function currentSpinMagnitude(): number {
+      if (!hasRecentRotationData()) return 0;
+      return Math.hypot(
+        applyDriftRateDeadband(rateX),
+        applyDriftRateDeadband(rateY),
+        applyDriftRateDeadband(rateZ),
+      );
+    }
+
+    function correctedRate(
+      value: number,
+      bias: number,
+      biasReady: boolean,
+    ): number {
+      const corrected = value - (biasReady ? bias : 0);
+      return Math.abs(corrected) < rateResidualDeadband ? 0 : corrected;
+    }
+
+    function smoothCorrectedRate(previous: number, next: number): number {
+      if (next === 0 && Math.abs(previous) < rateResidualDeadband * 1.25)
+        return 0;
+      const smoothed = previous + (next - previous) * rateSmoothingFactor;
+      return Math.abs(smoothed) < rateResidualDeadband ? 0 : smoothed;
+    }
+
+    function updateCorrectedRatesFromRaw(): void {
+      if (rateXAvailable)
+        rateX = smoothCorrectedRate(
+          rateX,
+          correctedRate(latestRawRateX, rateBiasX, rateBiasXReady),
+        );
+      if (rateYAvailable)
+        rateY = smoothCorrectedRate(
+          rateY,
+          correctedRate(latestRawRateY, rateBiasY, rateBiasYReady),
+        );
+      if (rateZAvailable)
+        rateZ = smoothCorrectedRate(
+          rateZ,
+          correctedRate(latestRawRateZ, rateBiasZ, rateBiasZReady),
+        );
+    }
+
+    function settleCorrectedRates(): void {
+      rateX = 0;
+      rateY = 0;
+      rateZ = 0;
+      visualRateZ = 0;
+      visualDriftX = 0;
+      visualDriftY = 0;
+    }
+
+    function resetCorrectedRateHistory(): void {
+      spinHistory.length = 0;
+      twistRateHistory.length = 0;
+      rateXHistory.length = 0;
+      rateYHistory.length = 0;
+      rateZHistory.length = 0;
+      peakSpin = 0;
+      peakZSpin = 0;
+      visualRateZ = 0;
+      visualDriftX = 0;
+      visualDriftY = 0;
+    }
+
+    function resetRateBias(): void {
+      rateBiasX = 0;
+      rateBiasY = 0;
+      rateBiasZ = 0;
+      rateBiasXReady = false;
+      rateBiasYReady = false;
+      rateBiasZReady = false;
+    }
+
+    function updateBiasCaptureUi(): void {
+      if (noiseScoreLabel) {
+        noiseScoreLabel.textContent =
+          biasCaptureState === "captured"
+            ? formatNoise(lastCapturedBiasMagnitude)
+            : "--";
+      }
+      if (noiseStateLabel) {
+        noiseStateLabel.textContent =
+          biasCaptureState === "idle"
+            ? "Not captured -- hold still and capture"
+            : biasCaptureState === "capturing"
+              ? `Hold still... ${biasCaptureCountdown}`
+              : biasCaptureState === "captured"
+                ? "Captured -- adjusts this page only"
+                : "Rejected -- hold the phone still and try again";
+      }
+      if (captureBiasButton) {
+        captureBiasButton.disabled =
+          !started ||
+          pausedForFullscreen ||
+          !hasRotationData ||
+          biasCaptureState === "capturing";
+        captureBiasButton.textContent =
+          biasCaptureState === "capturing"
+            ? `Hold still... ${biasCaptureCountdown}`
+            : "Capture zero-rate";
+      }
+    }
+
+    function startBiasCapture(): void {
+      if (
+        !started ||
+        pausedForFullscreen ||
+        !hasRotationData ||
+        biasCaptureState === "capturing"
+      )
+        return;
+      biasCaptureState = "capturing";
+      biasCaptureCountdown = BIAS_CAPTURE_SECONDS;
+      captureRawX.length = 0;
+      captureRawY.length = 0;
+      captureRawZ.length = 0;
+      updateBiasCaptureUi();
+      scheduleBiasCaptureCountdown();
+    }
+
+    function scheduleBiasCaptureCountdown(): void {
+      if (biasCaptureTimer !== 0 || biasCaptureState !== "capturing") return;
+      biasCaptureTimer = window.setInterval(() => {
+        biasCaptureCountdown -= 1;
+        if (biasCaptureCountdown <= 0) {
+          window.clearInterval(biasCaptureTimer);
+          biasCaptureTimer = 0;
+          finishBiasCapture();
+        } else {
+          updateBiasCaptureUi();
+        }
+      }, 1000);
+    }
+
+    function pauseBiasCapture(): void {
+      if (biasCaptureTimer === 0) return;
+      window.clearInterval(biasCaptureTimer);
+      biasCaptureTimer = 0;
+      updateBiasCaptureUi();
+    }
+
+    function resumeBiasCapture(): void {
+      scheduleBiasCaptureCountdown();
+      updateBiasCaptureUi();
+    }
+
+    function finishBiasCapture(): void {
+      const meanX = average(captureRawX);
+      const meanY = average(captureRawY);
+      const meanZ = average(captureRawZ);
+      const noise = Math.hypot(
+        deviationRootMeanSquare(captureRawX, meanX),
+        deviationRootMeanSquare(captureRawY, meanY),
+        deviationRootMeanSquare(captureRawZ, meanZ),
+      );
+      const mean = Math.hypot(meanX, meanY, meanZ);
+      const enoughSamples = captureRawX.length >= BIAS_CAPTURE_MIN_SAMPLES;
+
+      if (
+        !enoughSamples ||
+        noise > BIAS_CAPTURE_NOISE_LIMIT ||
+        mean > BIAS_CAPTURE_MEAN_LIMIT
+      ) {
+        biasCaptureState = "rejected";
+        updateBiasCaptureUi();
+        return;
+      }
+
+      rateBiasX = meanX;
+      rateBiasY = meanY;
+      rateBiasZ = meanZ;
+      rateBiasXReady = true;
+      rateBiasYReady = true;
+      rateBiasZReady = true;
+      settleCorrectedRates();
+      resetCorrectedRateHistory();
+      lastCapturedBiasMagnitude = mean;
+      biasCaptureState = "captured";
+      updateBiasCaptureUi();
+    }
+
+    function cancelBiasCapture(rejected: boolean): void {
+      if (biasCaptureTimer !== 0) {
+        window.clearInterval(biasCaptureTimer);
+        biasCaptureTimer = 0;
+      }
+      if (biasCaptureState === "capturing") {
+        biasCaptureState = rejected ? "rejected" : "idle";
+        updateBiasCaptureUi();
+      }
+    }
+
+    function isRecent(lastSampleTime: number): boolean {
+      return (
+        lastSampleTime > 0 &&
+        performance.now() - lastSampleTime < sensorFreshnessWindow
+      );
+    }
+
+    function hasRecentAlphaData(): boolean {
+      return isRecent(alphaLastSampleTime);
+    }
+
+    function hasRecentBetaData(): boolean {
+      return isRecent(betaLastSampleTime);
+    }
+
+    function hasRecentGammaData(): boolean {
+      return isRecent(gammaLastSampleTime);
+    }
+
+    function hasRecentTiltData(): boolean {
+      return hasRecentBetaData() && hasRecentGammaData();
+    }
+
+    function hasRecentAnyOrientationData(): boolean {
+      return (
+        hasRecentAlphaData() || hasRecentBetaData() || hasRecentGammaData()
+      );
+    }
+
+    function hasRecentAnyRotationData(): boolean {
+      return hasAnyRotationData && isRecent(rotationLastSampleTime);
+    }
+
+    function hasRecentRotationData(): boolean {
+      return hasRotationData && isRecent(rotationLastSampleTime);
+    }
+
+    function hasCheckData(check: GyroCheck): boolean {
+      if (check === "level") return hasRecentTiltData();
+      if (check === "twist")
+        return rateZAvailable && hasRecentAnyRotationData();
+      if (check === "3d") return hasRecentAnyOrientationData();
+      return hasRecentRotationData();
+    }
+
+    function updateCheckAvailability(): void {
+      checkButtons.forEach((button) => {
+        const check = button.dataset.gyroCheck as GyroCheck | undefined;
+        if (!check) return;
+        const unavailable = started && sampleCount > 0 && !hasCheckData(check);
+        button.disabled = unavailable;
+        button.title = unavailable
+          ? check === "level"
+            ? "Orientation-angle data is unavailable."
+            : check === "twist"
+              ? "Z-axis rotation-rate data is unavailable."
+              : check === "3d"
+                ? "Orientation data is unavailable."
+                : "Complete X, Y, and Z rotation-rate data is unavailable."
+          : "";
+      });
+      updateBiasCaptureUi();
+    }
+
+    function formatAngle(value: number): string {
+      return `${value.toFixed(1)}°`;
+    }
+
+    function formatRate(value: number): string {
+      return `${Math.round(value)} deg/s`;
+    }
+
+    function formatSignedRate(value: number): string {
+      const rounded = Math.round(value);
+      return `${rounded > 0 ? "+" : ""}${rounded} deg/s`;
+    }
+
+    function formatNoise(value: number): string {
+      return `${value.toFixed(1)} deg/s`;
+    }
+
+    function applyQuietRateDeadband(
+      value: number,
+      threshold = twistQuietRateThreshold,
+    ): number {
+      return Math.abs(value) < threshold ? 0 : value;
+    }
+
+    function applyDriftRateDeadband(value: number): number {
+      return Math.abs(value) < driftQuietRateThreshold ? 0 : value;
+    }
+
+    function setStatus(text: string): void {
+      if (runStatus) runStatus.textContent = text;
+      if (stageStatus) stageStatus.textContent = text;
+    }
+
+    function setAxisBar(
+      bar: HTMLElement | null,
+      value: number,
+      maxValue: number,
+    ): void {
+      if (!bar) return;
+      const width = Math.min(100, (Math.abs(value) / maxValue) * 100);
+      bar.style.setProperty("--axis-width", `${width / 2}%`);
+      bar.style.setProperty("--axis-direction", value < 0 ? "-1" : "1");
+      bar.style.setProperty("--axis-offset", value < 0 ? "-100%" : "0%");
+    }
+
+    function updateVisibleStats(): void {
+      const visible = new Set<string>(visibleStatsByCheck[currentCheck]);
+      runStats.forEach((item) => {
+        item.hidden = !visible.has(item.dataset.statId || "");
+      });
+    }
+
+    function graphLineColor(): { r: number; g: number; b: number } {
+      const fallback = { r: 51, g: 65, b: 85 };
+      if (!graphCanvas) return fallback;
+      const computed = getComputedStyle(graphCanvas).color;
+      const match = computed.match(
+        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/,
+      );
+      if (!match) return fallback;
+      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
+    }
+
+    function graphColors(): { grid: string; baseline: string; line: string } {
+      const c = graphLineColor();
+      const withAlpha = (alpha: number): string =>
+        `rgb(${c.r} ${c.g} ${c.b} / ${alpha})`;
+      return {
+        grid: withAlpha(0.1),
+        baseline: withAlpha(0.35),
+        line: withAlpha(0.9),
+      };
+    }
+
+    function resizeGraph(): void {
+      if (!graphCanvas) return;
+      const rect = graphCanvas.getBoundingClientRect();
+      graphWidth = rect.width;
+      graphHeight = rect.height;
+      if (graphWidth <= 0 || graphHeight <= 0) return;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      graphCanvas.width = Math.round(graphWidth * ratio);
+      graphCanvas.height = Math.round(graphHeight * ratio);
+      const context = graphCanvas.getContext("2d");
+      context?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawGraph();
+    }
+
+    function currentGraphSeries(): GraphSeries {
+      if (currentCheck === "level") {
+        const values = tiltHistory.length ? tiltHistory : [0];
+        const maxTilt = Math.max(
+          8,
+          ...tiltHistory,
+          currentTiltMagnitude(),
+          2.5,
+        );
+        return {
+          values,
+          sampleCount: tiltHistory.length,
+          min: 0,
+          max: maxTilt,
+          baseline: 0,
+          label: "Tilt offset (target under 2 deg)",
+        };
+      }
+
+      if (currentCheck === "twist") {
+        const values = twistRateHistory.length ? twistRateHistory : [0];
+        const scale = Math.max(
+          12,
+          peakZSpin,
+          ...twistRateHistory.map(Math.abs),
+        );
+        return {
+          values,
+          sampleCount: twistRateHistory.length,
+          min: -scale,
+          max: scale,
+          baseline: 0,
+          label: "Corrected Z-rate",
+        };
+      }
+
+      const values = spinHistory.length ? spinHistory : [0];
+      const maxSpin = Math.max(12, ...spinHistory, peakSpin, 8);
+      return {
+        values,
+        sampleCount: spinHistory.length,
+        min: 0,
+        max: maxSpin,
+        baseline: 0,
+        label: "Corrected spin (target under 8 deg/s)",
+      };
+    }
+
+    function updateGraphLabels(series: GraphSeries): void {
+      if (graphWindowLabel) {
+        const sampleLabel =
+          series.sampleCount > 0
+            ? `Last ${series.sampleCount} sample${series.sampleCount === 1 ? "" : "s"}`
+            : "No samples yet";
+        graphWindowLabel.textContent = `${series.label} - ${sampleLabel}`;
+      }
+    }
+
+    function drawGraph(series = currentGraphSeries()): void {
+      updateGraphLabels(series);
+      if (!graphCanvas || graphWidth <= 0 || graphHeight <= 0) return;
+      const context = graphCanvas.getContext("2d");
+      if (!context) return;
+
+      context.clearRect(0, 0, graphWidth, graphHeight);
+      const colors = graphColors();
+
+      context.strokeStyle = colors.grid;
+      context.lineWidth = 1;
+      for (let index = 1; index < 4; index += 1) {
+        const y = (graphHeight / 4) * index;
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(graphWidth, y);
+        context.stroke();
+      }
+
+      const values = series.values;
+      let minValue: number;
+      let maxValue: number;
+      if (series.baseline !== undefined) {
+        const deviation = Math.max(
+          series.baseline - series.min,
+          series.max - series.baseline,
+          0.001,
+        );
+        minValue = series.baseline - deviation;
+        maxValue = series.baseline + deviation;
+      } else {
+        minValue = series.min;
+        maxValue = series.max;
+      }
+      const span = Math.max(0.001, maxValue - minValue);
+
+      if (series.baseline !== undefined) {
+        const baselineY =
+          graphHeight - ((series.baseline - minValue) / span) * graphHeight;
+        context.strokeStyle = colors.baseline;
+        context.setLineDash([6, 6]);
+        context.beginPath();
+        context.moveTo(0, baselineY);
+        context.lineTo(graphWidth, baselineY);
+        context.stroke();
+        context.setLineDash([]);
+      }
+
+      if (values.length <= 1) return;
+
+      context.strokeStyle = colors.line;
+      context.lineWidth = 2.25;
+      context.lineJoin = "round";
+      context.lineCap = "round";
+      context.beginPath();
+
+      values.forEach((value, index) => {
+        const x = (index / (values.length - 1)) * graphWidth;
+        const y = graphHeight - ((value - minValue) / span) * graphHeight;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.stroke();
+    }
+
+    function computeHeadingDriftRange(): number {
+      if (!unwrappedHeadingHistory.length) return 0;
+      return (
+        Math.max(...unwrappedHeadingHistory) -
+        Math.min(...unwrappedHeadingHistory)
+      );
+    }
+
+    function updateSampleMetrics(): void {
+      const stream =
+        currentCheck === "level"
+          ? hasRecentTiltData()
+            ? "orientation"
+            : "rotation"
+          : hasRecentAnyRotationData()
+            ? "rotation"
+            : "orientation";
+      const intervals =
+        stream === "rotation" ? rotationIntervals : orientationIntervals;
+      const avgInterval = average(intervals);
+      const sampleRate = avgInterval > 0 ? 1000 / avgInterval : 0;
+      const rateText = sampleRate > 0 ? `${sampleRate.toFixed(1)} Hz` : "-- Hz";
+
+      if (runRate) runRate.textContent = rateText;
+      if (stageRate) stageRate.textContent = rateText;
+      if (evidenceRateLabel) evidenceRateLabel.textContent = rateText;
+    }
+
+    function computeFrameMetrics(): FrameMetrics {
+      const recentTiltData = hasRecentTiltData();
+      const recentRotationData = hasRecentRotationData();
+      const recentAnyRotationData = hasRecentAnyRotationData();
+      const tiltMagnitude = recentTiltData ? currentTiltMagnitude() : 0;
+      const displayDriftX =
+        rateXAvailable && recentAnyRotationData
+          ? applyDriftRateDeadband(rateX)
+          : 0;
+      const displayDriftY =
+        rateYAvailable && recentAnyRotationData
+          ? applyDriftRateDeadband(rateY)
+          : 0;
+      const displayDriftZ =
+        rateZAvailable && recentAnyRotationData
+          ? applyDriftRateDeadband(rateZ)
+          : 0;
+      const spinMagnitude = Math.hypot(
+        displayDriftX,
+        displayDriftY,
+        displayDriftZ,
+      );
+      const restingBias = recentRotationData
+        ? Math.hypot(
+            average(rateXHistory.map(applyDriftRateDeadband)),
+            average(rateYHistory.map(applyDriftRateDeadband)),
+            average(rateZHistory.map(applyDriftRateDeadband)),
+          )
+        : 0;
+      const idleRate = recentRotationData
+        ? rootMeanSquare(
+            spinHistory.map((value) =>
+              value < driftQuietRateThreshold ? 0 : value,
+            ),
+          )
+        : 0;
+      const driftScore = Math.max(spinMagnitude, idleRate, restingBias);
+      const driftState = !recentRotationData
+        ? ("waiting" as const)
+        : driftScore < driftQuietRateThreshold
+          ? ("calm" as const)
+          : driftScore < 5.5
+            ? ("minor" as const)
+            : ("high" as const);
+      return {
+        recentRotationData,
+        recentAnyRotationData,
+        tiltMagnitude,
+        displayDriftX,
+        displayDriftY,
+        displayDriftZ,
+        spinMagnitude,
+        idleRate,
+        restingBias,
+        driftScore,
+        driftState,
+      };
+    }
+
+    function updateDiagnostics(metrics = computeFrameMetrics()): void {
+      const recentTiltData = hasRecentTiltData();
+      const recentHeadingData = hasRecentAlphaData();
+      const headingRange = computeHeadingDriftRange();
+      const {
+        recentRotationData,
+        recentAnyRotationData,
+        tiltMagnitude,
+        displayDriftX,
+        displayDriftY,
+        spinMagnitude,
+        driftScore,
+        driftState,
+      } = metrics;
+      const driftText = recentRotationData ? formatNoise(driftScore) : "--";
+      const displayRateZ = applyQuietRateDeadband(rateZ);
+
+      updateSampleMetrics();
+      if (runTilt)
+        runTilt.textContent = recentTiltData
+          ? formatAngle(tiltMagnitude)
+          : "--";
+      if (stageTilt)
+        stageTilt.textContent = recentTiltData
+          ? formatAngle(tiltMagnitude)
+          : "--";
+      if (runHeading)
+        runHeading.textContent = recentHeadingData
+          ? formatAngle(currentHeading())
+          : "--";
+      if (stageHeading)
+        stageHeading.textContent = recentHeadingData
+          ? formatAngle(currentHeading())
+          : "--";
+      const recentZRate = rateZAvailable && recentAnyRotationData;
+      if (runZRate)
+        runZRate.textContent = recentZRate
+          ? formatSignedRate(displayRateZ)
+          : "--";
+      if (stageZRate)
+        stageZRate.textContent = recentZRate
+          ? formatSignedRate(displayRateZ)
+          : "--";
+      if (twistRateValue)
+        twistRateValue.textContent = recentZRate
+          ? formatSignedRate(displayRateZ)
+          : "--";
+      if (runPeak)
+        runPeak.textContent = recentZRate ? formatRate(peakZSpin) : "--";
+      if (stagePeak)
+        stagePeak.textContent = recentZRate ? formatRate(peakZSpin) : "--";
+      if (runDrift) runDrift.textContent = driftText;
+      if (stageDrift) stageDrift.textContent = driftText;
+      if (driftStateLabel) {
+        driftStateLabel.textContent =
+          driftState === "waiting"
+            ? "Waiting for rate"
+            : driftState === "calm"
+              ? "Calm in quiet band"
+              : driftState === "minor"
+                ? "Minor drift"
+                : "High drift";
+      }
+      stage?.setAttribute("data-drift-state", driftState);
+
+      if (headingDriftLabel)
+        headingDriftLabel.textContent = recentHeadingData
+          ? formatAngle(headingRange)
+          : "--";
+      if (headingStateLabel) {
+        headingStateLabel.textContent = !recentHeadingData
+          ? "Unavailable"
+          : headingRange < 2
+            ? "Stable"
+            : headingRange < 8
+              ? "Minor drift"
+              : "Large drift";
+      }
+
+      if (peakSpinLabel)
+        peakSpinLabel.textContent = recentAnyRotationData
+          ? formatRate(peakSpin)
+          : "--";
+      if (evidencePeakLabel)
+        evidencePeakLabel.textContent = formatRate(peakSpin);
+      if (peakStateLabel) {
+        peakStateLabel.textContent = !recentAnyRotationData
+          ? "Unavailable"
+          : peakSpin < 20
+            ? "No spike yet"
+            : peakSpin < 80
+              ? "Light turn"
+              : peakSpin < 180
+                ? "Clear turn"
+                : "Fast spin";
+      }
+
+      const graphSeries = currentGraphSeries();
+      if (document.hidden) updateGraphLabels(graphSeries);
+      else drawGraph(graphSeries);
+
+      const motionLabel =
+        !recentTiltData && !recentAnyRotationData
+          ? "Waiting"
+          : spinMagnitude < 2 && tiltMagnitude < 2
+            ? "Still"
+            : Math.abs(displayRateZ) >
+                  Math.max(Math.abs(displayDriftX), Math.abs(displayDriftY)) &&
+                Math.abs(displayRateZ) > 8
+              ? "Twisting"
+              : tiltMagnitude > 5
+                ? "Tilting"
+                : spinMagnitude > 8
+                  ? "Rotating"
+                  : "Settling";
+
+      if (runMotionState) runMotionState.textContent = motionLabel;
+      if (stageMotionState) stageMotionState.textContent = motionLabel;
+
+      if (evidenceSourceLabel) {
+        evidenceSourceLabel.textContent = !started
+          ? "--"
+          : usingGenericSensor
+            ? "Source: Generic Sensor API"
+            : "Source: DeviceMotion";
+      }
+      if (evidenceAxesLabel) {
+        const axes = [
+          rateXAvailable ? "X" : null,
+          rateYAvailable ? "Y" : null,
+          rateZAvailable ? "Z" : null,
+        ].filter((axis): axis is string => axis !== null);
+        evidenceAxesLabel.textContent = axes.length ? axes.join(" ") : "--";
+      }
+    }
+
+    function requestSensorUiRefresh(): void {
+      if (document.hidden) return;
+      uiScheduler.request();
+    }
+
+    function refreshStatusFromData(): void {
+      if (!started) {
+        setStatus("Ready");
+        return;
+      }
+      if (pausedForFullscreen) {
+        setStatus("Paused");
+        return;
+      }
+
+      const recentOrientationData = hasRecentAnyOrientationData();
+      const recentRotationData = hasRecentRotationData();
+      const recentAnyRotationData = hasRecentAnyRotationData();
+      if (recentOrientationData && recentRotationData) {
+        setStatus("Live");
+      } else if (recentOrientationData) {
+        setStatus(recentAnyRotationData ? "Mixed" : "Angles only");
+      } else if (recentRotationData) {
+        setStatus("Rate only");
+      } else if (recentAnyRotationData) {
+        setStatus("Partial rate");
+      } else {
+        setStatus("Waiting");
+      }
+      updateCheckAvailability();
+    }
+
+    function updateStageInfo(metrics = computeFrameMetrics()): void {
+      if (!stageInfo) return;
+      const { tiltMagnitude, spinMagnitude, idleRate } = metrics;
+
+      if (started && sampleCount > 0 && !hasCheckData(currentCheck)) {
+        stageInfo.textContent =
+          currentCheck === "level"
+            ? "Orientation-angle data is unavailable, so the level check cannot be evaluated."
+            : currentCheck === "twist"
+              ? "Z-axis rotation-rate data is unavailable, so the twist check cannot be evaluated."
+              : currentCheck === "3d"
+                ? "Orientation data is unavailable, so the 3D view cannot be evaluated."
+                : "Complete X, Y, and Z rotation-rate data is unavailable, so drift cannot be evaluated.";
+        return;
+      }
+
+      if (sampleCount === 0 && !hasAnyRotationData) {
+        stageInfo.textContent = checkHints[currentCheck];
+        return;
+      }
+
+      if (currentCheck === "level") {
+        stageInfo.textContent =
+          tiltMagnitude < 2
+            ? "The attitude horizon is close to level. Tilt slowly and confirm pitch and roll move smoothly."
+            : "Tilt response is active. Return the phone flat and check that the horizon settles back near level.";
+        return;
+      }
+
+      if (currentCheck === "twist") {
+        stageInfo.textContent =
+          Math.abs(rateZ) > 12
+            ? "Twist response is active. The signed Z-rate needle should follow the marked + CCW or - CW direction."
+            : "Keep the phone flat and still before twisting. Use “Capture zero-rate” first if the resting rate looks offset.";
+        return;
+      }
+
+      if (currentCheck === "3d") {
+        stageInfo.textContent =
+          "The model tracks the OS's fused orientation (accelerometer, gyroscope, and compass where present). It shows the orientation pipeline works -- it is not an isolated gyroscope reading.";
+        return;
+      }
+
+      stageInfo.textContent =
+        idleRate < 1.5 && spinMagnitude < 3
+          ? "Resting spin looks calm and settled close to zero."
+          : "Hold the phone flat and still for a few seconds, then use “Capture zero-rate” to remove the resting offset.";
+    }
+
+    function render3dStage(): void {
+      gyro3dStage?.style.setProperty("--gyro-3d-z", `${-latestAlpha}deg`);
+      gyro3dStage?.style.setProperty("--gyro-3d-x", `${-latestBeta}deg`);
+      gyro3dStage?.style.setProperty("--gyro-3d-y", `${latestGamma}deg`);
+    }
+
+    function animateVisuals(): void {
+      const deviceTiltX = hasRecentTiltData() ? currentTiltX() : 0;
+      const deviceTiltY = hasRecentTiltData() ? currentTiltY() : 0;
+      const { x: tiltX, y: tiltY } = remapDeviceAxes(
+        deviceTiltX,
+        deviceTiltY,
+        screenAngle,
+      );
+      const recentAnyRotationData = hasRecentAnyRotationData();
+      const deviceDriftX =
+        rateXAvailable && recentAnyRotationData
+          ? applyDriftRateDeadband(rateX)
+          : 0;
+      const deviceDriftY =
+        rateYAvailable && recentAnyRotationData
+          ? applyDriftRateDeadband(rateY)
+          : 0;
+      const { x: displayDriftX, y: displayDriftY } = remapDeviceAxes(
+        deviceDriftX,
+        deviceDriftY,
+        screenAngle,
+      );
+      const targetRateZ =
+        rateZAvailable && recentAnyRotationData
+          ? applyQuietRateDeadband(rateZ)
+          : 0;
+
+      visualTiltX += (tiltX - visualTiltX) * 0.12;
+      visualTiltY += (tiltY - visualTiltY) * 0.12;
+      visualRateZ += (targetRateZ - visualRateZ) * 0.2;
+      if (targetRateZ === 0 && Math.abs(visualRateZ) < 0.35) visualRateZ = 0;
+      visualDriftX += (displayDriftX - visualDriftX) * 0.22;
+      visualDriftY += (displayDriftY - visualDriftY) * 0.22;
+      if (displayDriftX === 0 && Math.abs(visualDriftX) < 0.35)
+        visualDriftX = 0;
+      if (displayDriftY === 0 && Math.abs(visualDriftY) < 0.35)
+        visualDriftY = 0;
+
+      const zRateAngle = Math.max(-90, Math.min(90, -(visualRateZ / 180) * 90));
+      stage?.style.setProperty("--gyro-z-angle", `${zRateAngle}deg`);
+      stage?.style.setProperty(
+        "--gyro-roll",
+        `${Math.max(-70, Math.min(70, -visualTiltX))}deg`,
+      );
+      stage?.style.setProperty(
+        "--gyro-pitch",
+        `${Math.max(-52, Math.min(52, visualTiltY * 0.82))}px`,
+      );
+      if (driftScope) {
+        const driftExtent = 64 * visualScale;
+        const driftXOffset = Math.max(
+          -driftExtent,
+          Math.min(
+            driftExtent,
+            (visualDriftX / driftVisualScale) * 58 * visualScale,
+          ),
+        );
+        const driftYOffset = Math.max(
+          -driftExtent,
+          Math.min(
+            driftExtent,
+            (-visualDriftY / driftVisualScale) * 58 * visualScale,
+          ),
+        );
+        driftScope.style.setProperty("--gyro-drift-x", `${driftXOffset}px`);
+        driftScope.style.setProperty("--gyro-drift-y", `${driftYOffset}px`);
+      }
+      if (driftXyValue) {
+        const xyDrift = Math.hypot(displayDriftX, displayDriftY);
+        driftXyValue.textContent = recentAnyRotationData
+          ? formatNoise(xyDrift)
+          : "--";
+      }
+      if (stage) {
+        stage.dataset.spinDirection =
+          targetRateZ > 4 ? "counter" : targetRateZ < -4 ? "clockwise" : "idle";
+      }
+
+      const alphaAvail = hasRecentAlphaData();
+      const betaAvail = hasRecentBetaData();
+      const gammaAvail = hasRecentGammaData();
+      if (alphaAngle)
+        alphaAngle.textContent = alphaAvail
+          ? formatAngle(wrapDegrees(latestAlpha))
+          : "--";
+      if (betaAngle)
+        betaAngle.textContent = betaAvail ? formatAngle(latestBeta) : "--";
+      if (gammaAngle)
+        gammaAngle.textContent = gammaAvail ? formatAngle(latestGamma) : "--";
+      setAxisBar(alphaAngleBar, alphaAvail ? wrapDegrees(latestAlpha) : 0, 180);
+      setAxisBar(betaAngleBar, betaAvail ? latestBeta : 0, 180);
+      setAxisBar(gammaAngleBar, gammaAvail ? latestGamma : 0, 90);
+
+      if (xRateLabel)
+        xRateLabel.textContent =
+          rateXAvailable && recentAnyRotationData
+            ? formatRate(displayDriftX)
+            : "--";
+      if (yRateLabel)
+        yRateLabel.textContent =
+          rateYAvailable && recentAnyRotationData
+            ? formatRate(displayDriftY)
+            : "--";
+      if (zRateLabel)
+        zRateLabel.textContent =
+          rateZAvailable && recentAnyRotationData
+            ? formatRate(applyQuietRateDeadband(rateZ))
+            : "--";
+      setAxisBar(xRateBar, displayDriftX, 360);
+      setAxisBar(yRateBar, displayDriftY, 360);
+      setAxisBar(zRateBar, applyQuietRateDeadband(rateZ), 360);
+
+      if (orientationModeLabel) {
+        orientationModeLabel.textContent = hasRecentAnyOrientationData()
+          ? orientationAbsolute
+            ? "Absolute"
+            : "Relative"
+          : "Waiting";
+      }
+
+      const stillSettling =
+        Math.abs(visualTiltX - tiltX) > 0.05 ||
+        Math.abs(visualTiltY - tiltY) > 0.05 ||
+        Math.abs(visualRateZ) > 0.1 ||
+        Math.abs(visualDriftX) > 0.1 ||
+        Math.abs(visualDriftY) > 0.1;
+
+      if (
+        !document.hidden &&
+        !pausedForFullscreen &&
+        (started || stillSettling)
+      ) {
+        visualAnimationFrame = requestAnimationFrame(animateVisuals);
+      } else {
+        visualAnimationFrame = 0;
+      }
+    }
+
+    function ensureVisualAnimation(): void {
+      if (document.hidden || pausedForFullscreen) return;
+      if (visualAnimationFrame !== 0) return;
+      visualAnimationFrame = requestAnimationFrame(animateVisuals);
+    }
+
+    function pushInterval(
+      now: number,
+      stream: "orientation" | "rotation",
+    ): void {
+      const previous =
+        stream === "orientation"
+          ? orientationLastSampleTime
+          : rotationLastSampleTime;
+      const interval = previous ? now - previous : 0;
+      if (stream === "orientation") {
+        orientationLastSampleTime = now;
+      } else {
+        rotationLastSampleTime = now;
+      }
+      if (interval > 0) {
+        const history =
+          stream === "orientation" ? orientationIntervals : rotationIntervals;
+        pushLimited(history, interval);
+      }
+    }
+
+    function pushHeadingSample(heading: number): void {
+      headingHistory.push(heading);
+      if (headingHistory.length > 48) headingHistory.shift();
+
+      if (!unwrappedHeadingHistory.length) {
+        unwrappedHeadingHistory.push(heading);
+        return;
+      }
+
+      const lastWrapped =
+        headingHistory.length > 1
+          ? headingHistory[headingHistory.length - 2]
+          : heading;
+      const lastUnwrapped =
+        unwrappedHeadingHistory[unwrappedHeadingHistory.length - 1];
+      const delta = wrapDegrees(heading - lastWrapped);
+      unwrappedHeadingHistory.push(lastUnwrapped + delta);
+      if (unwrappedHeadingHistory.length > 48) unwrappedHeadingHistory.shift();
+    }
+
+    function handleNoData(): void {
+      if (!started || sampleCount > 0) return;
+      setStatus("No data");
+      if (stageInfo) {
+        stageInfo.textContent =
+          "No gyroscope-style data has arrived yet. Move the phone once or check browser support.";
+      }
+    }
+
+    function handleStreamLoss(): void {
+      if (!started || sampleCount === 0) return;
+      alphaLastSampleTime = 0;
+      betaLastSampleTime = 0;
+      gammaLastSampleTime = 0;
+      orientationLastSampleTime = 0;
+      rotationLastSampleTime = 0;
+      orientationIntervals.length = 0;
+      rotationIntervals.length = 0;
+      hasRotationData = false;
+      hasAnyRotationData = false;
+      rateXAvailable = false;
+      rateYAvailable = false;
+      rateZAvailable = false;
+      resetCorrectedRateHistory();
+      tiltHistory.length = 0;
+      cancelBiasCapture(true);
+      setStatus("Signal lost");
+      updateCheckAvailability();
+      updateDiagnostics();
+      if (stageInfo) {
+        stageInfo.textContent =
+          "Sensor updates stopped. Move the phone again or check browser support and permissions.";
+      }
+    }
+
+    const sensorWatchdog = createSensorWatchdog({
+      onNoData: handleNoData,
+      onStale: handleStreamLoss,
+    });
+
+    function setCheck(checkId: GyroCheck): void {
+      const changed = checkId !== currentCheck;
+      if (changed && checkId === "twist") {
+        peakZSpin = 0;
+        twistRateHistory.length = 0;
+      }
+      if (changed && checkId === "level") {
+        tiltHistory.length = 0;
+      }
+      if (changed && checkId === "drift") {
+        resetCorrectedRateHistory();
+        headingHistory.length = 0;
+        unwrappedHeadingHistory.length = 0;
+      }
+      currentCheck = checkId;
+      if (stage) stage.dataset.check = checkId;
+      if (shell) shell.dataset.check = checkId;
+      const activeCheckButton = checkButtons.find(
+        (button) => button.dataset.gyroCheck === checkId,
+      );
+      if (dockTip && activeCheckButton?.dataset.gyroTip) {
+        dockTip.textContent = activeCheckButton.dataset.gyroTip;
+      }
+      const checkLabel =
+        checkId === "3d"
+          ? "3D View"
+          : checkId[0].toUpperCase() + checkId.slice(1);
+      if (stageCheckLegend) stageCheckLegend.textContent = checkLabel;
+      updateVisibleStats();
+      updateDiagnostics();
+      updateStageInfo();
+    }
+
+    function ingestRotationSample(
+      rawX: number | null,
+      rawY: number | null,
+      rawZ: number | null,
+      intervalMs: number,
+    ): void {
+      if (rawX === null && rawY === null && rawZ === null) return;
+
+      sampleCount += 1;
+      const now = performance.now();
+      pushInterval(now, "rotation");
+      if (intervalMs > 0) {
+        rotationLastSampleTime = now;
+      }
+
+      rateXAvailable = rawX !== null;
+      rateYAvailable = rawY !== null;
+      rateZAvailable = rawZ !== null;
+      hasAnyRotationData = rateXAvailable || rateYAvailable || rateZAvailable;
+      hasRotationData = rateXAvailable && rateYAvailable && rateZAvailable;
+      if (rawX !== null) latestRawRateX = rawX;
+      if (rawY !== null) latestRawRateY = rawY;
+      if (rawZ !== null) latestRawRateZ = rawZ;
+
+      if (biasCaptureState === "capturing") {
+        if (rawX !== null) captureRawX.push(rawX);
+        if (rawY !== null) captureRawY.push(rawY);
+        if (rawZ !== null) captureRawZ.push(rawZ);
+      }
+
+      updateCorrectedRatesFromRaw();
+
+      if (rateZAvailable) {
+        const correctedZUnsmoothed = correctedRate(
+          latestRawRateZ,
+          rateBiasZ,
+          rateBiasZReady,
+        );
+        peakZSpin = Math.max(peakZSpin, Math.abs(correctedZUnsmoothed));
+        pushLimited(twistRateHistory, rateZ);
+      }
+      if (hasRotationData) {
+        const spinMagnitude = currentSpinMagnitude();
+        peakSpin = Math.max(peakSpin, spinMagnitude);
+        pushLimited(spinHistory, spinMagnitude);
+        pushLimited(rateXHistory, rateX);
+        pushLimited(rateYHistory, rateY);
+        pushLimited(rateZHistory, rateZ);
+      }
+
+      sensorWatchdog.markSample(now);
+      requestSensorUiRefresh();
+      ensureVisualAnimation();
+    }
+
+    function handleOrientation(event: DeviceOrientationEvent): void {
+      if (pausedForFullscreen || sensorsPausedForVisibility) return;
+      const incomingAlpha = finiteNumber(event.alpha);
+      const incomingBeta = finiteNumber(event.beta);
+      const incomingGamma = finiteNumber(event.gamma);
+      if (
+        incomingAlpha === null &&
+        incomingBeta === null &&
+        incomingGamma === null
+      )
+        return;
+
+      orientationAbsolute = Boolean(event.absolute);
+      sampleCount += 1;
+
+      const now = performance.now();
+      const alphaWasRecent = isRecent(alphaLastSampleTime);
+      if (incomingAlpha !== null) {
+        if (!alphaWasRecent) {
+          headingHistory.length = 0;
+          unwrappedHeadingHistory.length = 0;
+        }
+        latestAlpha = incomingAlpha;
+        alphaLastSampleTime = now;
+      }
+      if (incomingBeta !== null) {
+        latestBeta = incomingBeta;
+        betaLastSampleTime = now;
+      }
+      if (incomingGamma !== null) {
+        latestGamma = incomingGamma;
+        gammaLastSampleTime = now;
+      }
+      if (!orientationReferenceReady && hasRecentTiltData()) {
+        setOrientationReferenceFromCurrent();
+      }
+      pushInterval(now, "orientation");
+      if (hasRecentTiltData()) pushLimited(tiltHistory, currentTiltMagnitude());
+
+      if (
+        incomingAlpha !== null &&
+        currentSpinMagnitude() < driftQuietRateThreshold
+      ) {
+        pushHeadingSample(currentHeading());
+      }
+      render3dStage();
+
+      sensorWatchdog.markSample(now);
+      requestSensorUiRefresh();
+      ensureVisualAnimation();
+    }
+
+    function handleMotion(event: DeviceMotionEvent): void {
+      if (pausedForFullscreen || sensorsPausedForVisibility) return;
+      const rotation = event.rotationRate;
+      if (!rotation) return;
+
+      const now = performance.now();
+      const measuredInterval = rotationLastSampleTime
+        ? now - rotationLastSampleTime
+        : 0;
+      ingestRotationSample(
+        finiteNumber(rotation.beta),
+        finiteNumber(rotation.gamma),
+        finiteNumber(rotation.alpha),
+        measuredInterval,
+      );
+    }
+
+    function genericSensorSupported(): boolean {
+      return typeof (window as WindowWithGyroscope).Gyroscope === "function";
+    }
+
+    function handleGenericGyroscopeReading(): void {
+      if (
+        !gyroscopeSensor ||
+        !started ||
+        pausedForFullscreen ||
+        sensorsPausedForVisibility
+      )
+        return;
+      const now = performance.now();
+      const intervalMs = genericSensorLastSampleTime
+        ? now - genericSensorLastSampleTime
+        : 0;
+      genericSensorLastSampleTime = now;
+      const x = finiteNumber(gyroscopeSensor.x);
+      const y = finiteNumber(gyroscopeSensor.y);
+      const z = finiteNumber(gyroscopeSensor.z);
+      ingestRotationSample(
+        x === null ? null : x * RAD_TO_DEG,
+        y === null ? null : y * RAD_TO_DEG,
+        z === null ? null : z * RAD_TO_DEG,
+        intervalMs,
+      );
+    }
+
+    function stopGenericSensor(): void {
+      gyroscopeSensor?.stop();
+      gyroscopeSensor = null;
+      usingGenericSensor = false;
+      genericSensorLastSampleTime = 0;
+    }
+
+    function pauseGenericSensor(): void {
+      gyroscopeSensor?.stop();
+      genericSensorLastSampleTime = 0;
+    }
+
+    function recoverFromGenericSensorFailure(): void {
+      stopGenericSensor();
+      if (
+        !started ||
+        pausedForFullscreen ||
+        sensorsPausedForVisibility ||
+        document.hidden ||
+        !motionPermissionGranted
+      ) {
+        return;
+      }
+      window.removeEventListener("devicemotion", handleMotion);
+      window.addEventListener("devicemotion", handleMotion, { signal });
+      setStatus("Waiting");
+      updateStageInfo();
+      sensorWatchdog.start();
+    }
+
+    function resumeGenericSensor(): void {
+      if (!usingGenericSensor || !gyroscopeSensor) return;
+      try {
+        gyroscopeSensor.start();
+      } catch {
+        recoverFromGenericSensorFailure();
+      }
+    }
+
+    function tryStartGenericSensor(): Promise<boolean> {
+      return new Promise((resolve) => {
+        const win = window as WindowWithGyroscope;
+        if (!win.Gyroscope) {
+          resolve(false);
+          return;
+        }
+        try {
+          const sensor = new win.Gyroscope({ frequency: 60 });
+          let settled = false;
+          let startupTimer = 0;
+          function settle(ok: boolean): void {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(startupTimer);
+            resolve(ok);
+          }
+          function handleFailure(): void {
+            if (settled) {
+              recoverFromGenericSensorFailure();
+              return;
+            }
+            stopGenericSensor();
+            settle(false);
+          }
+          sensor.addEventListener("reading", handleGenericGyroscopeReading, {
+            signal,
+          });
+          sensor.addEventListener("activate", () => settle(true), { signal });
+          sensor.addEventListener(
+            "error",
+            handleFailure,
+            { signal },
+          );
+          gyroscopeSensor = sensor;
+          startupTimer = window.setTimeout(() => {
+            stopGenericSensor();
+            settle(false);
+          }, 1000);
+          sensor.start();
+        } catch {
+          stopGenericSensor();
+          resolve(false);
+        }
+      });
+    }
+
+    async function requestPermissions(): Promise<{
+      motion: boolean;
+      orientation: boolean;
+    }> {
+      const motionResult = await requestMotionPermission();
+      const orientationResult = await requestOrientationPermission();
+      return {
+        motion: motionResult.granted,
+        orientation: orientationResult.granted,
+      };
+    }
+
+    async function startTest(): Promise<void> {
+      if (started || startInFlight) return;
+      startInFlight = true;
+      startCancelled = false;
+      syncStartButton();
+
+      if (
+        !("DeviceOrientationEvent" in window) &&
+        !("DeviceMotionEvent" in window) &&
+        !genericSensorSupported()
+      ) {
+        setStatus("Unavailable");
+        if (stageInfo)
+          stageInfo.textContent = describeSensorUnavailability("unsupported");
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+
+      usingGenericSensor =
+        genericSensorSupported() && (await tryStartGenericSensor());
+      if (startCancelled) {
+        stopGenericSensor();
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+
+      const permissions = await requestPermissions();
+      if (startCancelled) {
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+      motionPermissionGranted = permissions.motion;
+      orientationPermissionGranted = permissions.orientation;
+
+      if (
+        !usingGenericSensor &&
+        !permissions.motion &&
+        !permissions.orientation
+      ) {
+        const reason: SensorPermissionReason = "denied";
+        const permanentlyDenied =
+          (await getMotionPermissionState()) === "denied";
+        setStatus("Permission blocked");
+        if (stageInfo)
+          stageInfo.textContent = describeSensorUnavailability(reason, {
+            permanentlyDenied,
+          });
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+
+      started = true;
+      pausedForFullscreen = true;
+      pauseGenericSensor();
+      updateBiasCaptureUi();
+
+      startInFlight = false;
+      setStatus("Paused");
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    let sensorsPausedForVisibility = false;
+
+    function pauseSensorsForVisibility(): void {
+      if (!started || sensorsPausedForVisibility) return;
+      sensorsPausedForVisibility = true;
+      wakeLock.release();
+      window.removeEventListener("deviceorientation", handleOrientation);
+      window.removeEventListener("devicemotion", handleMotion);
+      pauseGenericSensor();
+      sensorWatchdog.stop();
+      pauseBiasCapture();
+      if (visualAnimationFrame !== 0) {
+        cancelAnimationFrame(visualAnimationFrame);
+        visualAnimationFrame = 0;
+      }
+    }
+
+    function resumeSensorsForVisibility(): void {
+      if (!started || !sensorsPausedForVisibility) return;
+      sensorsPausedForVisibility = false;
+      if (pausedForFullscreen) return;
+      if (orientationPermissionGranted) {
+        window.addEventListener("deviceorientation", handleOrientation, {
+          signal,
+        });
+      }
+      if (usingGenericSensor) {
+        resumeGenericSensor();
+      } else if (motionPermissionGranted) {
+        window.addEventListener("devicemotion", handleMotion, { signal });
+      }
+      sensorWatchdog.start();
+      ensureVisualAnimation();
+      resumeBiasCapture();
+      wakeLock.request();
+    }
+
+    function isFullscreenActive(): boolean {
+      return shell?.dataset.fullscreen === "true";
+    }
+
+    function syncPauseNotice(): void {
+      if (pauseNotice) {
+        pauseNotice.hidden = isFullscreenActive() || !pausedForFullscreen;
+      }
+    }
+
+    function syncStartButton(): void {
+      if (!startButton) return;
+      const isRunning = started && !pausedForFullscreen;
+      startButton.classList.toggle("is-running", isRunning);
+      startButton.setAttribute("aria-pressed", String(isRunning));
+      startButton.toggleAttribute("disabled", startInFlight);
+      startButton.textContent = startInFlight
+        ? "Starting..."
+        : isRunning
+          ? "Pause"
+          : pausedForFullscreen
+            ? "Resume"
+            : "Start";
+    }
+
+    function pauseSensorTest(): void {
+      if (!started || pausedForFullscreen) return;
+      pausedForFullscreen = true;
+      shouldResumeAfterFullscreen = false;
+      wakeLock.release();
+      window.removeEventListener("deviceorientation", handleOrientation);
+      window.removeEventListener("devicemotion", handleMotion);
+      pauseGenericSensor();
+      sensorWatchdog.stop();
+      uiScheduler.cancel();
+      pauseBiasCapture();
+      if (visualAnimationFrame !== 0) {
+        cancelAnimationFrame(visualAnimationFrame);
+        visualAnimationFrame = 0;
+      }
+      setStatus("Paused");
+      updateBiasCaptureUi();
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    function resumeSensorTest(): void {
+      if (!started || document.hidden) return;
+      pausedForFullscreen = false;
+      sensorsPausedForVisibility = false;
+      wakeLock.request();
+      if (orientationPermissionGranted) {
+        window.addEventListener("deviceorientation", handleOrientation, {
+          signal,
+        });
+      }
+      if (usingGenericSensor) {
+        resumeGenericSensor();
+      } else if (motionPermissionGranted) {
+        window.addEventListener("devicemotion", handleMotion, { signal });
+      }
+      setStatus(hasAnyRotationData ? "Live" : "Waiting");
+      updateStageInfo();
+      sensorWatchdog.start();
+      ensureVisualAnimation();
+      resumeBiasCapture();
+      requestSensorUiRefresh();
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    function requestSensorFullscreen(): void {
+      shouldResumeAfterFullscreen = true;
+      if (isFullscreenActive()) {
+        shouldResumeAfterFullscreen = false;
+        resumeSensorTest();
+        return;
+      }
+      fullscreenButton?.click();
+      showRuntimeControls();
+    }
+
+    async function handleStartButton(): Promise<void> {
+      if (startInFlight) return;
+      if (!started) {
+        await startTest();
+        if (!started) return;
+      } else if (!pausedForFullscreen) {
+        pauseSensorTest();
+        showRuntimeControls();
+        return;
+      }
+      requestSensorFullscreen();
+    }
+
+    function resetTest(): void {
+      startCancelled = true;
+      wakeLock.release();
+      window.removeEventListener("deviceorientation", handleOrientation);
+      window.removeEventListener("devicemotion", handleMotion);
+      stopGenericSensor();
+      started = false;
+      sensorsPausedForVisibility = false;
+      pausedForFullscreen = false;
+      shouldResumeAfterFullscreen = false;
+      motionPermissionGranted = false;
+      orientationPermissionGranted = false;
+      sensorWatchdog.stop();
+      uiScheduler.cancel();
+      if (visualAnimationFrame !== 0) {
+        cancelAnimationFrame(visualAnimationFrame);
+        visualAnimationFrame = 0;
+      }
+      cancelBiasCapture(false);
+      biasCaptureState = "idle";
+
+      hasRotationData = false;
+      hasAnyRotationData = false;
+      rateXAvailable = false;
+      rateYAvailable = false;
+      rateZAvailable = false;
+      orientationAbsolute = false;
+      latestAlpha = 0;
+      latestBeta = 0;
+      latestGamma = 0;
+      latestRawRateX = 0;
+      latestRawRateY = 0;
+      latestRawRateZ = 0;
+      rateX = 0;
+      rateY = 0;
+      rateZ = 0;
+      resetRateBias();
+      referenceAlpha = 0;
+      referenceBeta = 0;
+      referenceGamma = 0;
+      orientationReferenceReady = false;
+      visualTiltX = 0;
+      visualTiltY = 0;
+      visualRateZ = 0;
+      visualDriftX = 0;
+      visualDriftY = 0;
+      peakSpin = 0;
+      peakZSpin = 0;
+      sampleCount = 0;
+      orientationLastSampleTime = 0;
+      rotationLastSampleTime = 0;
+      alphaLastSampleTime = 0;
+      betaLastSampleTime = 0;
+      gammaLastSampleTime = 0;
+      genericSensorLastSampleTime = 0;
+      lastDetailedRefresh = 0;
+      resetCorrectedRateHistory();
+      tiltHistory.length = 0;
+      headingHistory.length = 0;
+      unwrappedHeadingHistory.length = 0;
+      orientationIntervals.length = 0;
+      rotationIntervals.length = 0;
+      if (orientationModeLabel) orientationModeLabel.textContent = "Waiting";
+      [
+        alphaAngle,
+        betaAngle,
+        gammaAngle,
+        xRateLabel,
+        yRateLabel,
+        zRateLabel,
+      ].forEach((item) => {
+        if (item) item.textContent = "--";
+      });
+      [alphaAngleBar, betaAngleBar, gammaAngleBar].forEach((bar, index) => {
+        setAxisBar(bar, 0, index === 2 ? 90 : 180);
+      });
+      [xRateBar, yRateBar, zRateBar].forEach((bar) => setAxisBar(bar, 0, 360));
+
+      if (runRate) runRate.textContent = "-- Hz";
+      if (stageRate) stageRate.textContent = "-- Hz";
+      if (runZRate) runZRate.textContent = "--";
+      if (stageZRate) stageZRate.textContent = "--";
+      if (twistRateValue) twistRateValue.textContent = "--";
+      if (runTilt) runTilt.textContent = "--";
+      if (stageTilt) stageTilt.textContent = "--";
+      if (runHeading) runHeading.textContent = "--";
+      if (stageHeading) stageHeading.textContent = "--";
+      if (runPeak) runPeak.textContent = "--";
+      if (stagePeak) stagePeak.textContent = "--";
+      if (runDrift) runDrift.textContent = "--";
+      if (stageDrift) stageDrift.textContent = "--";
+      if (runMotionState) runMotionState.textContent = "Waiting";
+      if (stageMotionState) stageMotionState.textContent = "Waiting";
+      if (headingDriftLabel) headingDriftLabel.textContent = "--";
+      if (headingStateLabel) headingStateLabel.textContent = "Waiting";
+      if (peakSpinLabel) peakSpinLabel.textContent = "--";
+      if (peakStateLabel) peakStateLabel.textContent = "Waiting";
+      if (evidenceSourceLabel) evidenceSourceLabel.textContent = "--";
+      if (evidenceAxesLabel) evidenceAxesLabel.textContent = "--";
+      if (evidenceRateLabel) evidenceRateLabel.textContent = "-- Hz";
+      if (evidencePeakLabel) evidencePeakLabel.textContent = "0 deg/s";
+      if (graphWindowLabel) graphWindowLabel.textContent = "No samples yet";
+      if (stage) stage.dataset.spinDirection = "idle";
+      stage?.setAttribute("data-drift-state", "waiting");
+      if (driftStateLabel) driftStateLabel.textContent = "Waiting for rate";
+      if (driftScope) {
+        driftScope.style.setProperty("--gyro-drift-x", "0px");
+        driftScope.style.setProperty("--gyro-drift-y", "0px");
+      }
+      if (driftXyValue) driftXyValue.textContent = "0.0 deg/s";
+      render3dStage();
+
+      setStatus("Ready");
+      syncStartButton();
+      syncPauseNotice();
+      updateCheckAvailability();
+      updateBiasCaptureUi();
+      drawGraph();
+      updateStageInfo();
+    }
+
+    function queueGraphResize(): void {
+      window.setTimeout(resizeGraph, 40);
+    }
+
+    function cleanupSensorPage(): void {
+      resetTest();
+      pageController.abort();
+      stopOrientationWatch?.();
+      stopOrientationWatch = null;
+      graphResizeObserver?.disconnect();
+      graphResizeObserver = null;
+      driftVisualResizeObserver?.disconnect();
+      driftVisualResizeObserver = null;
+    }
+
+    checkButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const checkId = button.dataset.gyroCheck as GyroCheck | undefined;
+          if (!checkId) return;
+          setCheck(checkId);
+        },
+        { signal },
+      );
+    });
+
+    startButton?.addEventListener("click", () => void handleStartButton(), {
+      signal,
+    });
+    resetButton?.addEventListener("click", resetTest, { signal });
+    captureBiasButton?.addEventListener("click", startBiasCapture, { signal });
+    shell?.addEventListener(
+      "tool-runtime:fullscreen-change",
+      (event) => {
+        const detail = (event as CustomEvent<{ isExpanded: boolean }>).detail;
+        if (detail.isExpanded) {
+          if (shouldResumeAfterFullscreen) {
+            shouldResumeAfterFullscreen = false;
+            resumeSensorTest();
+          }
+        } else {
+          shouldResumeAfterFullscreen = false;
+          if (started && !pausedForFullscreen) pauseSensorTest();
+        }
+        syncPauseNotice();
+        queueGraphResize();
+        showRuntimeControls();
+      },
+      { signal },
+    );
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden) {
+          pauseSensorsForVisibility();
+        } else {
+          resumeSensorsForVisibility();
+          requestSensorUiRefresh();
+        }
+      },
+      { signal },
+    );
+    graphResizeObserver = observeResize(graphCanvas, resizeGraph);
+    driftVisualResizeObserver = observeResize(gyroVisual, updateVisualScale);
+    let stopOrientationWatch: (() => void) | null = onOrientationChange(() => {
+      screenAngle = getScreenAngle();
+      ensureVisualAnimation();
+    });
+
+    updateVisualScale();
+    setCheck("level");
+    resetTest();
+    resizeGraph();
+  </script>
+</BaseLayout>

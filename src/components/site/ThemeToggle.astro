@@ -1,0 +1,47 @@
+---
+// src/components/site/ThemeToggle.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+---
+
+<button
+  type="button"
+  class="btn-base"
+  aria-label="Toggle dark mode"
+  aria-pressed="false"
+  data-theme-toggle
+>
+  <svg
+    data-sun-icon
+    class="hidden h-5.5 w-5.5 text-inherit transition-colors dark:block"
+    aria-hidden="true"
+  >
+    <use href={`${Icons}#sun`}></use>
+  </svg>
+  <svg
+    data-moon-icon
+    class="h-5.5 w-5.5 text-inherit transition-colors dark:hidden"
+    aria-hidden="true"
+  >
+    <use href={`${Icons}#moon`}></use>
+  </svg>
+</button>
+<script>
+  type ThemePreference = "light" | "dark" | "system";
+
+  const themeWindow = window as Window & {
+    setThemePreference?: (theme: ThemePreference) => void;
+  };
+  const btn = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
+
+  window.applyTheme?.();
+
+  if (btn && btn.dataset.themeBound !== "true") {
+    btn.dataset.themeBound = "true";
+    btn.addEventListener("click", () => {
+      const nextTheme: ThemePreference =
+        document.documentElement.classList.contains("dark") ? "light" : "dark";
+      themeWindow.setThemePreference?.(nextTheme);
+    });
+  }
+</script>

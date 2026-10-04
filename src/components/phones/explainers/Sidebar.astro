@@ -1,0 +1,286 @@
+---
+// src/components/phones/explainers/sidebar.astro
+
+import type { MarkdownHeading } from "astro";
+import { getCollection } from "astro:content";
+import Icons from "@/assets/icons/site-sprites.svg?url";
+
+interface Props {
+  currentSlug: string;
+  headings?: MarkdownHeading[];
+}
+const { currentSlug, headings = [] } = Astro.props;
+
+const allExplainers = (await getCollection("explainers")).filter(
+  (entry) => !entry.data.draft,
+);
+
+const currentEntry = allExplainers.find((entry) => entry.id === currentSlug);
+const activeSeries = currentEntry?.data.series;
+
+const parents = allExplainers
+  .filter((entry) => entry.data.role === "overview")
+  .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+
+const tree = parents.map((parent) => {
+  const children = allExplainers
+    .filter(
+      (entry) =>
+        entry.data.series === parent.data.series && entry.data.role === "part",
+    )
+    .map((c) => ({
+      slug: c.id,
+      title: c.data.title,
+      order: c.data.order,
+      isActive: c.id === currentSlug,
+    }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const related = allExplainers
+    .filter(
+      (entry) =>
+        entry.data.series === parent.data.series &&
+        entry.data.role === "related",
+    )
+    .map((entry) => ({
+      slug: entry.id,
+      title: entry.data.cardTitle,
+      relatedOrder: entry.data.relatedOrder,
+      isActive: entry.id === currentSlug,
+    }))
+    .sort(
+      (a, b) => (a.relatedOrder ?? 0) - (b.relatedOrder ?? 0),
+    );
+
+  return {
+    series: parent.data.series,
+    isCurrent: parent.data.series === activeSeries,
+    articles: [
+      {
+        slug: parent.id,
+        title: parent.data.cardTitle,
+        isActive: parent.id === currentSlug,
+      },
+      ...children.map((child) => ({
+        slug: child.slug,
+        title: child.title,
+        isActive: child.isActive,
+      })),
+    ],
+    related,
+  };
+});
+
+const sections = [
+  ...tree.filter((s) => s.isCurrent),
+  ...tree.filter((s) => !s.isCurrent),
+];
+
+const h2Headings = headings.filter((h) => h.depth === 2);
+---
+
+{
+  sections.some((section) => section.isCurrent) && (
+    <aside class="space-y-4">
+      <div class="lg:bg-custom-100 lg:dark:bg-custom-700 lg:shadow-accent-glow lg:rounded-xl lg:p-4 lg:shadow-md">
+        <ul class="grid gap-2">
+          {sections.map((section) => (
+            <li>
+              <details
+                open={section.isCurrent}
+                class="border-accent-line from-accent-wash group overflow-hidden rounded-xl border bg-linear-to-b to-transparent"
+              >
+                <summary class="text-xsmall flex cursor-pointer list-none items-center gap-3 px-4 py-3 font-bold tracking-wide uppercase transition-colors">
+                  <svg
+                    class="h-5 w-5 shrink-0 group-open:hidden"
+                    aria-hidden="true"
+                  >
+                    <use href={`${Icons}#hex-plus`} />
+                  </svg>
+                  <svg
+                    class="hidden h-5 w-5 shrink-0 group-open:block"
+                    aria-hidden="true"
+                  >
+                    <use href={`${Icons}#hex-minus`} />
+                  </svg>
+                  <span>{section.series}</span>
+                </summary>
+                <ul class="space-y-1 px-1 pb-2">
+                  {section.articles.map((article) => (
+                    <li>
+                      <a
+                        href={`/phones/explainers/${article.slug}`}
+                        aria-current={article.isActive ? "page" : undefined}
+                        class:list={[
+                          "hover:text-accent-ink text-xsmall flex items-center gap-3 px-4 py-1.5 font-medium text-slate-700 transition-colors dark:text-slate-300",
+                          article.isActive &&
+                            "bg-accent-500/40 dark:bg-accent-500/20",
+                        ]}
+                      >
+                        <svg
+                          class="h-4 w-4 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <use href={`${Icons}#hex-none`} />
+                        </svg>
+                        <span class="leading-snug">{article.title}</span>
+                      </a>
+                      {section.isCurrent &&
+                        article.isActive &&
+                        h2Headings.length > 0 && (
+                          <ul class="mt-0.5 space-y-0.5">
+                            {h2Headings.map((h) => (
+                              <li>
+                                <a
+                                  href={`#${h.slug}`}
+                                  data-heading-link={h.slug}
+                                  class="hover:text-accent-ink text-xsmall flex items-start gap-3 px-4 py-0.5 text-slate-700 transition-colors dark:text-slate-300"
+                                >
+                                  <span
+                                    class="text-h4 w-4 shrink-0 text-center leading-none"
+                                    aria-hidden="true"
+                                  >
+                                    &bull;
+                                  </span>
+                                  {h.text}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+                {section.related.length > 0 && (
+                  <div class="border-accent-line mx-3 border-t pt-2 pb-3">
+                    <p class="text-accent-ink mb-1 px-2 text-[0.7rem] font-bold tracking-wider uppercase">
+                      Related articles
+                    </p>
+                    <ul class="space-y-1">
+                      {section.related.map((article) => (
+                        <li>
+                          <a
+                            href={`/phones/explainers/${article.slug}`}
+                            aria-current={article.isActive ? "page" : undefined}
+                            class:list={[
+                              "hover:text-accent-ink text-xsmall flex items-center gap-3 rounded-md px-2 py-1.5 font-medium text-slate-700 transition-colors dark:text-slate-300",
+                              article.isActive &&
+                                "bg-accent-500/40 dark:bg-accent-500/20",
+                            ]}
+                          >
+                            <svg
+                              class="h-4 w-4 shrink-0"
+                              aria-hidden="true"
+                            >
+                              <use href={`${Icons}#hex-none`} />
+                            </svg>
+                            <span class="leading-snug">{article.title}</span>
+                          </a>
+                          {section.isCurrent &&
+                            article.isActive &&
+                            h2Headings.length > 0 && (
+                              <ul class="mt-0.5 space-y-0.5">
+                                {h2Headings.map((h) => (
+                                  <li>
+                                    <a
+                                      href={`#${h.slug}`}
+                                      data-heading-link={h.slug}
+                                      class="hover:text-accent-ink text-xsmall flex items-start gap-3 px-2 py-0.5 text-slate-700 transition-colors dark:text-slate-300"
+                                    >
+                                      <span
+                                        class="text-h4 w-4 shrink-0 text-center leading-none"
+                                        aria-hidden="true"
+                                      >
+                                        &bull;
+                                      </span>
+                                      {h.text}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </details>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </aside>
+  )
+}
+
+<script>
+  import { createRafScheduler } from "@/utils/site/raf";
+
+  function initHeadingObserver() {
+    const links = document.querySelectorAll<HTMLAnchorElement>(
+      "[data-heading-link]",
+    );
+    if (!links.length) return;
+
+    const headingEls = Array.from(
+      document.querySelectorAll<HTMLHeadingElement>(".mdx-content h2"),
+    );
+    if (!headingEls.length) return;
+
+    let scrollMargin = 88;
+    let positions: number[] = [];
+
+    function cachePositions() {
+      scrollMargin = headingEls[0]
+        ? parseFloat(getComputedStyle(headingEls[0]).scrollMarginTop)
+        : 88;
+      positions = headingEls.map(
+        (el) => el.getBoundingClientRect().top + window.scrollY,
+      );
+    }
+
+    function setActive(slug: string | null) {
+      links.forEach((link) => {
+        const active = link.dataset.headingLink === slug;
+        link.classList.toggle("text-accent-ink", active);
+        link.classList.toggle("text-slate-700", !active);
+        link.classList.toggle("dark:text-slate-300", !active);
+      });
+    }
+
+    function onScroll() {
+      const threshold = window.scrollY + scrollMargin + 10;
+      let activeSlug: string | null = null;
+      for (let i = 0; i < headingEls.length; i++) {
+        if (positions[i] <= threshold) activeSlug = headingEls[i].id;
+        else break;
+      }
+      setActive(activeSlug);
+    }
+
+    const scheduler = createRafScheduler(onScroll);
+
+    cachePositions();
+
+    const ro = new ResizeObserver(() => {
+      cachePositions();
+      scheduler.request();
+    });
+    ro.observe(document.body);
+
+    window.addEventListener("scroll", scheduler.request, { passive: true });
+    onScroll();
+
+    window.addEventListener(
+      "pagehide",
+      () => {
+        window.removeEventListener("scroll", scheduler.request);
+        scheduler.cancel();
+        ro.disconnect();
+      },
+      { once: true },
+    );
+  }
+
+  initHeadingObserver();
+</script>

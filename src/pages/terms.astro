@@ -1,0 +1,106 @@
+---
+// src/pages/terms.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import { ORGANIZATION_ID, SITE_ORIGIN } from "@/utils/site/schema";
+
+const title = "Terms of Service - Sorted Tech";
+const metaDescription =
+  "Sorted Tech User Agreement: outlines user responsibilities, site conduct, and key terms for using our website.";
+const ogImage = DEFAULT_OG_IMAGE;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: "Terms of Service",
+  description: metaDescription,
+  url: `${SITE_ORIGIN}/terms`,
+  publisher: {
+    "@id": ORGANIZATION_ID,
+  },
+};
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card rounded-none">
+    <h1>Terms of Service</h1>
+
+    <p class="text-small mb-4">
+      <strong>Effective Date:</strong> 10th October 2025.
+    </p>
+
+    <h2>1. Introduction</h2>
+    <p class="mb-4 lg:mb-6">
+      Welcome to Sorted Tech. Throughout this site, the terms
+      <strong>"we," "us," and "our"</strong> refer to the brand as an entity. By using
+      our website, you agree to follow these Terms of Service. If you disagree with
+      any of these terms, we kindly ask that you discontinue use of the site. We may
+      update these terms from time to time, so please check back periodically to stay
+      informed.
+    </p>
+
+    <h2>2. User Responsibilities</h2>
+    <p>As a user of Sorted Tech, we ask that you:</p>
+    <ul class="mb-6 list-disc pl-6 lg:mb-8">
+      <li>
+        Use the website only for lawful purposes and in a manner that respects
+        the rights of others.
+      </li>
+      <li>
+        Avoid actions that could harm or disrupt the site's functionality or
+        services.
+      </li>
+      <li>
+        Refrain from uploading, sharing, or posting any content that is illegal,
+        offensive, or infringes on the rights of others.
+      </li>
+      <li>
+        Respect the intellectual property of Sorted Tech. All content on the
+        site, including text, images, and reviews, is owned by Sorted Tech or
+        its licensors. Please do not use, copy, or distribute such content
+        without prior permission.
+      </li>
+    </ul>
+
+    <h2>3. Changes to Terms</h2>
+    <p class="mb-4 lg:mb-6">
+      We may update or change these Terms of Service at any time. When changes
+      are made, we will update the date at the top of this page. We encourage
+      you to check this page regularly to stay informed. If you continue to use
+      the site after changes are made, it will mean that you accept the updated
+      terms.
+    </p>
+
+    <h2>4. Termination</h2>
+    <p class="mb-4 lg:mb-6">
+      While we hope it doesn't come to this, we reserve the right to terminate
+      or suspend your access to Sorted Tech, at our discretion, without prior
+      notice, if we believe you are violating these Terms of Service or engaging
+      in behavior that could harm the site or its users.
+    </p>
+
+    <h2>5. Indemnification</h2>
+    <p class="mb-4 lg:mb-6">
+      In the unlikely event of any legal claims or issues arising from your use
+      of the site, you agree to indemnify and hold harmless Sorted Tech from any
+      damages, losses, or legal expenses resulting from your actions or breach
+      of these Terms of Service.
+    </p>
+
+    <h2>6. Contact Information</h2>
+    <p class="mb-4 lg:mb-6">
+      If you have any questions or concerns about these Terms of Service, please
+      reach out to us through our <a href="/contact" class="hover:underline"
+        >Contact</a
+      > page.
+    </p>
+
+    <p>
+      We appreciate your cooperation in helping us create a safe, enjoyable, and
+      trustworthy environment for all users. Thank you for visiting Sorted Tech.
+    </p>
+  </section>
+</BaseLayout>

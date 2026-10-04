@@ -1,0 +1,133 @@
+---
+// src/components/site/Breadcrumb.astro
+
+import { jsonForScript } from "@/utils/site/json";
+import { SITE_ORIGIN } from "@/utils/site/schema";
+
+interface Props {
+  customLabels?: Record<string, string>;
+  showVisual?: boolean;
+  nonLinkablePaths?: string[];
+  maxVisibleItems?: number;
+}
+const {
+  customLabels = {},
+  showVisual = false,
+  nonLinkablePaths = [],
+  maxVisibleItems = 2,
+} = Astro.props;
+
+function normalizeBreadcrumbPath(pathname: string): string {
+  const normalizedPath = pathname
+    .replace(/\.html$/, "")
+    .replace(/\/index$/, "");
+  return normalizedPath === "" ? "/" : normalizedPath;
+}
+
+const paths = normalizeBreadcrumbPath(Astro.url.pathname)
+  .split("/")
+  .filter(Boolean);
+const hasBreadcrumbTrail = paths.length > 0;
+
+const breadcrumbs = paths.map((path, index) => ({
+  href: "/" + paths.slice(0, index + 1).join("/"),
+  label:
+    customLabels[path] ??
+    path
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" "),
+  isNonLinkable: nonLinkablePaths.includes(path),
+}));
+
+const allBreadcrumbs = [
+  { href: "/", label: "Home", isNonLinkable: false },
+  ...breadcrumbs,
+];
+
+const visibleBreadcrumbs =
+  allBreadcrumbs.length > maxVisibleItems + 1
+    ? [
+        allBreadcrumbs[0],
+        { href: "#", label: "...", isNonLinkable: false },
+        ...allBreadcrumbs.slice(-maxVisibleItems),
+      ]
+    : allBreadcrumbs;
+
+const schemaData = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: allBreadcrumbs.map((crumb, index) => ({
+    "@type": "ListItem",
+    position: index + 1,
+    name: crumb.label,
+    item: new URL(crumb.href, Astro.site ?? SITE_ORIGIN).toString(),
+  })),
+};
+---
+
+{
+  showVisual && hasBreadcrumbTrail && (
+    <>
+      <script
+        is:inline
+        type="application/ld+json"
+        set:html={jsonForScript(schemaData)}
+      />
+
+      <nav aria-label="Breadcrumb" class="text-xsmall mb-4 md:mb-6">
+        <ol class="flex flex-wrap items-center gap-2">
+          {visibleBreadcrumbs.map((crumb, index) => {
+            const isLast = index === visibleBreadcrumbs.length - 1;
+            return (
+              <li class="flex items-center gap-2">
+                {isLast ? (
+                  <span aria-current="page">{crumb.label}</span>
+                ) : crumb.label === "..." ? (
+                  <>
+                    <span class="font-medium">
+                      {crumb.label}
+                    </span>
+                    <span
+                      class="text-body text-custom-500"
+                      aria-hidden="true"
+                    >
+                      {">"}
+                    </span>
+                  </>
+                ) : crumb.isNonLinkable ? (
+                  <>
+                    <span>
+                      {crumb.label}
+                    </span>
+                    <span
+                      class="text-body text-custom-500"
+                      aria-hidden="true"
+                    >
+                      {">"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <a
+                      href={crumb.href}
+                      class="font-medium hover:underline active:text-blue-500"
+                    >
+                      {crumb.label}
+                    </a>
+                    <span
+                      class="text-body text-custom-500"
+                      aria-hidden="true"
+                    >
+                      {">"}
+                    </span>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    </>
+  )
+}

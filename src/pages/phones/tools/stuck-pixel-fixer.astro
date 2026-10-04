@@ -1,0 +1,3533 @@
+---
+// src/pages/phones/tools/stuck-pixel-fixer.astro
+
+export const prerender = true;
+
+import { getToolBySlug } from "@/content/phones/tools";
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+
+const tool = getToolBySlug("stuck-pixel-fixer");
+const ogImage = tool.image.src;
+const title = "Free Online Stuck Pixel Fixer for Any Screen";
+const metaDescription =
+  "Diagnose stuck, hot, or dead pixels, mark affected areas, then try targeted static noise or color cycles with adjustable spot, speed, and timer controls.";
+
+const defaultSpeedFps = 15;
+const SPEED_RAW_MAX = 500;
+const defaultSpeedRaw = SPEED_RAW_MAX / 2;
+
+const referenceItems = [
+  {
+    label: "Identify",
+    check:
+      "Use Diagnose in the Auto tab to view black, white, red, green, and blue. If you mark an area, five comparison checks follow. Nearby taps at the same screen position are grouped, classified, and shown in the Auto dock.",
+    reading:
+      "A pixel contains red, green, and blue sub-pixels. A fixed colored point often means one sub-pixel is stuck; a point that stays black on every color is more likely dead. Software repair can't do anything for a genuinely dead pixel. No tool can guarantee a fix, and any specific success-rate claim you see elsewhere is unverified marketing, not a measured result.",
+    good: "That usually points to a stuck sub-pixel, which may respond to color cycling or per-pixel noise.",
+    concern:
+      "A permanently black pixel, crack, line, burn-in mark, or pressure damage will not be repaired here.",
+  },
+  {
+    label: "Target",
+    check:
+      "Auto positions the repair spot over each mark. In Manual Override, choose Movable spot and drag the repair window directly over the affected area.",
+    reading:
+      "Movable spot flashes only inside the square repair window, while Full screen flashes the entire panel. Size in px means the spot width in browser-rendered pixels.",
+    good: "Only the problem area flashes while the rest of the screen stays calmer.",
+    concern:
+      "Jumping straight to full-screen flashing is harsher and usually unnecessary at first.",
+  },
+  {
+    label: "Run",
+    check:
+      "Auto runs Static Noise on every mark for the selected time. Manual Override lets you run Static Noise or combine RGB, CMY, and B/W color cycles. Start with a short pass, stop if the phone becomes warm or you feel discomfort, then verify before deciding whether to repeat it.",
+    reading:
+      "RGB means red, green, and blue; B/W means black and white; CMY means cyan, magenta, and yellow. Static Noise starts at 15 fps and adjusts to a 30 fps cap. Color-cycle speed and spot size are limited by mode, and reduced-motion preferences lower the fastest setting. These limits reduce risk but do not guarantee that rapidly changing patterns are safe for every person. Keep the phone ventilated and stop the run if it becomes hot.",
+    good: "If the pixel improves, repeat another short pass instead of pushing one long aggressive run.",
+    concern:
+      "The pixel stays unchanged after several short passes, which suggests the issue will not respond to software cycling.",
+  },
+  {
+    label: "Verify",
+    check:
+      "Use the solid-color checks after each pass. All 10 are available, including both greys. Watch the same screen location as the colors change to confirm whether the defect remains.",
+    reading:
+      "Verify colors are inspection screens and do not run a repair cycle. Watch the exact same screen position as colors change to see whether the defect remains fixed. iPhone Safari has no true fullscreen, so part of the edge always sits under the address bar or the notch. Check in both portrait and landscape to cover it.",
+    good: "A recovered pixel changes normally across those colors without staying bright or tinted.",
+    concern:
+      "If the same defect remains after repeated short passes, the issue is likely not recoverable in software.",
+  },
+];
+
+const repairPatterns = [
+  {
+    id: "static",
+    label: "Static Noise",
+    note: "Recommended. Independently varies red, green, and blue sub-pixels. It starts at 15 frames per second and can be adjusted up to 30.",
+    swatch:
+      "background: repeating-conic-gradient(from 0deg, #000 0deg 9deg, #fff 9deg 18deg, #ff0000 18deg 27deg, #00ff00 27deg 36deg, #0000ff 36deg 45deg); background-size: 6px 6px;",
+  },
+  {
+    id: "rgb",
+    label: "RGB",
+    note: "Color cycling for a colored stuck sub-pixel.",
+    swatch: "background: linear-gradient(to right, #ef4444, #a3e635, #3b82f6);",
+  },
+  {
+    id: "cmy",
+    label: "CMY",
+    note: "Adds cyan, magenta, and yellow to a custom manual color cycle.",
+    swatch:
+      "background: linear-gradient(to right, #00ffff, #ff00ff, #ffff00);",
+  },
+  {
+    id: "contrast",
+    label: "B/W",
+    note: "Highest contrast option. Try this only after gentler patterns fail.",
+    swatch: "background: linear-gradient(to right, #000000, #ffffff);",
+  },
+];
+
+const repairTips: Record<string, string> = {
+  static: "Start with the smallest spot that fully covers the affected pixel.",
+  rgb: "Add red, green, and blue to the manual color cycle.",
+  cmy: "Add cyan, magenta, and yellow to the manual color cycle.",
+  contrast: "Try this high-contrast pulse last and stop if it causes discomfort.",
+};
+
+const inspectColors = [
+  { id: "black", label: "Black", value: "#000000", swatch: "background: #000000;" },
+  { id: "white", label: "White", value: "#ffffff", swatch: "background: #ffffff;" },
+  { id: "red", label: "Red", value: "#ff0000", swatch: "background: #ff0000;" },
+  { id: "green", label: "Green", value: "#00ff00", swatch: "background: #00ff00;" },
+  { id: "blue", label: "Blue", value: "#0000ff", swatch: "background: #0000ff;" },
+  { id: "cyan", label: "Cyan", value: "#00ffff", swatch: "background: #00ffff;" },
+  { id: "magenta", label: "Magenta", value: "#ff00ff", swatch: "background: #ff00ff;" },
+  { id: "yellow", label: "Yellow", value: "#ffff00", swatch: "background: #ffff00;" },
+  { id: "midGrey", label: "Mid grey", value: "#808080", swatch: "background: #808080;" },
+  { id: "darkGrey", label: "Dark grey", value: "#101010", swatch: "background: #101010;" },
+];
+
+const timerOptions = [
+  { value: 60, label: "1 min" },
+  { value: 300, label: "5 min", selected: true },
+  { value: 600, label: "10 min" },
+  { value: 1200, label: "20 min" },
+  { value: 1800, label: "30 min" },
+  { value: 3600, label: "60 min" },
+];
+const defaultTimerOption =
+  timerOptions.find((option) => option.selected) ?? timerOptions[0];
+
+const sidebarGroups = [
+  {
+    title: "Manual patterns",
+    openByDefault: true,
+    attributes: {
+      "data-manual-sidebar-group": "",
+      "data-disabled-message": "Available in Manual Override",
+    },
+    items: repairPatterns.map((pattern, index) => ({
+      label: pattern.label,
+      visual: {
+        type: "swatch" as const,
+        style: pattern.swatch,
+      },
+      active: index === 0,
+      disabled: true,
+      attributes: {
+        "data-repair-button": "",
+        "data-pattern-id": pattern.id,
+        "data-pattern-label": pattern.label,
+        "data-pattern-tip": repairTips[pattern.id],
+        "data-pattern-kind": pattern.id === "static" ? "noise" : "color-group",
+      },
+    })),
+  },
+  {
+    title: "Verify",
+    attributes: {
+      "data-manual-sidebar-group": "",
+      "data-disabled-message": "Available in Manual Override",
+    },
+    items: inspectColors.map((color) => ({
+      label: color.label,
+      visual: {
+        type: "swatch" as const,
+        style: color.swatch,
+      },
+      disabled: true,
+      attributes: {
+        "data-inspect-button": "",
+        "data-inspect-color": color.value,
+        "data-inspect-label": color.label,
+      },
+    })),
+  },
+];
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{
+    tools: "Tools",
+    "stuck-pixel-fixer": "Stuck Pixel Fixer",
+  }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Stuck Pixel Diagnosis and Repair Tool</h1>
+        <p>
+          Check a fixed screen point against different background colors to
+          identify stuck, hot, or dead pixels and attempting recovery when a
+          pixel appears stuck. Its flashing patterns follow WCAG 2.2 Level A
+          limits in movable-spot mode and Level AAA limits in full-screen mode,
+          while reduced-motion preferences lower the fastest available settings.
+          The Diagnose option compares each marked area across multiple test
+          colors, classifies the likely issue, and prepares a targeted repair
+          sequence using locally rendered Static Noise or RGB, CMY, and B/W
+          color cycles. It cannot guarantee recovery or repair dead black pixels,
+          permanent OLED burn-in, horizontal lines, screen cracks, or physical
+          impact damage.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="pixel-test-shell"
+          fullscreenButtonId="pixel-fullscreen"
+          stageVariant="tall"
+          controlsAutoHide={true}
+          fullscreenButtonMuted={true}
+          fullscreenScreenTouch="none"
+          screenOverflow="visible"
+          actionBarLabel="Run controls"
+          dockPrimaryItemCount={4}
+          buttons={[
+            {
+              label: "Diagnose",
+              attributes: { id: "pixel-diagnose" },
+            },
+            {
+              label: "Play",
+              tone: "success",
+              disabled: true,
+              attributes: { id: "pixel-start" },
+            },
+            {
+              label: "Reset",
+              tone: "danger",
+              attributes: { id: "pixel-stop" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Timer",
+              value: "05:00",
+              className: "run-timer",
+              valueAttributes: { id: "pixel-countdown" },
+            },
+          ]}
+        >
+          <div
+            id="pixel-stage"
+            class="pixel-stage"
+            data-running="false"
+            data-mode="spot"
+            data-warning-hidden="false"
+            data-warning-acknowledged="false"
+            data-pattern="static"
+            data-spot-placed="false"
+          >
+            <div
+              id="pixel-warning"
+              class="pixel-warning absolute inset-0 z-8 rounded-2xl bg-custom-100 p-4 transition-opacity duration-200 dark:bg-custom-700"
+              role="dialog"
+              aria-modal="false"
+              tabindex="-1"
+              aria-labelledby="pixel-warning-title"
+              aria-describedby="pixel-warning-info"
+            >
+              <div
+                class="grid h-full w-full justify-items-center overflow-y-auto overscroll-contain touch-pan-y touch-pinch-zoom"
+              >
+                <div
+                  class="border-accent-line from-accent-wash rounded-2xl my-auto w-full max-w-xl border bg-linear-to-b to-custom-100 p-5 text-slate-800 dark:to-custom-700 dark:text-slate-200"
+                >
+                  <h2
+                    id="pixel-warning-title"
+                    class="text-body mb-4 rounded-xl bg-linear-to-b from-red-400 to-red-600 px-3 py-2 text-center text-white"
+                  >
+                    PHOTOSENSITIVITY WARNING
+                  </h2>
+                  <p
+                    id="pixel-warning-info"
+                    class="text-small text-custom-800 dark:text-custom-200 mb-4"
+                  >
+                    This helper can flash saturated colors rapidly. Do not use
+                    it if flashing lights or high-contrast patterns trigger
+                    seizures, migraines, dizziness, nausea, or visual
+                    discomfort.
+                  </p>
+                  <details
+                    id="pixel-warning-details"
+                    class="text-small text-custom-800 dark:text-custom-200 mb-4"
+                  >
+                    <summary class="cursor-pointer font-medium"
+                      >Safety Tips</summary
+                    >
+                    <ul class="text-xsmall mt-2 mb-2 grid gap-2 pl-4">
+                      <li class="leading-relaxed">
+                        Use it in a well-lit room and sit back from the
+                        screen.
+                      </li>
+                      <li class="leading-relaxed">
+                        Prefer movable spot mode before trying full-screen
+                        mode.
+                      </li>
+                      <li class="leading-relaxed">
+                        Stop immediately if you feel any discomfort.
+                      </li>
+                    </ul>
+                  </details>
+                  <label
+                    class="text-small border-accent-line mb-4 flex items-start gap-2 rounded-2xl border p-2"
+                  >
+                    <input
+                      id="pixel-warning-ack"
+                      class="text-accent-ink mt-0.5 h-5 w-5 shrink-0 accent-current"
+                      type="checkbox"
+                    />
+                    <span>I understand and want to continue</span>
+                  </label>
+                  <button
+                    type="button"
+                    id="pixel-warning-button"
+                    class="btn-base text-small ml-auto w-fit disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled
+                  >
+                    Show Test Area
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div
+              id="pixel-diagnosis-instruct"
+              class="pixel-diagnosis-instruct absolute inset-0 z-8 grid place-items-center p-4"
+              data-visible="false"
+              role="dialog"
+              aria-modal="false"
+              tabindex="-1"
+              aria-labelledby="pixel-diagnosis-instruct-title"
+            >
+              <div
+                class="border-accent-line shadow-accent-glow relative grid w-full max-w-sm gap-3 max-h-full overflow-y-auto overscroll-contain rounded-2xl border bg-custom-100 p-4 text-center shadow-md sm:max-w-md lg:max-w-lg dark:bg-custom-700"
+              >
+                <span
+                  id="pixel-diagnosis-instruct-progress"
+                  class="text-2xsmall absolute top-3 right-3 font-bold text-slate-500 dark:text-slate-400"
+                  >1/5</span
+                >
+                <h2
+                  id="pixel-diagnosis-instruct-title"
+                  class="text-body mb-0 px-10 text-slate-800 dark:text-slate-200"
+                >
+                </h2>
+                <p
+                  id="pixel-diagnosis-instruct-body"
+                  class="text-small text-custom-800 dark:text-custom-200 mb-0"
+                >
+                </p>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    id="pixel-diagnosis-begin"
+                    class="btn-base text-small"
+                  >
+                    Yes
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  data-diagnosis-cancel
+                  class="text-2xsmall text-slate-500 underline"
+                >
+                  Cancel diagnosis
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="pixel-diagnosis-countdown"
+              class="pixel-diagnosis-countdown"
+              hidden
+              aria-live="polite"
+              tabindex="-1"
+            >
+            </div>
+
+            <div
+              id="pixel-diagnosis-confirm"
+              class="pixel-diagnosis-confirm absolute inset-0 z-8 grid place-items-center p-4"
+              data-visible="false"
+              role="dialog"
+              aria-modal="false"
+              tabindex="-1"
+              aria-labelledby="pixel-diagnosis-confirm-title"
+            >
+              <div
+                class="border-accent-line shadow-accent-glow relative grid w-full max-w-sm gap-3 max-h-full overflow-y-auto overscroll-contain rounded-2xl border bg-custom-100 p-4 text-center shadow-md sm:max-w-md lg:max-w-lg dark:bg-custom-700"
+              >
+                <span
+                  id="pixel-diagnosis-confirm-progress"
+                  class="text-2xsmall absolute top-3 right-3 font-bold text-slate-500 dark:text-slate-400"
+                  >1/5</span
+                >
+                <h2
+                  id="pixel-diagnosis-confirm-title"
+                  class="text-body mb-0 px-10 text-slate-800 dark:text-slate-200"
+                >
+                </h2>
+                <p
+                  id="pixel-diagnosis-confirm-body"
+                  class="text-small text-custom-800 dark:text-custom-200 mb-0"
+                >
+                </p>
+                <div
+                  id="pixel-diagnosis-confirm-clean"
+                  class="flex flex-wrap justify-center gap-2"
+                >
+                  <button
+                    type="button"
+                    id="pixel-diagnosis-check-again"
+                    class="btn-base text-small"
+                  >
+                    Repeat
+                  </button>
+                  <button
+                    type="button"
+                    id="pixel-diagnosis-no-issue"
+                    class="btn-base text-small"
+                  >
+                    No Issue
+                  </button>
+                </div>
+                <div
+                  id="pixel-diagnosis-confirm-marked"
+                  class="flex flex-wrap justify-center gap-2"
+                >
+                  <button
+                    type="button"
+                    id="pixel-diagnosis-redo"
+                    class="btn-base text-small"
+                  >
+                    Redo
+                  </button>
+                  <button
+                    type="button"
+                    id="pixel-diagnosis-confirm-next"
+                    class="btn-base text-small"
+                  >
+                    Next Color
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  data-diagnosis-cancel
+                  class="text-2xsmall text-slate-500 underline"
+                >
+                  Cancel Diagnosis
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="pixel-pause-notice"
+              class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-none absolute top-1/2 left-1/2 z-9 grid w-[min(18rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-1 rounded-2xl border px-4 py-3 text-center shadow-md"
+              hidden
+              role="status"
+              aria-live="polite"
+            >
+              <strong class="text-small leading-tight text-slate-800 dark:text-slate-200"
+                >Paused</strong
+              >
+              <span class="text-xsmall leading-snug text-slate-700 dark:text-slate-300"
+                >Press Resume to continue in fullscreen.</span
+              >
+            </div>
+
+            <div class="pixel-pattern-status" aria-live="polite">
+              <span
+                id="pixel-state"
+                class="text-small text-slate-200 leading-tight">Ready</span
+              >
+              <strong
+                id="pixel-detail"
+                class="text-xsmall text-slate-300 uppercase">Static Noise</strong
+              >
+            </div>
+
+            <div id="pixel-spot" class="pixel-spot" aria-hidden="true"></div>
+            <canvas
+              id="pixel-noise-canvas"
+              class="pixel-noise-canvas"
+              aria-hidden="true"></canvas>
+          </div>
+
+          <div
+            slot="dockTabs"
+            id="pixel-workflow-tabs"
+            class="pl-3 -mx-3 -mt-4 flex w-[calc(100%+1.5rem)] items-start justify-start gap-4 sm:pl-4 sm:-mx-4 sm:-mt-5 sm:w-[calc(100%+2rem)]"
+            role="tablist"
+            aria-label="Repair workflow"
+          >
+            <button
+              type="button"
+              id="pixel-auto-tab"
+              class="pixel-workflow-tab"
+              role="tab"
+              aria-selected="true"
+              aria-controls="pixel-auto-controls"
+              data-workflow-tab="auto"
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              id="pixel-manual-tab"
+              class="pixel-workflow-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="pixel-manual-controls"
+              data-workflow-tab="manual"
+              tabindex="-1"
+            >
+              Manual
+            </button>
+          </div>
+
+          <p slot="dockLead" id="pixel-dock-tip" class="mb-0">
+            Diagnose the screen, choose one time per mark, then press Play.
+          </p>
+
+          <div slot="dockPrimary" class="grid gap-3">
+            <div
+              id="pixel-diagnosis-summary"
+              class="to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash grid gap-1 rounded-2xl border bg-linear-to-b p-3 text-left"
+              aria-live="polite"
+              hidden
+            >
+              <div class="flex items-start justify-between gap-3">
+                <strong
+                  id="pixel-diagnosis-summary-title"
+                  class="text-xsmall text-custom-800 dark:text-custom-200"
+                >
+                  Diagnosis
+                </strong>
+                <span
+                  id="pixel-diagnosis-summary-count"
+                  class="text-2xsmall text-accent-ink shrink-0 font-bold"
+                ></span>
+              </div>
+              <p
+                id="pixel-diagnosis-summary-body"
+                class="text-2xsmall text-custom-700 dark:text-custom-300 mb-0"
+              ></p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+              <div
+                id="pixel-auto-controls"
+                class="grid content-start gap-1 text-left"
+                role="tabpanel"
+                aria-labelledby="pixel-auto-tab"
+              >
+                <label
+                  for="pixel-auto-mark"
+                  class="text-xsmall grid gap-1 leading-tight font-bold tracking-widest uppercase"
+                >
+                  Marked Location
+                </label>
+                <div class="relative">
+                  <select
+                    id="pixel-auto-mark"
+                    class="pixel-visible-select"
+                    disabled
+                  >
+                    <option value="">Diagnose First</option>
+                  </select>
+                  <svg
+                    class="pixel-visible-select-icon"
+                    aria-hidden="true"
+                  >
+                    <use href={`${SiteIcons}#chevron`}></use>
+                  </svg>
+                </div>
+              </div>
+
+              <div
+                id="pixel-manual-controls"
+                class="grid content-start gap-1 text-left"
+                role="tabpanel"
+                aria-labelledby="pixel-manual-tab"
+                hidden
+              >
+                <span
+                  id="pixel-mode-select-label"
+                  class="text-xsmall grid gap-1 leading-tight font-bold tracking-widest uppercase"
+                  >Select Mode</span
+                >
+                <select
+                  id="pixel-mode"
+                  class="native-select"
+                  aria-labelledby="pixel-mode-select-label"
+                >
+                  <option value="spot">Movable spot</option>
+                  <option value="full">Full screen</option>
+                </select>
+                <details
+                  class="control-dropdown"
+                  data-control-dropdown
+                  aria-hidden="true"
+                >
+                  <summary class="control-dropdown-trigger" tabindex="-1">
+                    <span id="pixel-mode-label" class="control-dropdown-value"
+                      >Movable spot</span
+                    >
+                    <svg class="control-dropdown-icon" aria-hidden="true">
+                      <use href={`${SiteIcons}#chevron`}></use>
+                    </svg>
+                  </summary>
+                  <div class="control-dropdown-panel">
+                    <button
+                      type="button"
+                      class="control-dropdown-option is-active"
+                      tabindex="-1"
+                      data-dropdown-option
+                      data-target-select="pixel-mode"
+                      data-value="spot"
+                    >
+                      Movable spot
+                    </button>
+                    <button
+                      type="button"
+                      class="control-dropdown-option"
+                      tabindex="-1"
+                      data-dropdown-option
+                      data-target-select="pixel-mode"
+                      data-value="full"
+                    >
+                      Full screen
+                    </button>
+                  </div>
+                </details>
+              </div>
+
+              <div
+                id="pixel-timer-control"
+                class="grid content-start gap-1 text-left"
+              >
+                <span
+                  id="pixel-timer-select-label"
+                  class="text-xsmall grid gap-1 leading-tight font-bold tracking-widest uppercase"
+                  >Time per mark</span
+                >
+                <select
+                  id="pixel-timer"
+                  class="native-select"
+                  aria-labelledby="pixel-timer-select-label"
+                >
+                  {
+                    timerOptions.map((option) => (
+                      <option value={option.value} selected={option.selected}>
+                        {option.label}
+                      </option>
+                    ))
+                  }
+                </select>
+                <details
+                  class="control-dropdown"
+                  data-control-dropdown
+                  aria-hidden="true"
+                >
+                  <summary class="control-dropdown-trigger" tabindex="-1">
+                    <span id="pixel-timer-label" class="control-dropdown-value"
+                      >{defaultTimerOption?.label}</span
+                    >
+                    <svg class="control-dropdown-icon" aria-hidden="true">
+                      <use href={`${SiteIcons}#chevron`}></use>
+                    </svg>
+                  </summary>
+                  <div class="control-dropdown-panel">
+                    {
+                      timerOptions.map((option) => (
+                        <button
+                          type="button"
+                          class:list={[
+                            "control-dropdown-option",
+                            option.selected && "is-active",
+                          ]}
+                          tabindex="-1"
+                          data-dropdown-option
+                          data-target-select="pixel-timer"
+                          data-value={option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))
+                    }
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <div
+              id="pixel-manual-range-controls"
+              class="grid grid-cols-2 gap-2 sm:gap-3"
+              hidden
+            >
+              <label
+                id="pixel-size-control"
+                class="to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash flex h-15 w-full flex-wrap items-center gap-x-3 self-center rounded-2xl border bg-linear-to-b px-3 py-2"
+              >
+                <span
+                  class="text-xsmall grid shrink-0 gap-0.5 leading-tight font-bold tracking-widest uppercase"
+                  >Spot size</span
+                >
+                <input
+                  id="pixel-size"
+                  class="inline-control-range text-accent-ink order-3 m-0 basis-full bg-transparent p-0 accent-current"
+                  type="range"
+                  min="40"
+                  max="200"
+                  step="20"
+                  value="120"
+                />
+                <strong
+                  id="pixel-size-value"
+                  class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
+                  >120 px</strong
+                >
+              </label>
+
+              <label
+                id="pixel-speed-control"
+                class="to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash flex h-15 w-full flex-wrap items-center gap-x-3 self-center rounded-2xl border bg-linear-to-b px-3 py-2"
+              >
+                <span
+                  class="text-xsmall grid shrink-0 gap-0.5 leading-tight font-bold tracking-widest uppercase"
+                  >Speed</span
+                >
+                <strong
+                  id="pixel-speed-value"
+                  class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
+                  >{defaultSpeedFps} fps</strong
+                >
+                <input
+                  id="pixel-speed"
+                  class="inline-control-range text-accent-ink order-3 m-0 basis-full bg-transparent p-0 accent-current"
+                  type="range"
+                  min="0"
+                  max={SPEED_RAW_MAX}
+                  step="50"
+                  value={defaultSpeedRaw}
+                />
+                <small
+                  id="pixel-speed-note"
+                  class="text-xsmall sr-only leading-tight tracking-normal normal-case"
+                  >{defaultSpeedFps} frames/sec</small
+                >
+              </label>
+            </div>
+            <p
+              id="pixel-motion-note"
+              class="text-2xsmall text-custom-800 dark:text-custom-200 mb-0"
+              hidden
+            >
+              Your device requests reduced motion, so the fastest speed is
+              capped here.
+            </p>
+            <p
+              id="pixel-wakelock-note"
+              class="text-2xsmall mb-0 text-amber-700 dark:text-amber-400"
+              aria-live="polite"
+              hidden
+            >
+              Your screen may have gone to sleep. Low Power Mode or the OS
+              released the keep-awake lock. Plug in and disable Low Power
+              Mode for a long session.
+            </p>
+
+          </div>
+
+        </ToolRuntime>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="grid gap-4 lg:content-start">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Stuck pixel tools and related links"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    :global(:is(#pixel-start, #pixel-diagnose).is-running) {
+      @apply bg-linear-to-br from-yellow-400 to-yellow-600;
+    }
+
+    .pixel-workflow-tab {
+      @apply text-xsmall min-h-9 rounded-b-lg border-x border-b border-slate-300 px-3 py-2 font-bold text-slate-600 transition dark:border-slate-600 dark:text-slate-400;
+    }
+
+    .pixel-workflow-tab[aria-selected="true"] {
+      @apply border-accent-500 bg-accent-500/10 text-accent-ink;
+    }
+
+    .pixel-visible-select {
+      @apply to-custom-100 text-small dark:to-custom-700 border-accent-line from-accent-wash shadow-accent-glow h-10 w-full cursor-pointer appearance-none rounded-2xl border bg-linear-to-b py-1.5 pr-10 pl-3 text-slate-800 shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200;
+    }
+
+    .pixel-visible-select-icon {
+      @apply text-accent-ink pointer-events-none absolute top-1/2 right-3 size-3.5 shrink-0 -translate-y-1/2 rotate-180;
+    }
+
+    .pixel-visible-select:disabled + .pixel-visible-select-icon {
+      @apply opacity-50;
+    }
+
+    #pixel-timer-control[data-disabled="true"] {
+      @apply opacity-50;
+    }
+
+    #pixel-timer-control[data-disabled="true"] .control-dropdown-trigger {
+      @apply cursor-not-allowed;
+    }
+
+    :global(
+      [data-manual-sidebar-group][data-manual-disabled="true"]
+        [data-tool-sidebar-item]
+    ) {
+      @apply cursor-not-allowed opacity-45;
+    }
+
+    :global(
+      [data-manual-sidebar-group][data-manual-disabled="true"]::after
+    ) {
+      content: attr(data-disabled-message);
+      @apply text-2xsmall text-accent-ink mx-3 mb-3 block rounded-lg bg-accent-500/10 px-2 py-1.5 text-center;
+    }
+
+    :global(
+      #pixel-test-shell[data-workflow="manual"] .tool-runtime-button-group,
+      #pixel-test-shell[data-auto-ready="true"] .tool-runtime-button-group
+    ) {
+      @apply grid-cols-2;
+    }
+
+    :global(
+      #pixel-test-shell[data-workflow="manual"]
+        .tool-runtime-button-group--odd
+        > .tool-runtime-button:last-child,
+      #pixel-test-shell[data-auto-ready="true"]
+        .tool-runtime-button-group--odd
+        > .tool-runtime-button:last-child
+    ) {
+      @apply col-span-1;
+    }
+
+    .pixel-stage {
+      @apply relative size-full cursor-default touch-pan-y touch-pinch-zoom rounded-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-user-select:none];
+    }
+
+    :global(#pixel-test-shell[data-fullscreen="true"] .pixel-stage) {
+      @apply rounded-none;
+    }
+
+    :global(
+      #pixel-test-shell[data-action-count="2"] .tool-runtime-button-group
+    ) {
+      grid-template-columns: repeat(2, minmax(0, auto));
+    }
+
+    :global(
+      #pixel-test-shell[data-action-count="2"]
+        .tool-runtime-button-group
+        > .tool-runtime-button:last-child
+    ) {
+      grid-column: auto;
+    }
+
+    .pixel-stage[data-running="true"] {
+      @apply cursor-crosshair touch-none overscroll-none;
+    }
+
+    .pixel-stage[data-warning-hidden="true"] .pixel-warning {
+      @apply pointer-events-none invisible opacity-0;
+    }
+
+    .pixel-stage[data-warning-hidden="false"] .pixel-warning {
+      @apply relative inset-auto h-full;
+    }
+
+    .pixel-diagnosis-instruct,
+    .pixel-diagnosis-confirm {
+      @apply pointer-events-none invisible opacity-0 transition-opacity duration-200;
+    }
+
+    .pixel-diagnosis-instruct[data-visible="true"],
+    .pixel-diagnosis-confirm[data-visible="true"] {
+      @apply pointer-events-auto visible opacity-100;
+    }
+
+    .pixel-diagnosis-countdown {
+      @apply text-small pointer-events-none absolute top-4 right-4 z-7 font-bold text-white [text-shadow:0_1px_3px_rgb(0_0_0_/_0.8)];
+    }
+
+    .pixel-pattern-status {
+      @apply absolute top-1/2 left-1/2 z-5 grid min-w-40 -translate-x-1/2 -translate-y-1/2 gap-1 rounded-xl border-2 border-violet-500/50 bg-black/50 px-3.5 py-2.5 text-center;
+    }
+
+    .pixel-stage[data-diagnosing="true"] .pixel-pattern-status {
+      @apply hidden;
+    }
+
+    :global(
+      #pixel-test-shell[data-auto-ready="true"]
+        .pixel-stage[data-running="false"]
+        .pixel-pattern-status
+    ) {
+      @apply hidden;
+    }
+
+    .pixel-spot {
+      @apply pointer-events-none absolute top-1/2 left-1/2 z-3 hidden size-28 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-accent-500/50;
+    }
+
+    .pixel-stage[data-mode="spot"][data-spot-placed="true"]:not(
+        [data-diagnosing="true"]
+      )
+      .pixel-spot {
+      @apply block;
+    }
+
+    :global(.pixel-diagnosis-marker) {
+      @apply pointer-events-none absolute z-4 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full;
+      box-shadow:
+        0 0 0 2px #000,
+        0 0 0 4px #fff;
+    }
+
+    :global(.pixel-auto-marker) {
+      @apply pointer-events-none absolute z-4 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full transition duration-200;
+      box-shadow:
+        0 0 0 2px #000,
+        0 0 0 4px #fff;
+    }
+
+    :global(.pixel-auto-marker strong) {
+      @apply text-[0.6rem] absolute inset-0 grid place-items-center leading-none font-bold whitespace-nowrap text-white;
+      text-shadow:
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000,
+        0 1px 3px #000;
+    }
+
+    :global(.pixel-auto-marker.is-highlighted) {
+      @apply scale-115;
+      box-shadow:
+        0 0 0 3px #fff,
+        0 0 0 8px var(--color-accent-500);
+    }
+
+    .pixel-noise-canvas {
+      @apply pointer-events-none absolute z-2 hidden;
+      image-rendering: pixelated;
+    }
+
+    .pixel-stage:not([data-mode="spot"]) .pixel-noise-canvas {
+      @apply inset-0 h-full w-full;
+    }
+
+    .pixel-stage[data-mode="spot"] .pixel-noise-canvas {
+      @apply -translate-x-1/2 -translate-y-1/2 rounded-full;
+    }
+
+    .pixel-stage[data-running="true"][data-pattern="static"]
+      .pixel-noise-canvas {
+      @apply block;
+    }
+
+    .native-select {
+      @apply sr-only;
+    }
+
+    .control-dropdown {
+      @apply relative w-full;
+    }
+
+    .control-dropdown-trigger {
+      @apply to-custom-100 text-small dark:to-custom-700 border-accent-line from-accent-wash shadow-accent-glow flex h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border bg-linear-to-b px-3 py-1.5 text-slate-800 shadow-md dark:text-slate-200;
+    }
+
+    .control-dropdown-trigger::-webkit-details-marker {
+      @apply hidden;
+    }
+
+    .control-dropdown-icon {
+      @apply text-accent-ink size-3.5 shrink-0 rotate-180 transition-transform duration-200 ease-out;
+    }
+
+    .control-dropdown[open] .control-dropdown-icon {
+      @apply rotate-0;
+    }
+
+    .control-dropdown-value {
+      @apply block min-w-0 flex-1;
+    }
+
+    .control-dropdown-panel {
+      @apply from-custom-100 to-custom-200 dark:from-custom-700 dark:to-custom-800 border-accent-line absolute top-full right-0 left-0 z-20 mt-2 grid gap-1 rounded-2xl border bg-linear-to-b p-1.5;
+    }
+
+    .control-dropdown-option {
+      @apply text-small flex h-10 w-full items-center rounded-xl px-3 text-left;
+    }
+
+    .control-dropdown-option:hover,
+    .control-dropdown-option.is-active {
+      @apply to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash bg-linear-to-b;
+    }
+
+    .inline-control-range {
+      -webkit-appearance: none;
+      appearance: none;
+      --control-track-bg: --alpha(var(--accent-500) / 50%);
+      --control-thumb-bg: var(--color-custom-700);
+
+      @variant dark {
+        --control-thumb-bg: var(--color-custom-100);
+      }
+    }
+
+    .inline-control-range::-webkit-slider-runnable-track {
+      @apply h-2 rounded-full;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--control-track-bg);
+    }
+
+    .inline-control-range::-webkit-slider-thumb {
+      @apply -mt-1 size-4 rounded-full border-0;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--control-thumb-bg);
+    }
+
+    .inline-control-range::-moz-range-track {
+      @apply h-2 rounded-full;
+      background-color: var(--control-track-bg);
+    }
+
+    .inline-control-range::-moz-range-thumb {
+      @apply size-4 rounded-full border-0;
+      background-color: var(--control-thumb-bg);
+    }
+
+    :global(.run-timer .tool-runtime-pill-value) {
+      @apply text-slate-800 dark:text-slate-200;
+    }
+
+    :global(
+      #pixel-test-shell[data-dialog="warning"] .tool-runtime-fullscr-btn,
+      #pixel-test-shell[data-dialog="result"] .tool-runtime-fullscr-btn
+    ) {
+      @apply hidden;
+    }
+
+    :global(
+      #pixel-test-shell[data-fullscreen="true"] #pixel-diagnosis-summary
+    ) {
+      @apply hidden;
+    }
+
+    :global(#pixel-test-shell[data-fullscreen="true"] .pixel-diagnosis-countdown) {
+      top: calc(1rem + env(safe-area-inset-top, 0px));
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+    }
+
+    :global(#pixel-test-shell[data-fullscreen="true"] #pixel-warning) {
+      @apply rounded-none;
+    }
+
+    :global(
+      #pixel-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        .pixel-pattern-status
+    ) {
+      @apply pointer-events-none -translate-x-1/2 -translate-y-[50%] opacity-0;
+    }
+
+    :global(
+      #pixel-test-shell[data-fullscreen="true"] .pixel-pattern-status strong
+    ) {
+      @apply text-small leading-tight tracking-normal text-slate-800 normal-case dark:text-slate-200;
+    }
+
+    :global(#pixel-test-shell[data-fullscreen="true"] .pixel-pattern-status) {
+      @apply min-h-10 h-auto py-1.5;
+    }
+
+    :global(
+      #pixel-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        .pixel-stage[data-mode="spot"]
+    ) {
+      @apply cursor-none;
+    }
+  </style>
+
+  <script>
+    import { onPageHide, observeResize } from "@/utils/phones/tools/lifecycle";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      getStoredValue,
+      removeStoredValue,
+      setStoredValue,
+    } from "@/utils/site/storage";
+    import { onOrientationChange } from "@/utils/phones/tools/orientation";
+
+    function showRuntimeControls(shell: Element | null | undefined): void {
+      shell?.dispatchEvent(
+        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
+      );
+    }
+
+    type InspectColorId =
+      | "black"
+      | "white"
+      | "red"
+      | "green"
+      | "blue"
+      | "cyan"
+      | "magenta"
+      | "yellow"
+      | "midGrey"
+      | "darkGrey";
+
+    type Channel = "red" | "green" | "blue";
+    type DefectClassification =
+      | "stuck-on"
+      | "stuck-off"
+      | "hot"
+      | "dead"
+      | "persistent-mark"
+      | "uneven-patch"
+      | "unclear";
+    type DefectObservation = {
+      color: InspectColorId;
+      visible: boolean;
+    };
+    type ClassificationConfidence = "strong" | "likely" | "unclear";
+    type ClassificationResult = {
+      classification: DefectClassification;
+      channels: Channel[];
+      confidence: ClassificationConfidence;
+      matchScore: number;
+    };
+
+    const testShell = document.getElementById(
+      "pixel-test-shell",
+    ) as HTMLDivElement | null;
+    const fullscreenButton = document.getElementById(
+      "pixel-fullscreen",
+    ) as HTMLButtonElement | null;
+    const stage = document.getElementById(
+      "pixel-stage",
+    ) as HTMLDivElement | null;
+    const spot = document.getElementById("pixel-spot") as HTMLDivElement | null;
+    const noiseCanvas = document.getElementById(
+      "pixel-noise-canvas",
+    ) as HTMLCanvasElement | null;
+    const modeInput = document.getElementById(
+      "pixel-mode",
+    ) as HTMLSelectElement | null;
+    const speedInput = document.getElementById(
+      "pixel-speed",
+    ) as HTMLInputElement | null;
+    const sizeInput = document.getElementById(
+      "pixel-size",
+    ) as HTMLInputElement | null;
+    const sizeControl = document.getElementById(
+      "pixel-size-control",
+    ) as HTMLLabelElement | null;
+    const timerInput = document.getElementById(
+      "pixel-timer",
+    ) as HTMLSelectElement | null;
+    const workflowTabs = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-workflow-tab]"),
+    );
+    const autoControls = document.getElementById("pixel-auto-controls");
+    const manualControls = document.getElementById("pixel-manual-controls");
+    const manualRangeControls = document.getElementById(
+      "pixel-manual-range-controls",
+    );
+    const autoMarkInput = document.getElementById(
+      "pixel-auto-mark",
+    ) as HTMLSelectElement | null;
+    const diagnosisSummary = document.getElementById(
+      "pixel-diagnosis-summary",
+    ) as HTMLDivElement | null;
+    const diagnosisSummaryTitle = document.getElementById(
+      "pixel-diagnosis-summary-title",
+    ) as HTMLElement | null;
+    const diagnosisSummaryCount = document.getElementById(
+      "pixel-diagnosis-summary-count",
+    ) as HTMLElement | null;
+    const diagnosisSummaryBody = document.getElementById(
+      "pixel-diagnosis-summary-body",
+    ) as HTMLElement | null;
+    const timerControl = document.getElementById("pixel-timer-control");
+    const modeLabel = document.getElementById(
+      "pixel-mode-label",
+    ) as HTMLElement | null;
+    const timerLabel = document.getElementById(
+      "pixel-timer-label",
+    ) as HTMLElement | null;
+    const startButton = document.getElementById(
+      "pixel-start",
+    ) as HTMLButtonElement | null;
+    const stopButton = document.getElementById(
+      "pixel-stop",
+    ) as HTMLButtonElement | null;
+    const pauseNotice = document.getElementById("pixel-pause-notice");
+    const diagnoseButton = document.getElementById(
+      "pixel-diagnose",
+    ) as HTMLButtonElement | null;
+    const stateLabel = document.getElementById(
+      "pixel-state",
+    ) as HTMLElement | null;
+    const detailLabel = document.getElementById(
+      "pixel-detail",
+    ) as HTMLElement | null;
+    const countdownLabel = document.getElementById(
+      "pixel-countdown",
+    ) as HTMLElement | null;
+    const speedNote = document.getElementById(
+      "pixel-speed-note",
+    ) as HTMLElement | null;
+    const speedValue = document.getElementById(
+      "pixel-speed-value",
+    ) as HTMLElement | null;
+    const sizeValue = document.getElementById(
+      "pixel-size-value",
+    ) as HTMLElement | null;
+    const warningAck = document.getElementById(
+      "pixel-warning-ack",
+    ) as HTMLInputElement | null;
+    const warningButton = document.getElementById(
+      "pixel-warning-button",
+    ) as HTMLButtonElement | null;
+    const warningPanel = document.getElementById(
+      "pixel-warning",
+    ) as HTMLDivElement | null;
+    const motionNote = document.getElementById(
+      "pixel-motion-note",
+    ) as HTMLElement | null;
+    const wakeLockNote = document.getElementById(
+      "pixel-wakelock-note",
+    ) as HTMLElement | null;
+    const controlDropdowns = Array.from(
+      document.querySelectorAll<HTMLDetailsElement>("[data-control-dropdown]"),
+    );
+    const controlDropdownOptions = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-dropdown-option]"),
+    );
+    const repairButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-repair-button]"),
+    );
+    const inspectButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-inspect-button]"),
+    );
+    const manualSidebarGroups = Array.from(
+      document.querySelectorAll<HTMLDetailsElement>(
+        "[data-manual-sidebar-group]",
+      ),
+    );
+    const dockTip = document.getElementById("pixel-dock-tip");
+
+    const diagnosisInstructPanel = document.getElementById(
+      "pixel-diagnosis-instruct",
+    ) as HTMLDivElement | null;
+    const diagnosisInstructTitle = document.getElementById(
+      "pixel-diagnosis-instruct-title",
+    ) as HTMLElement | null;
+    const diagnosisInstructBody = document.getElementById(
+      "pixel-diagnosis-instruct-body",
+    ) as HTMLElement | null;
+    const diagnosisInstructProgress = document.getElementById(
+      "pixel-diagnosis-instruct-progress",
+    ) as HTMLElement | null;
+    const diagnosisBeginButton = document.getElementById(
+      "pixel-diagnosis-begin",
+    ) as HTMLButtonElement | null;
+    const diagnosisCountdown = document.getElementById(
+      "pixel-diagnosis-countdown",
+    ) as HTMLElement | null;
+    const diagnosisConfirmPanel = document.getElementById(
+      "pixel-diagnosis-confirm",
+    ) as HTMLDivElement | null;
+    const diagnosisConfirmTitle = document.getElementById(
+      "pixel-diagnosis-confirm-title",
+    ) as HTMLElement | null;
+    const diagnosisConfirmBody = document.getElementById(
+      "pixel-diagnosis-confirm-body",
+    ) as HTMLElement | null;
+    const diagnosisConfirmProgress = document.getElementById(
+      "pixel-diagnosis-confirm-progress",
+    ) as HTMLElement | null;
+    const diagnosisConfirmClean = document.getElementById(
+      "pixel-diagnosis-confirm-clean",
+    ) as HTMLDivElement | null;
+    const diagnosisConfirmMarked = document.getElementById(
+      "pixel-diagnosis-confirm-marked",
+    ) as HTMLDivElement | null;
+    const diagnosisCheckAgainButton = document.getElementById(
+      "pixel-diagnosis-check-again",
+    ) as HTMLButtonElement | null;
+    const diagnosisNoIssueButton = document.getElementById(
+      "pixel-diagnosis-no-issue",
+    ) as HTMLButtonElement | null;
+    const diagnosisRedoButton = document.getElementById(
+      "pixel-diagnosis-redo",
+    ) as HTMLButtonElement | null;
+    const diagnosisConfirmNextButton = document.getElementById(
+      "pixel-diagnosis-confirm-next",
+    ) as HTMLButtonElement | null;
+    const diagnosisCancelButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-diagnosis-cancel]"),
+    );
+
+    const modalPanels = [
+      warningPanel,
+      diagnosisInstructPanel,
+      diagnosisConfirmPanel,
+    ].filter((panel): panel is HTMLDivElement => panel !== null);
+    const focusableSelector = [
+      "a[href]",
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      "details > summary:first-of-type",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",");
+
+    function visibleFocusableElements(panel: HTMLElement): HTMLElement[] {
+      return Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (element) => element.getClientRects().length > 0,
+      );
+    }
+
+    function focusModal(
+      panel: HTMLElement,
+      preferredTarget?: HTMLElement | null,
+    ): void {
+      requestAnimationFrame(() => {
+        const target =
+          preferredTarget ?? visibleFocusableElements(panel)[0] ?? panel;
+        target.focus();
+      });
+    }
+
+    function isolateStageModal(panel: HTMLElement | null): void {
+      if (!stage) return;
+      const activeBranch = panel
+        ? Array.from(stage.children).find(
+            (child) => child === panel || child.contains(panel),
+          )
+        : null;
+      Array.from(stage.children).forEach((child) => {
+        if (child instanceof HTMLElement) {
+          child.inert = activeBranch !== null && child !== activeBranch;
+        }
+      });
+    }
+
+    function handleModalKeydown(event: KeyboardEvent): void {
+      const panel = event.currentTarget as HTMLDivElement;
+      if (event.key === "Escape") {
+        if (panel !== warningPanel) {
+          event.preventDefault();
+          cancelDiagnosis();
+          diagnoseButton?.focus();
+        }
+      }
+    }
+
+    modalPanels.forEach((panel) =>
+      panel.addEventListener("keydown", handleModalKeydown),
+    );
+
+    const spotIsolationBackground = "#000000";
+    const SPEED_RAW_MAX = 500;
+    const CONSENT_STORAGE_KEY = "phones-tools:stuck-pixel-consent";
+    const RUN_STORAGE_KEY = "phones-tools:stuck-pixel-run";
+    const NOISE_FALLBACK_WIDTH = 400;
+    const NOISE_FALLBACK_HEIGHT = 250;
+
+    const NOISE_TILE_SIZE = 128;
+
+    const CYCLE_MIN_DELAY_MS = 334;
+    const CYCLE_MAX_DELAY_MS = 1000;
+    const NOISE_MIN_DELAY_MS = 33;
+    const NOISE_REDUCED_MOTION_MIN_DELAY_MS = 66;
+    const NOISE_MAX_DELAY_MS = 100;
+    const SPOT_SMALL_DIAMETER_PX = 295;
+    const SPOT_CYCLE_MIN_DELAY_MS = 100;
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    type ChannelMask = { r: boolean; g: boolean; b: boolean };
+    const FULL_CHANNEL_MASK: ChannelMask = { r: true, g: true, b: true };
+
+    type PatternDefinition = {
+      label: string;
+      note: string;
+      colors: string[];
+      isNoise?: boolean;
+      channelMask?: ChannelMask;
+    };
+
+    const patternLibrary: Record<string, PatternDefinition> = {
+      rgb: {
+        label: "RGB",
+        note: "Color cycling for a colored stuck sub-pixel. Speed is limited by the selected repair mode.",
+        colors: ["#ff0000", "#00ff00", "#0000ff"],
+      },
+      cmy: {
+        label: "CMY",
+        note: "Cyan, magenta, and yellow manual color cycling.",
+        colors: ["#00ffff", "#ff00ff", "#ffff00"],
+      },
+      rgbwb: {
+        label: "RGB + White + Black",
+        note: "Broader cycle for bright or white-hot stuck pixels.",
+        colors: ["#ff0000", "#00ff00", "#0000ff", "#ffffff", "#000000"],
+      },
+      rgbcmy: {
+        label: "RGB + CMY",
+        note: "Exercises more color transitions without jumping straight to a harsh contrast pulse.",
+        colors: [
+          "#ff0000",
+          "#00ff00",
+          "#0000ff",
+          "#00ffff",
+          "#ff00ff",
+          "#ffff00",
+        ],
+      },
+      contrast: {
+        label: "B/W",
+        note: "Highest contrast option. Use this only after gentler patterns fail.",
+        colors: ["#000000", "#ffffff"],
+      },
+      static: {
+        label: "Static Noise",
+        note: "Recommended. Independently toggles each red, green and blue sub-pixel. Starts at 15fps and adjusts up to 30fps.",
+        colors: [],
+        isNoise: true,
+      },
+    };
+
+    function channelList(channels: Channel[]): string {
+      if (channels.length === 0) return "";
+      if (channels.length === 1) return channels[0] ?? "";
+      return `${channels.slice(0, -1).join(", ")} and ${channels.at(-1)}`;
+    }
+
+    function classificationShortLabel(mark: DiagnosisMark): string {
+      const channels = channelList(mark.channels);
+      switch (mark.classification) {
+        case "stuck-on":
+          return `Bright ${channels} subpixel${mark.channels.length === 1 ? "" : "s"}`;
+        case "stuck-off":
+          return `Dark ${channels} subpixel${mark.channels.length === 1 ? "" : "s"}`;
+        case "hot":
+          return "Hot pixel";
+        case "dead":
+          return "Dead pixel";
+        case "persistent-mark":
+          return "Surface or panel mark";
+        case "uneven-patch":
+          return "Uneven panel patch";
+        default:
+          return "Unclear pattern";
+      }
+    }
+
+    function autoPatternIdsForMark(_mark: DiagnosisMark): string[] {
+      return ["static"];
+    }
+
+    function diagnosisDescription(mark: DiagnosisMark): string {
+      const confidence = mark.confidence === "strong" ? "Strong" : "Likely";
+      const match = `${mark.matchScore}/10 color responses matched`;
+      const patterns = autoPatternIdsForMark(mark)
+        .map((patternId) => patternLibrary[patternId]?.label ?? patternId)
+        .join(", then ");
+
+      switch (mark.classification) {
+        case "stuck-on":
+          return `${confidence} bright ${channelList(mark.channels)} subpixel fault. ${match}. Auto will run ${patterns}.`;
+        case "stuck-off":
+          return `${confidence} dark ${channelList(mark.channels)} subpixel fault. ${match}. Auto will run ${patterns}.`;
+        case "hot":
+          return `${confidence} hot pixel with all three subpixels staying on. ${match}. Auto will run ${patterns}.`;
+        case "dead":
+          return `${confidence} dead pixel with all three subpixels staying off. ${match}. Software repair is unlikely to help, so Auto only makes one Static Noise attempt.`;
+        case "persistent-mark":
+          return `${confidence} surface or panel mark rather than a pixel response. ${match}. Clean the screen and diagnose again. Auto only makes one Static Noise attempt.`;
+        case "uneven-patch":
+          return `${confidence} uneven panel patch visible mainly on grey. ${match}. This is unlikely to respond to pixel cycling, so Auto only makes one Static Noise attempt.`;
+        default:
+          return `The marked responses did not match one defect pattern closely enough. Auto will run Static Noise once. Diagnose again if the same point remains visible.`;
+      }
+    }
+
+    let colorIndex = 0;
+    let flashFrame = 0;
+    let lastFlashTime = 0;
+    let countdownTimer: ReturnType<typeof setInterval> | null = null;
+    let endsAt = 0;
+    let runPaused = false;
+    let pausedRunRemainingMs = 0;
+    let selectedPatternId = "static";
+    let pendingSpotPosition: { clientX: number; clientY: number } | null = null;
+    let spotFrame = 0;
+    let spotStageRect: DOMRect | null = null;
+    let spotDragging = false;
+    let pendingFullscreenAction:
+      | "run"
+      | "diagnose"
+      | "diagnose-resume"
+      | null = null;
+    let pendingRunDurationMs: number | null = null;
+    let noiseTileCanvas: HTMLCanvasElement | null = null;
+    let noiseTileCtx: CanvasRenderingContext2D | null = null;
+    let noiseTileImageData: ImageData | null = null;
+    let noiseRngState = 0x2f6e2b1d;
+
+    type StepTap = {
+      x: number;
+      y: number;
+      colorId: InspectColorId;
+      matchRadiusPx: number;
+    };
+    type DiagnosisMark = {
+      x: number;
+      y: number;
+      observations: DefectObservation[];
+      classification: DefectClassification;
+      channels: Channel[];
+      confidence: ClassificationConfidence;
+      matchScore: number;
+    };
+    type WorkflowMode = "auto" | "manual";
+    type ManualColorGroup = "rgb" | "cmy" | "contrast";
+    type AutoRepairItem = {
+      durationSeconds: number;
+      label: string;
+      markIndex: number;
+      phaseIndex: number;
+      phaseCount: number;
+      patternId: string;
+      result: DiagnosisMark;
+    };
+
+    const STEP_VIEW_SECONDS = 10;
+
+    let diagnosisActive = false;
+    let diagnosisViewing = false;
+    let diagnosisPaused = false;
+    let diagnosisStep = 0;
+    let sessionTaps: StepTap[] = [];
+    let diagnosisMarkerElements: HTMLElement[] = [];
+    let diagnosedMarks: DiagnosisMark[] = [];
+    let autoMarkHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+    let workflowMode: WorkflowMode = "auto";
+    let autoRepairQueue: AutoRepairItem[] = [];
+    let autoQueueIndex = 0;
+    let autoQueueRunning = false;
+    let autoQueueComplete = false;
+    let manualSelectedPatternId = "static";
+    const manualColorGroups = new Set<ManualColorGroup>();
+    let stepCountdownTimer: ReturnType<typeof setInterval> | null = null;
+    let stepCountdownRemaining = 0;
+    type DiagnosisColor = { id: InspectColorId; label: string; hex: string };
+
+    const QUICK_DIAGNOSIS_COLORS: DiagnosisColor[] = [
+      { id: "black", label: "Black", hex: "#000000" },
+      { id: "white", label: "White", hex: "#ffffff" },
+      { id: "red", label: "Red", hex: "#ff0000" },
+      { id: "green", label: "Green", hex: "#00ff00" },
+      { id: "blue", label: "Blue", hex: "#0000ff" },
+    ];
+
+    const DEEP_DIAGNOSIS_COLORS: DiagnosisColor[] = [
+      { id: "cyan", label: "Cyan", hex: "#00ffff" },
+      { id: "magenta", label: "Magenta", hex: "#ff00ff" },
+      { id: "yellow", label: "Yellow", hex: "#ffff00" },
+      { id: "midGrey", label: "Mid grey", hex: "#808080" },
+      { id: "darkGrey", label: "Dark grey", hex: "#101010" },
+    ];
+
+    const DIAGNOSIS_COLORS: DiagnosisColor[] = [...QUICK_DIAGNOSIS_COLORS];
+
+    const ALL_DIAGNOSIS_COLORS: InspectColorId[] = [
+      ...QUICK_DIAGNOSIS_COLORS,
+      ...DEEP_DIAGNOSIS_COLORS,
+    ].map((color) => color.id);
+
+    const TEST_COLOR_LEVELS: Record<
+      InspectColorId,
+      Record<Channel, number>
+    > = {
+      black: { red: 0, green: 0, blue: 0 },
+      white: { red: 1, green: 1, blue: 1 },
+      red: { red: 1, green: 0, blue: 0 },
+      green: { red: 0, green: 1, blue: 0 },
+      blue: { red: 0, green: 0, blue: 1 },
+      cyan: { red: 0, green: 1, blue: 1 },
+      magenta: { red: 1, green: 0, blue: 1 },
+      yellow: { red: 1, green: 1, blue: 0 },
+      midGrey: { red: 0.5, green: 0.5, blue: 0.5 },
+      darkGrey: { red: 0.063, green: 0.063, blue: 0.063 },
+    };
+
+    type DefectHypothesis = {
+      classification: DefectClassification;
+      channels: Channel[];
+      pattern: Record<InspectColorId, boolean>;
+    };
+
+    const CHANNELS: Channel[] = ["red", "green", "blue"];
+    const CHANNEL_GROUPS: Channel[][] = [
+      ["red"],
+      ["green"],
+      ["blue"],
+      ["red", "green"],
+      ["red", "blue"],
+      ["green", "blue"],
+      ["red", "green", "blue"],
+    ];
+
+    function visibilityPattern(
+      channels: Channel[],
+      stuckOn: boolean,
+    ): Record<InspectColorId, boolean> {
+      return Object.fromEntries(
+        ALL_DIAGNOSIS_COLORS.map((color) => {
+          const visible = channels.some((channel) =>
+            stuckOn
+              ? TEST_COLOR_LEVELS[color][channel] < 1
+              : TEST_COLOR_LEVELS[color][channel] > 0,
+          );
+          return [color, visible];
+        }),
+      ) as Record<InspectColorId, boolean>;
+    }
+
+    const DEFECT_HYPOTHESES: DefectHypothesis[] = [
+      ...CHANNEL_GROUPS.map((channels) => ({
+        classification:
+          channels.length === CHANNELS.length ? "hot" as const : "stuck-on" as const,
+        channels,
+        pattern: visibilityPattern(channels, true),
+      })),
+      ...CHANNEL_GROUPS.map((channels) => ({
+        classification:
+          channels.length === CHANNELS.length ? "dead" as const : "stuck-off" as const,
+        channels,
+        pattern: visibilityPattern(channels, false),
+      })),
+      {
+        classification: "persistent-mark",
+        channels: [],
+        pattern: Object.fromEntries(
+          ALL_DIAGNOSIS_COLORS.map((color) => [color, true]),
+        ) as Record<InspectColorId, boolean>,
+      },
+      {
+        classification: "uneven-patch",
+        channels: [],
+        pattern: Object.fromEntries(
+          ALL_DIAGNOSIS_COLORS.map((color) => [
+            color,
+            color === "midGrey" || color === "darkGrey",
+          ]),
+        ) as Record<InspectColorId, boolean>,
+      },
+    ];
+
+    function classifyObservations(
+      observations: DefectObservation[],
+    ): ClassificationResult {
+      const byColor = new Map(
+        observations.map((observation) => [
+          observation.color,
+          observation.visible,
+        ]),
+      );
+      const scored = DEFECT_HYPOTHESES.map((hypothesis) => ({
+        hypothesis,
+        score: ALL_DIAGNOSIS_COLORS.reduce(
+          (score, color) =>
+            score +
+            (Boolean(byColor.get(color)) === hypothesis.pattern[color]
+              ? 1
+              : 0),
+          0,
+        ),
+      })).sort((left, right) => right.score - left.score);
+      const best = scored[0];
+      const runnerUp = scored[1];
+      const margin = (best?.score ?? 0) - (runnerUp?.score ?? 0);
+
+      if (!best || best.score < 7 || (best.score < 9 && margin === 0)) {
+        return {
+          classification: "unclear",
+          channels: [],
+          confidence: "unclear",
+          matchScore: best?.score ?? 0,
+        };
+      }
+
+      return {
+        classification: best.hypothesis.classification,
+        channels: [...best.hypothesis.channels],
+        confidence: best.score >= 9 && margin >= 1 ? "strong" : "likely",
+        matchScore: best.score,
+      };
+    }
+
+    const pageController = new AbortController();
+    const wakeLock = createWakeLock({
+      signal: pageController.signal,
+      onRelease: () => {
+        if (wakeLockNote) wakeLockNote.hidden = false;
+      },
+    });
+
+    function formatTime(seconds: number): string {
+      const mins = Math.floor(seconds / 60)
+        .toString()
+        .padStart(2, "0");
+      const secs = Math.max(0, seconds % 60)
+        .toString()
+        .padStart(2, "0");
+      return `${mins}:${secs}`;
+    }
+
+    function currentPattern(): PatternDefinition {
+      return patternLibrary[selectedPatternId] ?? patternLibrary.rgb;
+    }
+
+    function currentRunDetail(): string {
+      const patternLabel = currentPattern().label;
+      const item = autoRepairQueue[autoQueueIndex];
+      return workflowMode === "auto" && item
+        ? `Mark ${item.markIndex + 1}/${diagnosedMarks.length} • ${patternLabel}`
+        : patternLabel;
+    }
+
+    const MANUAL_COLOR_GROUP_ORDER: ManualColorGroup[] = [
+      "rgb",
+      "cmy",
+      "contrast",
+    ];
+
+    function buildManualColorPattern(): PatternDefinition {
+      const selectedGroups = MANUAL_COLOR_GROUP_ORDER.filter((group) =>
+        manualColorGroups.has(group),
+      );
+      const labels = selectedGroups.map(
+        (group) => patternLibrary[group]?.label ?? group.toUpperCase(),
+      );
+      return {
+        label: labels.join(" + ") || "Static Noise",
+        note: "A custom manual cycle built from the selected color groups.",
+        colors: selectedGroups.flatMap(
+          (group) => patternLibrary[group]?.colors ?? [],
+        ),
+      };
+    }
+
+    function activateManualColorPattern(): void {
+      if (manualColorGroups.size === 0) {
+        manualSelectedPatternId = "static";
+      } else {
+        patternLibrary["manual-custom"] = buildManualColorPattern();
+        manualSelectedPatternId = "manual-custom";
+      }
+      selectedPatternId = manualSelectedPatternId;
+      syncManualPatternButtons();
+      syncPattern();
+    }
+
+    function syncManualPatternButtons(): void {
+      repairButtons.forEach((button) => {
+        const patternId = button.dataset.patternId;
+        const isNoise = button.dataset.patternKind === "noise";
+        const isSelected = isNoise
+          ? manualSelectedPatternId === "static"
+          : manualColorGroups.has(patternId as ManualColorGroup);
+        button.setAttribute("aria-pressed", String(isSelected));
+      });
+    }
+
+    function setManualSidebarAvailability(enabled: boolean): void {
+      manualSidebarGroups.forEach((group) => {
+        group.dataset.manualDisabled = String(!enabled);
+        group.setAttribute("aria-disabled", String(!enabled));
+      });
+      [...repairButtons, ...inspectButtons].forEach((button) => {
+        button.disabled = !enabled;
+      });
+    }
+
+    function markCoordinateLabel(mark: DiagnosisMark, index: number): string {
+      const x = Math.round(mark.x * 100);
+      const y = Math.round(mark.y * 100);
+      return `#${index + 1} - ${x}% ${y}%`;
+    }
+
+    function updateDiagnosisSummary(index: number): void {
+      const mark = diagnosedMarks[index];
+      if (!diagnosisSummary) return;
+      diagnosisSummary.hidden = workflowMode !== "auto" || !mark;
+      if (!mark) return;
+
+      const identifiedCount = diagnosedMarks.filter(
+        (result) => result.classification !== "unclear",
+      ).length;
+      if (diagnosisSummaryTitle) {
+        diagnosisSummaryTitle.textContent = `#${index + 1} ${classificationShortLabel(mark)}`;
+      }
+      if (diagnosisSummaryCount) {
+        diagnosisSummaryCount.textContent = `${identifiedCount}/${diagnosedMarks.length} identified`;
+      }
+      if (diagnosisSummaryBody) {
+        diagnosisSummaryBody.textContent = diagnosisDescription(mark);
+      }
+    }
+
+    function renderAutoMarkMarkers(): void {
+      clearDiagnosisMarkers();
+      if (!stage || workflowMode !== "auto") return;
+      diagnosedMarks.forEach((mark, index) => {
+        const marker = document.createElement("div");
+        const strong = document.createElement("strong");
+        marker.className = "pixel-auto-marker";
+        marker.dataset.autoMarkIndex = String(index);
+        marker.setAttribute("aria-hidden", "true");
+        marker.style.left = `${mark.x * 100}%`;
+        marker.style.top = `${mark.y * 100}%`;
+        strong.textContent = `#${index + 1}`;
+        marker.append(strong);
+        stage.append(marker);
+        diagnosisMarkerElements.push(marker);
+      });
+    }
+
+    function highlightAutoMark(index: number): void {
+      if (autoMarkHighlightTimer) clearTimeout(autoMarkHighlightTimer);
+      const markers = Array.from(
+        stage?.querySelectorAll<HTMLElement>("[data-auto-mark-index]") ?? [],
+      );
+      markers.forEach((marker) => {
+        marker.classList.toggle(
+          "is-highlighted",
+          marker.dataset.autoMarkIndex === String(index),
+        );
+      });
+      autoMarkHighlightTimer = setTimeout(() => {
+        markers.forEach((marker) => marker.classList.remove("is-highlighted"));
+        autoMarkHighlightTimer = null;
+      }, 5000);
+    }
+
+    function syncAutoQueueControls(preview = false): void {
+      const hasQueue = diagnosedMarks.length > 0 && autoRepairQueue.length > 0;
+      if (autoMarkInput) {
+        autoMarkInput.replaceChildren();
+        if (hasQueue) {
+          diagnosedMarks.forEach((mark, index) => {
+            const option = document.createElement("option");
+            option.value = String(index);
+            option.textContent = markCoordinateLabel(mark, index);
+            autoMarkInput.append(option);
+          });
+          autoMarkInput.value = "0";
+        } else {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "Diagnose first";
+          autoMarkInput.append(option);
+        }
+        autoMarkInput.disabled = !hasQueue;
+      }
+
+      if (timerInput) {
+        timerInput.disabled = !hasQueue && workflowMode === "auto";
+        syncControlDropdown(timerInput, timerLabel);
+      }
+      if (timerControl) {
+        const timerDisabled = workflowMode === "auto" && !hasQueue;
+        timerControl.dataset.disabled = String(timerDisabled);
+        const timerDetails = timerControl.querySelector("details");
+        if (timerDetails instanceof HTMLElement) {
+          timerDetails.inert = timerDisabled;
+          timerDetails.setAttribute("aria-disabled", String(timerDisabled));
+          if (timerDisabled) timerDetails.removeAttribute("open");
+        }
+      }
+      if (preview && hasQueue) renderAutoMarkMarkers();
+      updateDiagnosisSummary(0);
+    }
+
+    function autoMarkDurationSeconds(markIndex: number): number {
+      return autoRepairQueue
+        .filter((item) => item.markIndex === markIndex)
+        .reduce((total, item) => total + item.durationSeconds, 0);
+    }
+
+    function previewAutoRepairItem(index: number): void {
+      const item = autoRepairQueue[index];
+      if (!item || !stage || !spot || !modeInput) return;
+      modeInput.value = "spot";
+      stage.dataset.spotPlaced = "true";
+      spot.style.left = `${item.result.x * 100}%`;
+      spot.style.top = `${item.result.y * 100}%`;
+      selectedPatternId = item.patternId;
+      syncMode();
+      syncPattern();
+      syncNoisePlacement();
+      if (countdownLabel) {
+        countdownLabel.textContent = formatTime(
+          autoMarkDurationSeconds(item.markIndex),
+        );
+      }
+      updateStatus("Ready", item.label);
+    }
+
+    function syncWorkflowUI(): void {
+      const isAuto = workflowMode === "auto";
+      if (testShell) {
+        testShell.dataset.workflow = workflowMode;
+        testShell.dataset.autoReady = String(
+          isAuto && autoRepairQueue.length > 0,
+        );
+      }
+      workflowTabs.forEach((tab) => {
+        const selected = tab.dataset.workflowTab === workflowMode;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      if (autoControls) autoControls.hidden = !isAuto;
+      if (manualControls) manualControls.hidden = isAuto;
+      if (manualRangeControls) manualRangeControls.hidden = isAuto;
+      const timerHeading = document.getElementById("pixel-timer-select-label");
+      if (timerHeading) {
+        timerHeading.textContent = isAuto ? "Time per mark" : "Select time";
+      }
+      setManualSidebarAvailability(!isAuto);
+      syncAutoQueueControls(isAuto && autoRepairQueue.length > 0);
+      if (!isAuto) {
+        clearDiagnosisMarkers();
+        if (diagnosisSummary) diagnosisSummary.hidden = true;
+        selectedPatternId = manualSelectedPatternId;
+        syncManualPatternButtons();
+        syncPattern();
+        if (dockTip) {
+          dockTip.textContent =
+            "Choose Static Noise or build a custom RGB, CMY, and B/W cycle.";
+        }
+      } else if (dockTip) {
+        dockTip.textContent = autoRepairQueue.length > 0
+          ? "Pick a mark to highlight it. Set time, then Play at display max."
+          : "Diagnose the screen to add repair marks.";
+      }
+      if (isAuto && diagnosedMarks.length > 0) {
+        const selectedMark = Number(autoMarkInput?.value ?? 0);
+        updateDiagnosisSummary(Number.isInteger(selectedMark) ? selectedMark : 0);
+      }
+      updateRunButton();
+    }
+
+    function setWorkflowMode(nextMode: WorkflowMode): void {
+      if (workflowMode === nextMode) return;
+      if (diagnosisActive) cancelDiagnosis();
+      if (stage?.dataset.running === "true" || runPaused) {
+        resetFlashing(false);
+      }
+      autoQueueRunning = false;
+      workflowMode = nextMode;
+      syncWorkflowUI();
+    }
+
+    function xorshift32(): number {
+      noiseRngState ^= noiseRngState << 13;
+      noiseRngState ^= noiseRngState >>> 17;
+      noiseRngState ^= noiseRngState << 5;
+      return noiseRngState >>> 0;
+    }
+
+    function renderNoiseTile(mask: ChannelMask): void {
+      if (!noiseTileCanvas) {
+        noiseTileCanvas = document.createElement("canvas");
+        noiseTileCanvas.width = NOISE_TILE_SIZE;
+        noiseTileCanvas.height = NOISE_TILE_SIZE;
+        noiseTileCtx = noiseTileCanvas.getContext("2d", { alpha: false });
+        if (noiseTileCtx) noiseTileCtx.imageSmoothingEnabled = false;
+      }
+      if (!noiseTileCtx) return;
+      if (!noiseTileImageData) {
+        noiseTileImageData = noiseTileCtx.createImageData(
+          NOISE_TILE_SIZE,
+          NOISE_TILE_SIZE,
+        );
+      }
+      const pixels = new Uint32Array(noiseTileImageData.data.buffer);
+      const rBit = mask.r ? 0x000000ff : 0;
+      const gBit = mask.g ? 0x0000ff00 : 0;
+      const bBit = mask.b ? 0x00ff0000 : 0;
+      for (let index = 0; index < pixels.length; index += 1) {
+        const bits = xorshift32();
+        let value = 0xff000000;
+        if (bits & 1) value |= rBit;
+        if (bits & 2) value |= gBit;
+        if (bits & 4) value |= bBit;
+        pixels[index] = value;
+      }
+      noiseTileCtx.putImageData(noiseTileImageData, 0, 0);
+    }
+
+    function renderNoiseFrame(): void {
+      if (!noiseCanvas) return;
+      const context = noiseCanvas.getContext("2d", { alpha: false });
+      if (!context) return;
+      context.imageSmoothingEnabled = false;
+      const mask = currentPattern().channelMask ?? FULL_CHANNEL_MASK;
+      renderNoiseTile(mask);
+      if (!noiseTileCanvas) return;
+      const fillPattern = context.createPattern(noiseTileCanvas, "repeat");
+      if (!fillPattern) return;
+      const offsetX = Math.floor(Math.random() * NOISE_TILE_SIZE);
+      const offsetY = Math.floor(Math.random() * NOISE_TILE_SIZE);
+      fillPattern.setTransform(new DOMMatrix().translate(offsetX, offsetY));
+      context.fillStyle = fillPattern;
+      context.fillRect(0, 0, noiseCanvas.width, noiseCanvas.height);
+    }
+
+    function syncNoisePlacement(): void {
+      if (!noiseCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const inSpotMode = modeInput?.value === "spot";
+      let cssWidth: number;
+      let cssHeight: number;
+
+      if (inSpotMode) {
+        const diameter = effectiveSpotDiameter();
+        cssWidth = diameter;
+        cssHeight = diameter;
+        noiseCanvas.style.left = spot?.style.left || "50%";
+        noiseCanvas.style.top = spot?.style.top || "50%";
+        noiseCanvas.style.width = `${diameter}px`;
+        noiseCanvas.style.height = `${diameter}px`;
+      } else {
+        const rect = stage?.getBoundingClientRect();
+        cssWidth = rect?.width || NOISE_FALLBACK_WIDTH;
+        cssHeight = rect?.height || NOISE_FALLBACK_HEIGHT;
+        noiseCanvas.style.left = "";
+        noiseCanvas.style.top = "";
+        noiseCanvas.style.width = "";
+        noiseCanvas.style.height = "";
+      }
+
+      const width = Math.max(1, Math.round(cssWidth * dpr));
+      const height = Math.max(1, Math.round(cssHeight * dpr));
+      if (noiseCanvas.width !== width || noiseCanvas.height !== height) {
+        noiseCanvas.width = width;
+        noiseCanvas.height = height;
+      }
+    }
+
+    function syncRuntimeWarningState(): void {
+      const warningVisible = stage?.dataset.warningHidden !== "true";
+      if (!testShell) return;
+      testShell.dataset.runtimeScreenOverflow = warningVisible
+        ? "visible"
+        : "hidden";
+      testShell.dataset.fullscreenButtonMuted = warningVisible
+        ? "true"
+        : "false";
+      testShell.dataset.dialog = warningVisible ? "warning" : "none";
+    }
+
+    function updateStatus(state: string, detail: string): void {
+      if (stateLabel) stateLabel.textContent = state;
+      if (detailLabel) detailLabel.textContent = detail;
+    }
+
+    function isFullscreenActive(): boolean {
+      return testShell?.dataset.fullscreen === "true";
+    }
+
+    function syncPauseNotice(): void {
+      if (pauseNotice) {
+        pauseNotice.hidden =
+          isFullscreenActive() || (!runPaused && !diagnosisPaused);
+      }
+    }
+
+    function syncDiagnosisButton(): void {
+      if (!diagnoseButton) return;
+      const isRunning = diagnosisActive && !diagnosisPaused;
+      diagnoseButton.classList.toggle("is-running", isRunning);
+      diagnoseButton.setAttribute("aria-pressed", String(isRunning));
+      diagnoseButton.textContent = diagnosisActive
+        ? diagnosisPaused
+          ? "Resume"
+          : "Pause"
+        : "Diagnose";
+    }
+
+    function updateRunButton(_isRunning?: boolean): void {
+      const isRunning = stage?.dataset.running === "true";
+      const isAuto = workflowMode === "auto";
+      const autoReady = autoRepairQueue.length > 0;
+      const hideDiagnoseForRepair =
+        !diagnosisActive && isFullscreenActive() && (isRunning || runPaused);
+      if (diagnoseButton) {
+        diagnoseButton.hidden =
+          !isAuto || hideDiagnoseForRepair || (autoReady && !diagnosisActive);
+      }
+      if (startButton) {
+        startButton.hidden = diagnosisActive;
+        startButton.disabled = isAuto && !autoReady;
+        startButton.classList.toggle("is-running", isRunning);
+        startButton.setAttribute("aria-pressed", String(isRunning));
+        startButton.textContent = isRunning
+          ? "Pause"
+          : runPaused
+            ? "Resume"
+            : "Start";
+      }
+      if (stopButton) stopButton.disabled = false;
+      if (testShell) {
+        testShell.dataset.autoReady = String(isAuto && autoReady);
+        testShell.dataset.actionCount =
+          isAuto && !autoReady && !diagnosisActive ? "3" : "2";
+      }
+      syncDiagnosisButton();
+      syncPauseNotice();
+    }
+
+    function syncExclusiveSidebarSelection(
+      buttons: HTMLButtonElement[],
+      activeButton: HTMLButtonElement | null,
+    ): void {
+      buttons.forEach((candidate) => {
+        const isActive = candidate === activeButton;
+        candidate.setAttribute("aria-pressed", String(isActive));
+      });
+    }
+
+    function syncControlDropdown(
+      select: HTMLSelectElement | null,
+      label: HTMLElement | null,
+    ): void {
+      if (!select || !label) return;
+      const selectedOption = select.selectedOptions[0];
+      if (selectedOption) label.textContent = selectedOption.textContent ?? "";
+      controlDropdownOptions.forEach((option) => {
+        const isMatch =
+          option.dataset.targetSelect === select.id &&
+          option.dataset.value === select.value;
+        option.classList.toggle("is-active", isMatch);
+      });
+    }
+
+    function closeOtherControlDropdowns(active: HTMLDetailsElement): void {
+      controlDropdowns.forEach((dropdown) => {
+        if (dropdown !== active) dropdown.open = false;
+      });
+    }
+
+    function hideWarningOverlay(): void {
+      if (!stage) return;
+      stage.dataset.warningHidden = "true";
+      isolateStageModal(null);
+      syncRuntimeWarningState();
+    }
+
+    function showWarningOverlay(): void {
+      if (!stage) return;
+      stage.dataset.warningHidden = "false";
+      isolateStageModal(warningPanel);
+      syncRuntimeWarningState();
+      if (warningPanel) focusModal(warningPanel, warningAck);
+    }
+
+    function hasAcknowledgedWarning(): boolean {
+      return stage?.dataset.warningAcknowledged === "true";
+    }
+
+    function acknowledgeWarning(): void {
+      if (!stage) return;
+      stage.dataset.warningAcknowledged = "true";
+      setStoredValue(CONSENT_STORAGE_KEY, "true");
+      hideWarningOverlay();
+    }
+
+    function effectiveSpotDiameter(): number {
+      if (!sizeInput) return 112;
+      const requested = Number(sizeInput.value);
+      const stageWidth = stage?.getBoundingClientRect().width || 0;
+      if (stageWidth <= 0) return requested;
+      return Math.min(requested, Math.round(stageWidth * 0.6));
+    }
+
+    function syncSpotSize(): void {
+      if (!spot || !sizeInput) return;
+      const size = `${effectiveSpotDiameter()}px`;
+      spot.style.width = size;
+      spot.style.height = size;
+    }
+
+    function syncMode(): void {
+      if (!stage || !spot || !modeInput || !sizeInput) return;
+      stage.dataset.mode = modeInput.value;
+      syncSpotSize();
+      if (sizeControl) sizeControl.hidden = modeInput.value !== "spot";
+      syncNoisePlacement();
+      if (stage.dataset.running !== "true") {
+        updateStatus("Ready", currentPattern().label);
+      }
+    }
+
+    function activeSpeedRange(): { min: number; max: number } {
+      if (currentPattern().isNoise) {
+        return {
+          min: prefersReducedMotion
+            ? NOISE_REDUCED_MOTION_MIN_DELAY_MS
+            : NOISE_MIN_DELAY_MS,
+          max: NOISE_MAX_DELAY_MS,
+        };
+      }
+      const isSmallSpot =
+        modeInput?.value === "spot" &&
+        effectiveSpotDiameter() <= SPOT_SMALL_DIAMETER_PX;
+      const cycleMin = isSmallSpot ? SPOT_CYCLE_MIN_DELAY_MS : CYCLE_MIN_DELAY_MS;
+      return {
+        min: prefersReducedMotion ? CYCLE_MAX_DELAY_MS : cycleMin,
+        max: CYCLE_MAX_DELAY_MS,
+      };
+    }
+
+    function delayFromSpeedInput(): number {
+      if (!speedInput) return defaultDelayMs();
+      const { min, max } = activeSpeedRange();
+      const fraction = Number(speedInput.value) / SPEED_RAW_MAX;
+      return Math.round(max - fraction * (max - min));
+    }
+
+    function defaultDelayMs(): number {
+      return currentPattern().isNoise ? NOISE_MAX_DELAY_MS : CYCLE_MAX_DELAY_MS;
+    }
+
+    function syncSpeed(): void {
+      if (!speedInput) return;
+      const delay = delayFromSpeedInput();
+      const isNoise = currentPattern().isNoise === true;
+      if (isNoise) {
+        const fps = Math.round(1000 / delay);
+        if (speedValue) speedValue.textContent = `${fps} fps`;
+        if (speedNote) speedNote.textContent = `${fps} frames/sec`;
+        speedInput.setAttribute("aria-valuetext", `${fps} frames per second`);
+        return;
+      }
+      const changesPerSec = 1000 / delay;
+      if (speedValue) speedValue.textContent = `${delay} ms`;
+      if (speedNote)
+        speedNote.textContent = `${changesPerSec.toFixed(1)} changes/sec`;
+      speedInput.setAttribute(
+        "aria-valuetext",
+        `${delay} milliseconds per color`,
+      );
+    }
+
+    function syncSize(): void {
+      if (!sizeInput || !sizeValue) return;
+      sizeValue.textContent = `${effectiveSpotDiameter()} px`;
+    }
+
+    function syncPattern(): void {
+      if (!modeInput || !stage) return;
+      stage.dataset.pattern = selectedPatternId;
+      const pattern = currentPattern();
+      const selectedPatternButton = repairButtons.find(
+        (button) => button.dataset.patternId === selectedPatternId,
+      );
+      if (dockTip && workflowMode === "manual") {
+        dockTip.textContent =
+          selectedPatternId === "manual-custom"
+            ? `Manual cycle: ${pattern.label}.`
+            : selectedPatternButton?.dataset.patternTip ?? pattern.note;
+      }
+      syncSpeed();
+      if (stage.dataset.running === "true") {
+        colorIndex = 0;
+        if (pattern.isNoise) {
+          applyIdleStage();
+          syncNoisePlacement();
+          renderNoiseFrame();
+        } else {
+          applyColor(pattern.colors[colorIndex] ?? "#ff0000");
+        }
+        updateStatus("Running", currentRunDetail());
+        return;
+      }
+      updateStatus("Ready", pattern.label);
+    }
+
+    function applyIdleStage(): void {
+      if (!stage) return;
+
+      stage.style.background =
+        modeInput?.value === "spot" ? spotIsolationBackground : "";
+      if (spot) spot.style.background = "transparent";
+    }
+
+    function applyColor(color: string): void {
+      if (!stage || !spot || !modeInput) return;
+      if (modeInput.value === "spot") {
+        stage.style.background = spotIsolationBackground;
+        spot.style.background = color;
+      } else {
+        stage.style.background = color;
+        spot.style.background = "transparent";
+      }
+    }
+
+    function persistRun(): void {
+
+      setStoredValue(
+        RUN_STORAGE_KEY,
+        JSON.stringify({
+          endsAt,
+          patternId: selectedPatternId,
+          pattern: patternLibrary[selectedPatternId],
+        }),
+      );
+    }
+
+    function clearPersistedRun(): void {
+      removeStoredValue(RUN_STORAGE_KEY);
+    }
+
+    function updateCountdown(): void {
+      if (!countdownLabel) return;
+      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      const currentItem = autoRepairQueue[autoQueueIndex];
+      const laterPhaseSeconds =
+        workflowMode === "auto" && currentItem
+          ? autoRepairQueue
+              .slice(autoQueueIndex + 1)
+              .filter((item) => item.markIndex === currentItem.markIndex)
+              .reduce((total, item) => total + item.durationSeconds, 0)
+          : 0;
+      countdownLabel.textContent = formatTime(remaining + laterPhaseSeconds);
+      if (remaining === 0) {
+        if (workflowMode === "auto" && autoQueueRunning) {
+          advanceAutoQueue();
+        } else {
+          resetFlashing();
+        }
+      }
+    }
+
+    function stopFlashLoop(): void {
+      if (flashFrame !== 0) {
+        cancelAnimationFrame(flashFrame);
+        flashFrame = 0;
+      }
+      lastFlashTime = 0;
+    }
+
+    function flashTick(timestamp: number): void {
+      if (!speedInput || stage?.dataset.running !== "true") {
+        flashFrame = 0;
+        return;
+      }
+      const pattern = currentPattern();
+      const delay = delayFromSpeedInput();
+      if (
+        lastFlashTime === 0 ||
+        timestamp - lastFlashTime >= delay
+      ) {
+        lastFlashTime = timestamp;
+        if (pattern.isNoise) {
+          renderNoiseFrame();
+        } else {
+          colorIndex = (colorIndex + 1) % pattern.colors.length;
+          applyColor(pattern.colors[colorIndex] ?? "#ff0000");
+        }
+      }
+      flashFrame = requestAnimationFrame(flashTick);
+    }
+
+    function scheduleFlashLoop(): void {
+      stopFlashLoop();
+      flashFrame = requestAnimationFrame(flashTick);
+    }
+
+    function clearRunTimers(): void {
+      stopFlashLoop();
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+
+    function beginFlashing(durationMs: number): void {
+      if (!speedInput || !stage || !modeInput) return;
+      if (!hasAcknowledgedWarning()) {
+        showWarningOverlay();
+        return;
+      }
+      hideWarningOverlay();
+      clearDiagnosisMarkers();
+      if (wakeLockNote) wakeLockNote.hidden = true;
+
+      const pattern = currentPattern();
+      syncSpeed();
+      clearRunTimers();
+      endsAt = Date.now() + durationMs;
+      runPaused = false;
+      pausedRunRemainingMs = 0;
+      stage.dataset.running = "true";
+      stage.dataset.pattern = selectedPatternId;
+      updateStatus("Running", currentRunDetail());
+      colorIndex = 0;
+      if (pattern.isNoise) {
+        applyIdleStage();
+        syncNoisePlacement();
+        renderNoiseFrame();
+      } else {
+        applyColor(pattern.colors[colorIndex] ?? "#ff0000");
+      }
+      updateRunButton(true);
+      showRuntimeControls(testShell);
+      scheduleFlashLoop();
+      countdownTimer = setInterval(updateCountdown, 250);
+      updateCountdown();
+      wakeLock.request();
+      persistRun();
+    }
+
+    function pauseFlashing(): void {
+      if (!stage || stage.dataset.running !== "true") return;
+      pausedRunRemainingMs = Math.max(0, endsAt - Date.now());
+      clearRunTimers();
+      clearPersistedRun();
+      stage.dataset.running = "false";
+      runPaused = pausedRunRemainingMs > 0;
+      updateStatus("Paused", currentRunDetail());
+      updateRunButton();
+      wakeLock.release();
+    }
+
+    function resumeFlashing(durationMs: number): void {
+      if (!stage || durationMs <= 0) {
+        resetFlashing();
+        return;
+      }
+      endsAt = Date.now() + durationMs;
+      runPaused = false;
+      pausedRunRemainingMs = 0;
+      stage.dataset.running = "true";
+      updateStatus("Running", currentRunDetail());
+      updateRunButton();
+      scheduleFlashLoop();
+      countdownTimer = setInterval(updateCountdown, 250);
+      updateCountdown();
+      wakeLock.request();
+      persistRun();
+    }
+
+    function resetSpotToCenter(): void {
+      if (!spot || !stage) return;
+      spotDragging = false;
+      stage.dataset.spotPlaced = "false";
+      spot.style.left = "50%";
+      spot.style.top = "50%";
+      spot.style.background = "transparent";
+      syncNoisePlacement();
+    }
+
+    function resetFlashing(resetReady = true): void {
+      clearRunTimers();
+      clearPersistedRun();
+      runPaused = false;
+      pausedRunRemainingMs = 0;
+      if (stage) {
+        stage.dataset.running = "false";
+      }
+      applyIdleStage();
+      resetSpotToCenter();
+      updateRunButton(false);
+      wakeLock.release();
+      if (modeInput && resetReady) {
+        updateStatus("Ready", currentPattern().label);
+      }
+      if (timerInput && countdownLabel) {
+        countdownLabel.textContent = formatTime(Number(timerInput.value));
+      }
+    }
+
+    function requestRunStart(durationMs: number): void {
+      if (!hasAcknowledgedWarning()) {
+        showWarningOverlay();
+        return;
+      }
+      if (testShell?.dataset.fullscreen !== "true") {
+        pendingRunDurationMs = durationMs;
+        pendingFullscreenAction = "run";
+        fullscreenButton?.click();
+        return;
+      }
+      if (runPaused) resumeFlashing(durationMs);
+      else beginFlashing(durationMs);
+    }
+
+    function startAutoQueueItem(index: number, durationMs?: number): void {
+      const item = autoRepairQueue[index];
+      if (!item) return;
+      autoQueueIndex = index;
+      autoQueueRunning = true;
+      autoQueueComplete = false;
+      if (speedInput) speedInput.value = String(SPEED_RAW_MAX);
+      previewAutoRepairItem(index);
+      syncAutoQueueControls(false);
+      if (autoMarkInput) autoMarkInput.value = String(item.markIndex);
+      updateDiagnosisSummary(item.markIndex);
+      requestRunStart(durationMs ?? item.durationSeconds * 1000);
+    }
+
+    function advanceAutoQueue(): void {
+      clearRunTimers();
+      clearPersistedRun();
+      runPaused = false;
+      pausedRunRemainingMs = 0;
+      if (stage) stage.dataset.running = "false";
+      const nextIndex = autoQueueIndex + 1;
+      if (nextIndex < autoRepairQueue.length) {
+        startAutoQueueItem(nextIndex);
+        return;
+      }
+      autoQueueRunning = false;
+      autoQueueComplete = true;
+      wakeLock.release();
+      applyIdleStage();
+      updateStatus("Complete", `${diagnosedMarks.length} marks`);
+      if (countdownLabel) countdownLabel.textContent = "Done";
+      updateRunButton();
+      showRuntimeControls(testShell);
+    }
+
+    function toggleRunState(): void {
+      if (!timerInput || !stage) return;
+      if (stage.dataset.running === "true") {
+        pauseFlashing();
+        showRuntimeControls(testShell);
+        return;
+      }
+      if (workflowMode === "auto") {
+        if (autoRepairQueue.length === 0) return;
+        if (runPaused) {
+          startAutoQueueItem(autoQueueIndex, pausedRunRemainingMs);
+          return;
+        }
+        startAutoQueueItem(autoQueueComplete ? 0 : autoQueueIndex);
+        return;
+      }
+      requestRunStart(
+        runPaused ? pausedRunRemainingMs : Number(timerInput.value) * 1000,
+      );
+    }
+
+    function showInspectColor(
+      color: string,
+      label: string,
+    ): void {
+      if (workflowMode !== "manual") return;
+      if (!stage || !countdownLabel) return;
+      if (!hasAcknowledgedWarning()) {
+        showWarningOverlay();
+        return;
+      }
+      autoRepairQueue = [];
+      autoQueueIndex = 0;
+      autoQueueRunning = false;
+      autoQueueComplete = false;
+      resetFlashing(false);
+      hideWarningOverlay();
+      stage.dataset.running = "false";
+      stage.style.background = color;
+      if (spot) spot.style.background = "transparent";
+      updateStatus("Inspect", label);
+      if (dockTip) {
+        dockTip.textContent = `Check the same screen position on ${label.toLowerCase()} and compare it with other colors.`;
+      }
+      countdownLabel.textContent = "Hold";
+      showRuntimeControls(testShell);
+
+    }
+
+    function updateSpotPosition(clientX: number, clientY: number): void {
+      if (!spot || !stage) return;
+      const rect = spotStageRect ?? stage.getBoundingClientRect();
+      spotStageRect = rect;
+      spot.style.left = `${clientX - rect.left}px`;
+      spot.style.top = `${clientY - rect.top}px`;
+      syncNoisePlacement();
+    }
+
+    function queueSpotPosition(clientX: number, clientY: number): void {
+      if (stage?.dataset.mode !== "spot") return;
+      if (stage.dataset.warningHidden !== "true") return;
+      if (diagnosisActive) return;
+      pendingSpotPosition = { clientX, clientY };
+      if (spotFrame !== 0) return;
+      spotFrame = window.requestAnimationFrame(() => {
+        spotFrame = 0;
+        if (!pendingSpotPosition) return;
+        updateSpotPosition(
+          pendingSpotPosition.clientX,
+          pendingSpotPosition.clientY,
+        );
+        pendingSpotPosition = null;
+      });
+    }
+
+    function pointerMatchRadius(event: PointerEvent): number {
+      const contactRadius = Math.max(event.width, event.height) / 2;
+      const minimum = event.pointerType === "touch" ? 24 : event.pointerType === "pen" ? 12 : 10;
+      const maximum = event.pointerType === "touch" ? 44 : event.pointerType === "pen" ? 24 : 16;
+      const positioningAllowance = event.pointerType === "touch" ? 14 : event.pointerType === "pen" ? 8 : 6;
+      return Math.min(
+        maximum,
+        Math.max(minimum, contactRadius + positioningAllowance),
+      );
+    }
+
+    function clusterTaps(
+      taps: StepTap[],
+      width: number,
+      height: number,
+    ): {
+      x: number;
+      y: number;
+      colors: Set<InspectColorId>;
+    }[] {
+      const clusters: {
+        x: number;
+        y: number;
+        count: number;
+        markRadiusPx: number;
+        colors: Set<InspectColorId>;
+      }[] = [];
+
+      taps.forEach((tap) => {
+        let nearestIndex = -1;
+        let nearestDistancePx = Number.POSITIVE_INFINITY;
+        clusters.forEach((cluster, clusterIndex) => {
+          const distancePx = Math.hypot(
+            (cluster.x - tap.x) * width,
+            (cluster.y - tap.y) * height,
+          );
+          const matchDistancePx = Math.min(
+            56,
+            cluster.markRadiusPx + tap.matchRadiusPx,
+          );
+          if (
+            distancePx <= matchDistancePx &&
+            distancePx < nearestDistancePx
+          ) {
+            nearestIndex = clusterIndex;
+            nearestDistancePx = distancePx;
+          }
+        });
+
+        const cluster = clusters[nearestIndex];
+        if (!cluster) {
+          clusters.push({
+            x: tap.x,
+            y: tap.y,
+            count: 1,
+            markRadiusPx: tap.matchRadiusPx,
+            colors: new Set([tap.colorId]),
+          });
+          return;
+        }
+        cluster.x = (cluster.x * cluster.count + tap.x) / (cluster.count + 1);
+        cluster.y = (cluster.y * cluster.count + tap.y) / (cluster.count + 1);
+        cluster.count += 1;
+        cluster.markRadiusPx = Math.max(
+          cluster.markRadiusPx,
+          tap.matchRadiusPx,
+        );
+        cluster.colors.add(tap.colorId);
+      });
+
+      return clusters.map(({ x, y, colors }) => ({ x, y, colors }));
+    }
+
+    function observationsForColors(
+      colors: Set<InspectColorId>,
+    ): DefectObservation[] {
+      return ALL_DIAGNOSIS_COLORS.map((color) => ({
+        color,
+        visible: colors.has(color),
+      }));
+    }
+
+    function clearDiagnosisMarkers(): void {
+      if (autoMarkHighlightTimer) {
+        clearTimeout(autoMarkHighlightTimer);
+        autoMarkHighlightTimer = null;
+      }
+      diagnosisMarkerElements.forEach((marker) => marker.remove());
+      diagnosisMarkerElements = [];
+    }
+
+    function renderMarkersFromFractions(
+      points: { x: number; y: number }[],
+    ): void {
+      clearDiagnosisMarkers();
+      if (!stage) return;
+      points.forEach((point) => {
+        const marker = document.createElement("div");
+        marker.className = "pixel-diagnosis-marker";
+        marker.setAttribute("aria-hidden", "true");
+        marker.style.left = `${point.x * 100}%`;
+        marker.style.top = `${point.y * 100}%`;
+        stage.append(marker);
+        diagnosisMarkerElements.push(marker);
+      });
+    }
+
+    function renderDiagnosisMarkers(): void {
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      if (!current) {
+        clearDiagnosisMarkers();
+        return;
+      }
+      renderMarkersFromFractions(
+        sessionTaps
+          .filter((tap) => tap.colorId === current.id)
+          .map((tap) => ({ x: tap.x, y: tap.y })),
+      );
+    }
+
+    function setRunControlsHidden(hidden: boolean): void {
+      if (startButton) startButton.hidden = hidden;
+      if (stopButton) stopButton.hidden = false;
+      updateRunButton();
+    }
+
+    function clearStepCountdownTimer(): void {
+      if (stepCountdownTimer) {
+        clearInterval(stepCountdownTimer);
+        stepCountdownTimer = null;
+      }
+    }
+
+    function resetAutoWorkflow(): void {
+      autoRepairQueue = [];
+      autoQueueIndex = 0;
+      autoQueueRunning = false;
+      autoQueueComplete = false;
+      diagnosedMarks = [];
+      clearDiagnosisMarkers();
+      resetFlashing();
+      syncAutoQueueControls(false);
+      syncRuntimeWarningState();
+      syncWorkflowUI();
+    }
+
+    function stopStepCountdown(): void {
+      clearStepCountdownTimer();
+      if (diagnosisCountdown) diagnosisCountdown.hidden = true;
+    }
+
+    function resumeStepCountdown(): void {
+      if (!diagnosisViewing || stepCountdownRemaining <= 0) return;
+      if (diagnosisCountdown) {
+        diagnosisCountdown.hidden = false;
+        diagnosisCountdown.textContent = `${stepCountdownRemaining}s`;
+        diagnosisCountdown.focus();
+      }
+      clearStepCountdownTimer();
+      stepCountdownTimer = setInterval(tickStepCountdown, 1000);
+    }
+
+    function paintCurrentStep(): void {
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      if (!current || !stage) return;
+      stage.style.background = current.hex;
+      if (spot) spot.style.background = "transparent";
+      updateStatus("Diagnose", current.label);
+    }
+
+    function showInstructCard(): void {
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      if (!current || !diagnosisInstructPanel) return;
+      const isDeepPassStart =
+        diagnosisStep === QUICK_DIAGNOSIS_COLORS.length;
+      paintCurrentStep();
+      if (diagnosisInstructTitle) {
+        diagnosisInstructTitle.textContent = isDeepPassStart
+          ? "Narrow down the issue"
+          : "Start diagnosis";
+      }
+      if (diagnosisInstructBody) {
+        diagnosisInstructBody.textContent = isDeepPassStart
+          ? "You marked an area. Five more checks will compare the same location using cyan, magenta, yellow, and two greys."
+          : "You will see five test colors for 10 seconds each. Tap every area that does not match. You can mark more than one area.";
+      }
+      if (diagnosisInstructProgress) {
+        diagnosisInstructProgress.textContent = `${diagnosisStep + 1}/${DIAGNOSIS_COLORS.length}`;
+      }
+      if (diagnosisBeginButton) {
+        diagnosisBeginButton.textContent = isDeepPassStart
+          ? "Continue"
+          : "Start";
+      }
+      diagnosisInstructPanel.dataset.visible = "true";
+      isolateStageModal(diagnosisInstructPanel);
+      focusModal(diagnosisInstructPanel, diagnosisBeginButton);
+    }
+
+    function tickStepCountdown(): void {
+      if (diagnosisPaused) return;
+      stepCountdownRemaining -= 1;
+      if (diagnosisCountdown) {
+        diagnosisCountdown.textContent = `${stepCountdownRemaining}s`;
+      }
+      if (stepCountdownRemaining <= 0) {
+        endStepViewing();
+      }
+    }
+
+    function beginStepViewing(): void {
+      if (diagnosisPaused) return;
+      if (diagnosisInstructPanel)
+        diagnosisInstructPanel.dataset.visible = "false";
+      isolateStageModal(null);
+      paintCurrentStep();
+      clearDiagnosisMarkers();
+      stopStepCountdown();
+      diagnosisViewing = true;
+      stepCountdownRemaining = STEP_VIEW_SECONDS;
+      if (diagnosisCountdown) {
+        diagnosisCountdown.hidden = false;
+        diagnosisCountdown.textContent = `${stepCountdownRemaining}s`;
+        diagnosisCountdown.focus();
+      }
+      stepCountdownTimer = setInterval(tickStepCountdown, 1000);
+    }
+
+    function endStepViewing(): void {
+      diagnosisViewing = false;
+      stopStepCountdown();
+      showConfirmCard();
+    }
+
+    function showConfirmCard(): void {
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      if (!current || !diagnosisConfirmPanel) return;
+      const marksThisStep = sessionTaps.filter(
+        (tap) => tap.colorId === current.id,
+      ).length;
+      const isFinalStep = diagnosisStep === DIAGNOSIS_COLORS.length - 1;
+      const willExtend =
+        isFinalStep &&
+        DIAGNOSIS_COLORS.length === QUICK_DIAGNOSIS_COLORS.length &&
+        sessionTaps.length > 0;
+
+      if (diagnosisConfirmTitle) {
+        diagnosisConfirmTitle.textContent = `${current.label} screen`;
+      }
+      if (diagnosisConfirmProgress) {
+        diagnosisConfirmProgress.textContent = `${diagnosisStep + 1}/${DIAGNOSIS_COLORS.length}`;
+      }
+
+      if (marksThisStep === 0) {
+        if (diagnosisConfirmBody) {
+          diagnosisConfirmBody.textContent = willExtend
+            ? "You marked an area earlier. Five more checks will narrow down what it is."
+            : "Did you see anything on this screen?";
+        }
+        if (diagnosisConfirmClean) diagnosisConfirmClean.hidden = false;
+        if (diagnosisConfirmMarked) diagnosisConfirmMarked.hidden = true;
+        if (diagnosisNoIssueButton) {
+          diagnosisNoIssueButton.textContent = willExtend
+            ? "Continue"
+            : isFinalStep
+              ? "Finish"
+              : "Next";
+        }
+      } else {
+        if (diagnosisConfirmBody) {
+          diagnosisConfirmBody.textContent = willExtend
+            ? "You marked an area. Five more checks will narrow down what it is."
+            : marksThisStep === 1
+              ? "You marked 1 area on this screen."
+              : `You marked ${marksThisStep} areas on this screen.`;
+        }
+        if (diagnosisConfirmClean) diagnosisConfirmClean.hidden = true;
+        if (diagnosisConfirmMarked) diagnosisConfirmMarked.hidden = false;
+        if (diagnosisConfirmNextButton) {
+          diagnosisConfirmNextButton.textContent = willExtend
+            ? "Continue"
+            : isFinalStep
+              ? "Finish"
+              : "Next";
+        }
+      }
+
+      diagnosisConfirmPanel.dataset.visible = "true";
+      isolateStageModal(diagnosisConfirmPanel);
+      focusModal(diagnosisConfirmPanel);
+    }
+
+    function redoStep(): void {
+      if (diagnosisPaused) return;
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      if (current) {
+        sessionTaps = sessionTaps.filter((tap) => tap.colorId !== current.id);
+      }
+      if (diagnosisConfirmPanel)
+        diagnosisConfirmPanel.dataset.visible = "false";
+      isolateStageModal(null);
+      beginStepViewing();
+    }
+
+    function confirmStepAndAdvance(): void {
+      if (diagnosisPaused) return;
+      if (diagnosisConfirmPanel)
+        diagnosisConfirmPanel.dataset.visible = "false";
+      isolateStageModal(null);
+      diagnosisStep += 1;
+      if (diagnosisStep >= DIAGNOSIS_COLORS.length) {
+        if (
+          DIAGNOSIS_COLORS.length === QUICK_DIAGNOSIS_COLORS.length &&
+          sessionTaps.length > 0
+        ) {
+          DIAGNOSIS_COLORS.push(...DEEP_DIAGNOSIS_COLORS);
+          showInstructCard();
+          return;
+        }
+        finishDiagnosis();
+        return;
+      }
+
+      beginStepViewing();
+    }
+
+    function startDiagnosis(): void {
+      if (!hasAcknowledgedWarning()) {
+        showWarningOverlay();
+        return;
+      }
+
+      if (testShell?.dataset.fullscreen !== "true") {
+        pendingFullscreenAction = "diagnose";
+        fullscreenButton?.click();
+        return;
+      }
+      resetFlashing(false);
+      hideWarningOverlay();
+      diagnosisStep = 0;
+      sessionTaps = [];
+      DIAGNOSIS_COLORS.length = QUICK_DIAGNOSIS_COLORS.length;
+      clearDiagnosisMarkers();
+      diagnosisActive = true;
+      diagnosisPaused = false;
+      if (stage) stage.dataset.diagnosing = "true";
+      setRunControlsHidden(true);
+      showRuntimeControls(testShell);
+      showInstructCard();
+    }
+
+    function pauseDiagnosis(): void {
+      if (!diagnosisActive || diagnosisPaused) return;
+      diagnosisPaused = true;
+      clearStepCountdownTimer();
+      const current = DIAGNOSIS_COLORS[diagnosisStep];
+      updateStatus("Paused", current?.label ?? "Diagnosis");
+      updateRunButton();
+      showRuntimeControls(testShell);
+    }
+
+    function resumeDiagnosis(): void {
+      if (!diagnosisActive || !diagnosisPaused) return;
+      diagnosisPaused = false;
+      paintCurrentStep();
+      resumeStepCountdown();
+      updateRunButton();
+      showRuntimeControls(testShell);
+    }
+
+    function requestDiagnosisResume(): void {
+      if (isFullscreenActive()) {
+        resumeDiagnosis();
+        return;
+      }
+      pendingFullscreenAction = "diagnose-resume";
+      fullscreenButton?.click();
+      showRuntimeControls(testShell);
+    }
+
+    function toggleDiagnosisState(): void {
+      if (workflowMode !== "auto") return;
+      if (!diagnosisActive) {
+        startDiagnosis();
+        return;
+      }
+      if (diagnosisPaused) requestDiagnosisResume();
+      else pauseDiagnosis();
+    }
+
+    function cancelDiagnosis(): void {
+      diagnosisActive = false;
+      diagnosisViewing = false;
+      diagnosisPaused = false;
+      stopStepCountdown();
+      if (stage) stage.dataset.diagnosing = "false";
+      setRunControlsHidden(false);
+      if (diagnosisInstructPanel)
+        diagnosisInstructPanel.dataset.visible = "false";
+      if (diagnosisConfirmPanel)
+        diagnosisConfirmPanel.dataset.visible = "false";
+      isolateStageModal(null);
+      clearDiagnosisMarkers();
+      resetFlashing();
+      syncWorkflowUI();
+      diagnoseButton?.focus();
+    }
+
+    function buildAutoRepairQueue(): void {
+      const defaultDurationSeconds = Number(timerInput?.value ?? 300);
+      autoRepairQueue = diagnosedMarks.flatMap((result, markIndex) => {
+        const patternIds = autoPatternIdsForMark(result);
+        const baseDuration = Math.floor(
+          defaultDurationSeconds / patternIds.length,
+        );
+        return patternIds.map((patternId, phaseIndex) => ({
+          durationSeconds:
+            phaseIndex === patternIds.length - 1
+              ? defaultDurationSeconds - baseDuration * phaseIndex
+              : baseDuration,
+          label: `Mark ${markIndex + 1}`,
+          markIndex,
+          phaseIndex,
+          phaseCount: patternIds.length,
+          patternId,
+          result,
+        }));
+      });
+      autoQueueIndex = 0;
+      autoQueueRunning = false;
+      autoQueueComplete = false;
+    }
+
+    function finishDiagnosis(): void {
+      diagnosisActive = false;
+      diagnosisViewing = false;
+      diagnosisPaused = false;
+      stopStepCountdown();
+      if (stage) stage.dataset.diagnosing = "false";
+      setRunControlsHidden(false);
+      applyIdleStage();
+
+      const diagnosisRect = stage?.getBoundingClientRect();
+      const diagnosisWidth = Math.max(1, diagnosisRect?.width ?? window.innerWidth);
+      const diagnosisHeight = Math.max(
+        1,
+        diagnosisRect?.height ?? window.innerHeight,
+      );
+      diagnosedMarks = clusterTaps(
+        sessionTaps,
+        diagnosisWidth,
+        diagnosisHeight,
+      ).map((cluster) => {
+        const observations = observationsForColors(cluster.colors);
+        const result = classifyObservations(observations);
+        return {
+          x: cluster.x,
+          y: cluster.y,
+          observations,
+          classification: result.classification,
+          channels: result.channels,
+          confidence: result.confidence,
+          matchScore: result.matchScore,
+        };
+      });
+
+      buildAutoRepairQueue();
+      syncWorkflowUI();
+      if (autoRepairQueue.length > 0) {
+        const identifiedCount = diagnosedMarks.filter(
+          (result) => result.classification !== "unclear",
+        ).length;
+        updateStatus(
+          "Diagnosed",
+          `${identifiedCount}/${diagnosedMarks.length} identified`,
+        );
+        if (countdownLabel && timerInput) {
+          countdownLabel.textContent = formatTime(Number(timerInput.value));
+        }
+      } else {
+        updateStatus("Ready", "No marks");
+        if (dockTip) dockTip.textContent = "No marks were added. Run Diagnose again.";
+      }
+      if (testShell?.dataset.fullscreen === "true") {
+        fullscreenButton?.click();
+      }
+      showRuntimeControls(testShell);
+      syncRuntimeWarningState();
+      startButton?.focus();
+    }
+
+    stage?.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!spotDragging) return;
+        queueSpotPosition(event.clientX, event.clientY);
+      },
+      { passive: true },
+    );
+
+    window.addEventListener(
+      "pointerup",
+      () => {
+        spotDragging = false;
+      },
+      { passive: true, signal: pageController.signal },
+    );
+    window.addEventListener(
+      "pointercancel",
+      () => {
+        spotDragging = false;
+      },
+      { passive: true, signal: pageController.signal },
+    );
+
+    stage?.addEventListener(
+      "pointerdown",
+      (event) => {
+        spotStageRect = stage?.getBoundingClientRect() ?? null;
+        if (
+          stage?.dataset.mode === "spot" &&
+          stage.dataset.warningHidden === "true" &&
+          !diagnosisActive
+        ) {
+          spotDragging = true;
+          stage.dataset.spotPlaced = "true";
+        }
+        queueSpotPosition(event.clientX, event.clientY);
+
+        if (diagnosisViewing && !diagnosisPaused && stage) {
+          const rect = spotStageRect ?? stage.getBoundingClientRect();
+          const current = DIAGNOSIS_COLORS[diagnosisStep];
+          if (rect.width > 0 && rect.height > 0 && current) {
+            sessionTaps.push({
+              x: Math.min(
+                1,
+                Math.max(0, (event.clientX - rect.left) / rect.width),
+              ),
+              y: Math.min(
+                1,
+                Math.max(0, (event.clientY - rect.top) / rect.height),
+              ),
+              colorId: current.id,
+              matchRadiusPx: pointerMatchRadius(event),
+            });
+            renderDiagnosisMarkers();
+          }
+        }
+      },
+      { passive: true },
+    );
+
+    stage?.addEventListener("dblclick", (event) => {
+      if (stage.dataset.warningHidden === "true") event.preventDefault();
+    });
+
+    modeInput?.addEventListener("change", syncMode);
+    modeInput?.addEventListener("change", () =>
+      syncControlDropdown(modeInput, modeLabel),
+    );
+
+    modeInput?.addEventListener("change", syncSpeed);
+    speedInput?.addEventListener("input", syncSpeed);
+    sizeInput?.addEventListener("input", () => {
+      if (workflowMode === "manual" && stage?.dataset.mode === "spot") {
+        stage.dataset.spotPlaced = "true";
+      }
+      syncMode();
+      syncSize();
+      syncSpeed();
+    });
+    timerInput?.addEventListener("change", () => {
+      syncControlDropdown(timerInput, timerLabel);
+      if (workflowMode === "auto") {
+        const durationSeconds = Number(timerInput.value);
+        const selectedMark = Number(autoMarkInput?.value ?? 0);
+        buildAutoRepairQueue();
+        syncAutoQueueControls(false);
+        if (
+          autoMarkInput &&
+          Number.isInteger(selectedMark) &&
+          diagnosedMarks[selectedMark]
+        ) {
+          autoMarkInput.value = String(selectedMark);
+          updateDiagnosisSummary(selectedMark);
+        }
+        if (countdownLabel) {
+          countdownLabel.textContent = formatTime(durationSeconds);
+        }
+        return;
+      }
+      resetFlashing();
+    });
+    autoMarkInput?.addEventListener("change", () => {
+      const index = Number(autoMarkInput.value);
+      const mark = diagnosedMarks[index];
+      if (!Number.isInteger(index) || !mark) return;
+      if (stage?.dataset.running !== "true") {
+        renderAutoMarkMarkers();
+        highlightAutoMark(index);
+      }
+      updateDiagnosisSummary(index);
+      updateStatus("Mark", markCoordinateLabel(mark, index));
+    });
+    autoMarkInput?.addEventListener("click", () => {
+      const index = Number(autoMarkInput.value);
+      if (!Number.isInteger(index) || !diagnosedMarks[index]) return;
+      if (stage?.dataset.running !== "true") highlightAutoMark(index);
+      updateDiagnosisSummary(index);
+    });
+    startButton?.addEventListener("click", toggleRunState);
+    stopButton?.addEventListener("click", () => {
+      if (diagnosisActive) cancelDiagnosis();
+      else if (workflowMode === "auto") resetAutoWorkflow();
+      else resetFlashing();
+    });
+    diagnoseButton?.addEventListener("click", toggleDiagnosisState);
+    diagnosisBeginButton?.addEventListener("click", beginStepViewing);
+    diagnosisCheckAgainButton?.addEventListener("click", redoStep);
+    diagnosisNoIssueButton?.addEventListener("click", confirmStepAndAdvance);
+    diagnosisRedoButton?.addEventListener("click", redoStep);
+    diagnosisConfirmNextButton?.addEventListener(
+      "click",
+      confirmStepAndAdvance,
+    );
+    diagnosisCancelButtons.forEach((button) =>
+      button.addEventListener("click", cancelDiagnosis),
+    );
+    workflowTabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => {
+        const nextMode = tab.dataset.workflowTab;
+        if (nextMode === "auto" || nextMode === "manual") {
+          setWorkflowMode(nextMode);
+        }
+      });
+      tab.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const nextTab = workflowTabs.at(
+          (index + direction + workflowTabs.length) % workflowTabs.length,
+        );
+        nextTab?.focus();
+        nextTab?.click();
+      });
+    });
+
+    warningAck?.addEventListener("change", () => {
+      if (!warningButton) return;
+      warningButton.disabled = !warningAck.checked;
+    });
+
+    warningButton?.addEventListener("click", () => {
+      if (!warningAck?.checked) return;
+      acknowledgeWarning();
+      startButton?.focus();
+    });
+
+    controlDropdowns.forEach((dropdown) => {
+      dropdown.addEventListener("toggle", () => {
+        if (dropdown.open) closeOtherControlDropdowns(dropdown);
+      });
+    });
+
+    controlDropdownOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        const targetId = option.dataset.targetSelect;
+        const value = option.dataset.value;
+        if (!targetId || !value) return;
+        const target = document.getElementById(
+          targetId,
+        ) as HTMLSelectElement | null;
+        if (!target || target.disabled) return;
+        target.value = value;
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        option.closest("details")?.removeAttribute("open");
+      });
+    });
+
+    repairButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (workflowMode !== "manual") return;
+        const nextId = button.dataset.patternId;
+        if (!nextId) return;
+        const activeAccordion = button.closest("details");
+        if (activeAccordion instanceof HTMLDetailsElement) {
+          activeAccordion.dispatchEvent(
+            new CustomEvent("tool-sidebar:open-accordion", { bubbles: true }),
+          );
+        }
+        if (button.dataset.patternKind === "noise") {
+          manualSelectedPatternId = "static";
+          selectedPatternId = "static";
+          syncManualPatternButtons();
+          syncPattern();
+          return;
+        }
+        const group = nextId as ManualColorGroup;
+        if (manualColorGroups.has(group)) manualColorGroups.delete(group);
+        else manualColorGroups.add(group);
+        activateManualColorPattern();
+      });
+    });
+
+    inspectButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const color = button.dataset.inspectColor;
+        const label = button.dataset.inspectLabel;
+        if (!color || !label) return;
+        const activeAccordion = button.closest("details");
+        if (activeAccordion instanceof HTMLDetailsElement) {
+          activeAccordion.dispatchEvent(
+            new CustomEvent("tool-sidebar:open-accordion", { bubbles: true }),
+          );
+        }
+        syncExclusiveSidebarSelection(inspectButtons, button);
+        showInspectColor(color, label);
+      });
+    });
+
+    testShell?.addEventListener("tool-runtime:fullscreen-change", () => {
+      spotStageRect = null;
+      syncSpotSize();
+      syncNoisePlacement();
+
+      const isExpanded = testShell?.dataset.fullscreen === "true";
+      if (isExpanded && pendingFullscreenAction) {
+        const action = pendingFullscreenAction;
+        pendingFullscreenAction = null;
+        if (action === "run") {
+          const duration = pendingRunDurationMs ?? Number(timerInput?.value ?? 0) * 1000;
+          pendingRunDurationMs = null;
+          if (runPaused) resumeFlashing(duration);
+          else beginFlashing(duration);
+        } else if (action === "diagnose") {
+          startDiagnosis();
+        } else {
+          resumeDiagnosis();
+        }
+        return;
+      }
+
+      if (!isExpanded) {
+        pendingFullscreenAction = null;
+        pendingRunDurationMs = null;
+        if (stage?.dataset.running === "true") pauseFlashing();
+        if (diagnosisActive && !diagnosisPaused) pauseDiagnosis();
+      }
+      updateRunButton();
+      showRuntimeControls(testShell);
+    });
+
+    const stageResizeObserver = observeResize(stage, () => {
+      spotStageRect = null;
+      syncSpotSize();
+      syncNoisePlacement();
+    });
+    window.addEventListener(
+      "scroll",
+      () => {
+        spotStageRect = null;
+      },
+      { passive: true, signal: pageController.signal },
+    );
+    const unsubscribeOrientation = onOrientationChange(() => {
+      spotStageRect = null;
+      syncSpotSize();
+      syncNoisePlacement();
+    });
+
+    function restoreConsent(): void {
+      if (!stage) return;
+      if (getStoredValue(CONSENT_STORAGE_KEY) === "true") {
+        stage.dataset.warningAcknowledged = "true";
+        hideWarningOverlay();
+      }
+    }
+
+    function isChannelMask(value: unknown): value is ChannelMask {
+      if (typeof value !== "object" || value === null) return false;
+      const mask = value as Record<string, unknown>;
+      return (
+        typeof mask.r === "boolean" &&
+        typeof mask.g === "boolean" &&
+        typeof mask.b === "boolean"
+      );
+    }
+
+    function isPatternDefinition(value: unknown): value is PatternDefinition {
+      if (typeof value !== "object" || value === null) return false;
+      const candidate = value as Record<string, unknown>;
+      if (typeof candidate.label !== "string") return false;
+      if (typeof candidate.note !== "string") return false;
+      if (
+        !Array.isArray(candidate.colors) ||
+        !candidate.colors.every((color) => typeof color === "string")
+      ) {
+        return false;
+      }
+      if (
+        candidate.isNoise !== undefined &&
+        typeof candidate.isNoise !== "boolean"
+      ) {
+        return false;
+      }
+      if (
+        candidate.channelMask !== undefined &&
+        !isChannelMask(candidate.channelMask)
+      ) {
+        return false;
+      }
+      return true;
+    }
+
+    function restorePersistedRun(): void {
+      if (workflowMode !== "manual") {
+        clearPersistedRun();
+        return;
+      }
+      const raw = getStoredValue(RUN_STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as {
+          endsAt?: unknown;
+          patternId?: unknown;
+          pattern?: unknown;
+        };
+        if (
+          typeof parsed.endsAt !== "number" ||
+          typeof parsed.patternId !== "string" ||
+          !isPatternDefinition(parsed.pattern)
+        ) {
+          clearPersistedRun();
+          return;
+        }
+        const remaining = parsed.endsAt - Date.now();
+        if (remaining <= 1000) {
+          clearPersistedRun();
+          return;
+        }
+        patternLibrary[parsed.patternId] = parsed.pattern;
+        selectedPatternId = parsed.patternId;
+        requestRunStart(remaining);
+      } catch {
+        clearPersistedRun();
+      }
+    }
+
+    function cleanupPixelPage(): void {
+      clearRunTimers();
+      stopStepCountdown();
+      if (spotFrame !== 0) {
+        cancelAnimationFrame(spotFrame);
+        spotFrame = 0;
+      }
+      stageResizeObserver?.disconnect();
+      unsubscribeOrientation();
+      pageController.abort();
+      wakeLock.release();
+    }
+
+    onPageHide(cleanupPixelPage);
+
+    if (prefersReducedMotion && motionNote) motionNote.hidden = false;
+
+    syncRuntimeWarningState();
+    syncMode();
+    syncControlDropdown(modeInput, modeLabel);
+    syncSpeed();
+    syncSize();
+    syncControlDropdown(timerInput, timerLabel);
+    syncPattern();
+    resetFlashing();
+    syncWorkflowUI();
+    restoreConsent();
+    restorePersistedRun();
+    if (!hasAcknowledgedWarning() && warningPanel) {
+      isolateStageModal(warningPanel);
+      focusModal(warningPanel, warningAck);
+    }
+  </script>
+</BaseLayout>

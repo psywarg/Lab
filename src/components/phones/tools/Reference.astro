@@ -1,0 +1,116 @@
+---
+// src/components/phones/tools/Reference.astro
+
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+
+type ToolReferenceItem = {
+  label: string;
+  check: string;
+  reading: string;
+  good: string;
+  concern: string;
+};
+
+interface Props {
+  title?: string;
+  items: ToolReferenceItem[];
+}
+
+const { title = "Tool Reference", items } = Astro.props;
+const titleId = `tool-reference-${
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "") || "title"
+}`;
+const lastRowStart =
+  items.length % 2 === 0
+    ? Math.max(items.length - 2, 0)
+    : Math.max(items.length - 1, 0);
+const referenceItems = items.map((item, index) => {
+  const hasMobileBottomDivider = index < items.length - 1;
+  const hasDesktopBottomDivider = index < lastRowStart;
+  const hasColumnDivider = index % 2 === 0 && index + 1 < items.length;
+  const hasDesktopLeftPadding = index % 2 === 1;
+
+  return {
+    ...item,
+    number: String(index + 1).padStart(2, "0"),
+    classes: [
+      "grid gap-3 p-3 sm:gap-2 sm:p-4",
+      hasMobileBottomDivider && "border-b border-accent-line",
+      !hasDesktopBottomDivider && "sm:border-b-0",
+      hasColumnDivider && "sm:pr-5 sm:border-r sm:border-accent-line",
+      hasDesktopLeftPadding && "sm:pl-5",
+    ],
+  };
+});
+---
+
+<section class="grid gap-5 sm:gap-4" aria-labelledby={titleId}>
+  <h2 id={titleId} class="mb-0">{title}</h2>
+
+  <div
+    class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow hover:border-accent-500 active:border-accent-500 overflow-hidden rounded-none border p-0 shadow-md transition-colors duration-300 md:rounded-3xl"
+  >
+    <div class="grid grid-cols-1 sm:grid-cols-2">
+      {
+        referenceItems.map((item) => (
+          <article class:list={item.classes}>
+            <div class="bg-accent-500/10 dark:bg-accent-500/5 flex flex-wrap items-start gap-3 rounded-xl px-2 py-4 sm:p-2">
+              <span class="bg-accent-500/50 grid h-8 w-8 place-items-center rounded-full text-small font-bold text-slate-800 dark:text-slate-200">
+                {item.number}
+              </span>
+
+              <div class="min-w-0 flex-1">
+                <h3 class="text-small mb-1 font-bold">
+                  {item.label}
+                </h3>
+                <p class="tool-reference-info mb-0">{item.check}</p>
+              </div>
+
+              <p class="tool-reference-info basis-full">{item.reading}</p>
+            </div>
+
+            <dl class="grid gap-2 sm:gap-1">
+              <div class="rounded-xl bg-green-500/10 px-2 py-4 sm:p-2 dark:bg-green-500/5">
+                <dt class="text-small mb-0 font-bold text-slate-800 uppercase dark:text-slate-200">
+                  Good
+                </dt>
+                <dd class="tool-reference-info mb-0">{item.good}</dd>
+              </div>
+
+              <div class="rounded-xl bg-orange-500/10 px-2 py-4 sm:p-2 dark:bg-orange-500/5">
+                <dt class="text-small mb-0 font-bold text-slate-800 uppercase dark:text-slate-200">
+                  Watch for
+                </dt>
+                <dd class="tool-reference-info mb-0">{item.concern}</dd>
+              </div>
+            </dl>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+
+  <p class="text-xsmall text-custom-500 mb-0">
+    <svg
+      class="text-accent-ink mr-2 inline-flex h-4 w-4 align-middle"
+      aria-hidden="true"
+    >
+      <use href={`${SiteIcons}#info`} />
+    </svg>
+    Want to understand more about the hardware inside your phone? Explore our <a
+      href="/phones"
+      class="text-accent-ink hover:underline">smartphone hub</a
+    > for clear, practical explainers.
+  </p>
+</section>
+
+<style>
+  @reference "#app.css";
+
+  .tool-reference-info {
+    @apply text-xsmall text-slate-700 dark:text-slate-300;
+  }
+</style>

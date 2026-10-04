@@ -1,0 +1,2371 @@
+---
+// src/pages/phones/tools/accelerometer-test.astro
+
+export const prerender = true;
+
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import { getToolBySlug } from "@/content/phones/tools";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+
+const tool = getToolBySlug("accelerometer-test");
+const ogImage = tool.image.src;
+const title = "Free Online Accelerometer Test: Motion, Tilt & G-Force";
+const metaDescription =
+  "Check X, Y, and Z acceleration, gravity, tilt, lift, shakes, peak force, noise, and 3D orientation directly in your browser.";
+
+const referenceItems = [
+  {
+    label: "Flat",
+    check:
+      "Place the phone screen-up in portrait on a stable, level surface, then use the bullseye level to judge whether the cyan bubble stays near the middle.",
+    reading:
+      "The bubble shows X/Y tilt, and the center ring represents level. Force is measured in g, where a stationary phone normally reports about 1 g from gravity.",
+    good: "The bubble settles inside the center ring, total force stays near 1 g, and motion remains still.",
+    concern:
+      "The bubble wanders while the phone is still, values jump heavily, or total force never settles.",
+  },
+  {
+    label: "Tilt",
+    check:
+      "Keep the phone in portrait and tilt left, right, forward, and backward while watching the independent X and Y inclinometer markers.",
+    reading:
+      "X and Y are the phone's two screen-plane axes. Each colored marker belongs to one axis; the center means level and movement away from center shows tilt on that axis.",
+    good: "Each marker moves smoothly along its own axis and returns toward center when the phone is level.",
+    concern:
+      "One direction barely reacts, moves the wrong way, or snaps instead of moving smoothly.",
+  },
+  {
+    label: "Lift",
+    check:
+      "Keep the phone flat, lift and lower it gently, and watch the phone indicator move along the vertical guide.",
+    reading:
+      "The indicator follows vertical acceleration after gravity is removed where the browser provides it. Peak shows the highest total force measured during the check.",
+    good: "The indicator reacts in both directions during the lift, then settles near the center again.",
+    concern:
+      "Lift motions barely register, freeze, or stay noisy after the phone is still again.",
+  },
+  {
+    label: "Shake",
+    check:
+      "Give the phone one short gentle shake and watch the phone indicator move side to side.",
+    reading:
+      "The indicator follows the strongest changing acceleration axis. Peak is the highest total force in g, and Shakes counts distinct strong motion bursts.",
+    good: "The indicator reacts in both directions, peak force rises, and shake count increases once.",
+    concern:
+      "No spike during movement or shake count rises while the phone is resting.",
+  },
+  {
+    label: "3D View",
+    check:
+      "Start the test, then tilt and rotate the phone slowly on each axis and watch the 3D model follow.",
+    reading:
+      "This view renders the phone's fused orientation (accelerometer, gyroscope, and compass where present), not an isolated accelerometer reading. It shows the orientation pipeline is working end to end.",
+    good: "The model tracks smoothly and matches the phone's real orientation on every axis, including flipping face-down.",
+    concern:
+      "The model sticks, tracks the wrong axis, or never responds to a slow, deliberate rotation.",
+  },
+];
+
+const motionChecks = [
+  {
+    id: "flat",
+    icon: "motion-flat",
+    label: "Flat",
+    meta: "Stillness and gravity",
+    hint: "Place the phone flat and watch whether total force settles near 1 g.",
+  },
+  {
+    id: "tilt",
+    icon: "motion-tilt",
+    label: "Tilt",
+    meta: "Two-axis response",
+    hint: "Tilt smoothly and confirm the X/Y inclinometer markers move independently.",
+  },
+  {
+    id: "lift",
+    icon: "motion-lift",
+    label: "Lift",
+    meta: "Vertical acceleration pulse",
+    hint: "Lift gently and watch for a brief vertical acceleration pulse that returns to zero.",
+  },
+  {
+    id: "shake",
+    icon: "motion-shake",
+    label: "Shake",
+    meta: "Alternating motion burst",
+    hint: "Shake gently once and confirm peak force and shake count rise briefly.",
+  },
+  {
+    id: "3d",
+    icon: "motion-3d",
+    label: "3D View",
+    meta: "Fused orientation model",
+    hint: "Tilt and rotate slowly and confirm the 3D model tracks the phone's real orientation.",
+  },
+];
+
+const sidebarGroups = [
+  {
+    title: "Select check",
+    openByDefault: true,
+    attributes: { "data-accel-accordion": "" },
+    items: motionChecks.map((check, index) => ({
+      label: check.label,
+      meta: check.meta,
+      visual: {
+        type: "icon" as const,
+        spriteUrl: ToolIcons,
+        spriteId: check.icon,
+      },
+      active: index === 0,
+      attributes: {
+        "data-accel-check": check.id,
+        "data-accel-tip": check.hint,
+      },
+    })),
+  },
+];
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{
+    tools: "Tools",
+    "accelerometer-test": "Accelerometer Sensor Check",
+  }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Accelerometer Tester: Motion Sensor Checks</h1>
+        <p>
+          Test five aspects of phone motion sensing directly in the browser.
+          Place the device flat to compare total force with gravity, tilt it to
+          follow the X and Y level markers, lift it to check vertical
+          acceleration, shake it to track peak force and motion bursts, and
+          rotate it to compare a fused 3D orientation model. Live panels show X,
+          Y, and Z g-force, sensor rate, total and peak force, shake count,
+          rolling motion data, and measured stillness evidence. The 3D view uses fused
+          orientation data where available rather than the accelerometer alone.
+          All readings come from browser-exposed sensor data, and the tool is not
+          a hardware calibration or service test.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="accel-shell"
+          fullscreenButtonId="accel-fullscreen"
+          actionBarLabel="Accelerometer actions"
+          stageStatsMode="fullscreen-only"
+          stageStatsFillMobile={true}
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              attributes: { id: "accel-start" },
+            },
+            {
+              label: "Reset",
+              tone: "danger",
+              attributes: { id: "accel-reset" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Status",
+              value: "Ready",
+              attributes: { "data-stat-id": "status" },
+              valueAttributes: { id: "accel-run-status" },
+            },
+            {
+              label: "Motion",
+              value: "Still",
+              attributes: { "data-stat-id": "motion" },
+              valueAttributes: { id: "accel-run-motion" },
+            },
+            {
+              label: "Rate",
+              value: "-- Hz",
+              attributes: { "data-stat-id": "rate" },
+              valueAttributes: { id: "accel-run-rate" },
+            },
+            {
+              label: "Force",
+              value: "0.00 g",
+              attributes: { "data-stat-id": "force" },
+              valueAttributes: { id: "total-g" },
+            },
+            {
+              label: "Peak",
+              value: "0.00 g",
+              attributes: { "data-stat-id": "peak" },
+              valueAttributes: { id: "peak-g" },
+            },
+            {
+              label: "Shakes",
+              value: "0",
+              attributes: { "data-stat-id": "shakes" },
+              valueAttributes: { id: "shake-count" },
+            },
+          ]}
+          stageStats={[
+            {
+              label: "Check",
+              value: "Flat",
+              attributes: { "data-stat-id": "check" },
+              valueAttributes: { id: "accel-stage-check-legend" },
+            },
+            {
+              label: "Status",
+              value: "Ready",
+              attributes: { "data-stat-id": "status" },
+              valueAttributes: { id: "accel-stage-status" },
+            },
+            {
+              label: "Motion",
+              value: "Still",
+              attributes: { "data-stat-id": "motion" },
+              valueAttributes: { id: "accel-stage-motion" },
+            },
+            {
+              label: "Rate",
+              value: "-- Hz",
+              attributes: { "data-stat-id": "rate" },
+              valueAttributes: { id: "accel-stage-rate" },
+            },
+            {
+              label: "Force",
+              value: "0.00 g",
+              attributes: { "data-stat-id": "force" },
+              valueAttributes: { id: "accel-stage-force" },
+            },
+            {
+              label: "Peak",
+              value: "0.00 g",
+              attributes: { "data-stat-id": "peak" },
+              valueAttributes: { id: "accel-stage-peak" },
+            },
+            {
+              label: "Shakes",
+              value: "0",
+              attributes: { "data-stat-id": "shakes" },
+              valueAttributes: { id: "accel-stage-shakes" },
+            },
+          ]}
+        >
+          <div
+            id="accel-stage"
+            class="accel-stage"
+            data-check="flat"
+          >
+            <div class="accel-visual" aria-hidden="true">
+              <div class="accel-check-visual accel-check-visual--flat">
+                <div class="accel-bullseye-level"></div>
+              </div>
+              <div class="accel-check-visual accel-check-visual--tilt">
+                <div class="accel-inclinometer">
+                  <span
+                    class="accel-inclinometer-axis accel-inclinometer-axis--x"
+                  >
+                    <i></i>
+                  </span>
+                  <span
+                    class="accel-inclinometer-axis accel-inclinometer-axis--y"
+                  >
+                    <i></i>
+                  </span>
+                  <span class="accel-inclinometer-center"></span>
+                </div>
+              </div>
+              <div class="accel-check-visual accel-check-visual--lift">
+                <div class="accel-motion-scope">
+                  <div class="accel-motion-tile accel-motion-tile--lift">
+                    <span class="accel-lift-phone"></span>
+                    <span class="accel-lift-arrow accel-lift-arrow--up"></span>
+                    <span class="accel-lift-arrow accel-lift-arrow--down"
+                    ></span>
+                  </div>
+                </div>
+              </div>
+              <div class="accel-check-visual accel-check-visual--shake">
+                <div class="accel-motion-scope">
+                  <div class="accel-motion-tile accel-motion-tile--shake">
+                    <span class="accel-shake-phone"></span>
+                    <span class="accel-shake-arrow accel-shake-arrow--left"
+                    ></span>
+                    <span class="accel-shake-arrow accel-shake-arrow--right"
+                    ></span>
+                  </div>
+                </div>
+              </div>
+              <div class="accel-check-visual accel-check-visual--3d">
+                <div class="accel-3d-scene">
+                  <div id="accel-3d-stage" class="accel-3d-stage">
+                    <span class="accel-3d-face accel-3d-face--front">
+                      <span class="accel-3d-notch"></span>
+                    </span>
+                    <span class="accel-3d-face accel-3d-face--back"></span>
+                  </div>
+                </div>
+              </div>
+              <div id="level-dot" class="level-dot"></div>
+            </div>
+            <div
+              id="accel-pause-notice"
+              class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-none absolute top-1/2 left-1/2 z-6 grid w-[min(18rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-1 rounded-2xl border px-4 py-3 text-center shadow-md"
+              hidden
+              role="status"
+              aria-live="polite"
+            >
+              <strong class="text-small leading-tight text-slate-800 dark:text-slate-200"
+                >Paused</strong
+              >
+              <span class="text-xsmall leading-snug text-slate-700 dark:text-slate-300"
+                >Press Resume to continue in fullscreen.</span
+              >
+            </div>
+            <span id="accel-stage-info" class="sr-only">
+              Place the phone flat and start the test when you are ready.
+            </span>
+          </div>
+
+          <p slot="dockLead" id="accel-dock-tip">
+            {motionChecks[0]?.hint}
+          </p>
+        </ToolRuntime>
+
+        <div
+          class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow grid gap-2 rounded-xl border p-2.5 shadow-md sm:gap-3 sm:rounded-2xl sm:p-3"
+          aria-label="Live accelerometer readouts"
+        >
+          <section
+            class="border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+            aria-label="Live Axes"
+          >
+            <div class="flex min-w-0 items-baseline justify-between gap-3">
+              <strong class="sensor-panel-title">Live Axes</strong>
+              <span class="sensor-panel-unit">G-Force</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 sm:gap-3">
+              <div class="axis-stat">
+                <div class="axis-stat-row">
+                  <span class="axis-stat-label">X</span>
+                  <strong id="x-value" class="axis-stat-value">0.00</strong>
+                </div>
+                <div class="axis-track"><i id="x-bar"></i></div>
+              </div>
+              <div class="axis-stat">
+                <div class="axis-stat-row">
+                  <span class="axis-stat-label">Y</span>
+                  <strong id="y-value" class="axis-stat-value">0.00</strong>
+                </div>
+                <div class="axis-track"><i id="y-bar"></i></div>
+              </div>
+              <div class="axis-stat">
+                <div class="axis-stat-row">
+                  <span class="axis-stat-label">Z</span>
+                  <strong id="z-value" class="axis-stat-value">0.00</strong>
+                </div>
+                <div class="axis-track"><i id="z-bar"></i></div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+            aria-label="Diagnostic checks"
+          >
+            <div class="flex min-w-0 items-baseline justify-between gap-3">
+              <strong class="sensor-panel-title">Diagnostics</strong>
+              <span id="graph-window-label" class="sensor-panel-unit"
+                >Last 48 samples</span
+              >
+            </div>
+            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Motion Delta</span>
+                  <strong id="motion-delta" class="accel-diag-value"
+                    >0.00 g</strong
+                  >
+                </div>
+                <small id="motion-delta-state" class="accel-diag-state"
+                  >Stable</small
+                >
+              </div>
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Peak Delta</span>
+                  <strong id="peak-delta" class="accel-diag-value"
+                    >0.00 g</strong
+                  >
+                </div>
+                <small id="peak-delta-state" class="accel-diag-state"
+                  >No spike yet</small
+                >
+              </div>
+            </div>
+
+            <canvas
+              id="accel-graph"
+              class="accel-graph"
+              aria-label="Rolling accelerometer graph"></canvas>
+          </section>
+
+          <section
+            class="border-accent-line grid gap-2 rounded-xl border p-2.5 sm:gap-3 sm:rounded-2xl sm:p-3"
+            aria-label="Measured evidence"
+          >
+            <div class="flex min-w-0 items-baseline justify-between gap-3">
+              <strong class="sensor-panel-title">Measured Evidence</strong>
+              <span id="evidence-source" class="sensor-panel-unit">--</span>
+            </div>
+            <p class="text-xsmall m-0 text-slate-700 dark:text-slate-300">
+              A still phone should read very close to 1 g -- the gap below is
+              a real accelerometer scale-factor error. This does not measure
+              angular accuracy, gyroscope drift, or cross-axis alignment.
+            </p>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Axes present</span>
+                  <strong id="evidence-axes" class="accel-diag-value"
+                    >--</strong
+                  >
+                </div>
+                <small class="accel-diag-state">X / Y / Z</small>
+              </div>
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Measured rate</span>
+                  <strong id="evidence-rate" class="accel-diag-value"
+                    >-- Hz</strong
+                  >
+                </div>
+                <small class="accel-diag-state">Sample delivery</small>
+              </div>
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Gravity error</span>
+                  <strong id="evidence-gravity" class="accel-diag-value"
+                    >-- g</strong
+                  >
+                </div>
+                <small id="evidence-gravity-state" class="accel-diag-state"
+                  >Collecting</small
+                >
+              </div>
+              <div class="accel-diag-card">
+                <div class="accel-diag-row">
+                  <span class="accel-diag-label">Stillness noise</span>
+                  <strong id="evidence-noise" class="accel-diag-value"
+                    >-- g</strong
+                  >
+                </div>
+                <small id="evidence-noise-state" class="accel-diag-state"
+                  >Collecting</small
+                >
+              </div>
+            </div>
+          </section>
+        </div>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="lg:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Accelerometer checks and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    :global(#accel-start.is-running) {
+      @apply bg-linear-to-br from-yellow-400 to-yellow-600;
+    }
+
+    .accel-stage {
+      @apply relative grid size-full place-items-center;
+      container-type: size;
+    }
+
+    .accel-visual {
+      @apply pointer-events-none relative z-1 aspect-square sm:aspect-video;
+      width: min(83.333%, 83.333cqh, 64rem);
+    }
+
+    @media (width >= 40rem) {
+      .accel-visual {
+        width: min(83.333%, calc(83.333cqh * 16 / 9), 64rem);
+      }
+    }
+
+    .accel-check-visual {
+      @apply absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 ease-out;
+    }
+
+    .accel-check-visual--flat {
+      @apply rounded-full bg-[linear-gradient(rgb(255_255_255/0.05)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.05)_1px,transparent_1px)] bg-size-[64px_64px];
+      background-position: calc(50% + 32px) calc(50% + 32px);
+    }
+
+    .accel-bullseye-level {
+      @apply relative aspect-square w-[80%] max-w-[350px] rounded-full border-4 border-blue-500 bg-[radial-gradient(circle,transparent_0_25px,rgb(142_197_255/0.20)_26px_28px,transparent_29px),radial-gradient(circle,transparent_0_30%,rgb(142_197_255/0.30)_31%_32%,transparent_33%),radial-gradient(circle,transparent_0_50%,rgb(142_197_255/0.40)_51%_52%,transparent_53%)] ring-10 ring-blue-300/10;
+    }
+
+    .accel-bullseye-level::before,
+    .accel-bullseye-level::after {
+      @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-white bg-blue-300/10 content-[''];
+    }
+
+    .accel-bullseye-level::before {
+      @apply h-px w-full;
+    }
+
+    .accel-bullseye-level::after {
+      @apply h-full w-px;
+    }
+
+    .accel-inclinometer {
+      @apply relative aspect-square w-[80%] max-w-[350px] rounded-4xl border-2 border-blue-500 ring-10 ring-blue-300/10;
+    }
+
+    .accel-inclinometer::before {
+      @apply absolute inset-[25%] rounded-4xl bg-blue-300/10 content-[''];
+    }
+
+    .accel-inclinometer-axis {
+      @apply absolute top-1/2 left-1/2 z-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300/50;
+    }
+
+    .accel-inclinometer-axis::after {
+      @apply text-xsmall absolute leading-none font-bold text-white;
+    }
+
+    .accel-inclinometer-axis--x {
+      @apply h-0.5 w-[80%];
+    }
+
+    .accel-inclinometer-axis--x::after {
+      @apply top-1/2 -right-5 -translate-y-1/2 content-['X'];
+    }
+
+    .accel-inclinometer-axis--y {
+      @apply h-[80%] w-0.5;
+    }
+
+    .accel-inclinometer-axis--y::after {
+      @apply -top-5 left-1/2 -translate-x-1/2 content-['Y'];
+    }
+
+    .accel-inclinometer-axis i {
+      @apply absolute top-1/2 left-1/2 size-4 rounded-full border-2 border-white bg-blue-500 ring-4 ring-blue-300/10;
+    }
+
+    .accel-inclinometer-axis--x i {
+      transform: translate(calc(-50% + var(--accel-tilt-x, 0px)), -50%);
+    }
+
+    .accel-inclinometer-axis--y i {
+      transform: translate(-50%, calc(-50% + var(--accel-tilt-y, 0px)));
+    }
+
+    .accel-inclinometer-center {
+      @apply absolute top-1/2 left-1/2 z-2 -translate-x-1/2 -translate-y-1/2 size-4 rounded-full border border-white/40 bg-blue-300/20;
+    }
+
+    .accel-motion-scope {
+      @apply relative grid h-full w-full place-items-center;
+    }
+
+    .accel-motion-tile {
+      @apply relative aspect-square w-[80%] max-w-[350px] overflow-hidden rounded-4xl border-2 border-blue-500 ring-10 ring-blue-300/10;
+    }
+
+    .accel-motion-tile::before {
+      @apply absolute z-1 rounded-full bg-blue-300/10 content-[''];
+    }
+
+    .accel-motion-tile--lift::before {
+      @apply top-[10%] bottom-[10%] left-1/2 w-1.5 -translate-x-1/2;
+    }
+
+    .accel-motion-tile--shake::before {
+      @apply top-1/2 right-[10%] left-[10%] h-1.5 -translate-y-1/2;
+    }
+
+    .accel-lift-phone,
+    .accel-shake-phone {
+      @apply absolute z-3 h-25 w-15 rounded-xl border border-white bg-white/10 ring-5 ring-blue-300/20;
+    }
+
+    .accel-lift-phone {
+      @apply top-1/2 left-1/2;
+      transform: translate(-50%, calc(-50% - var(--accel-lift-offset, 0px)));
+      transition: transform 90ms linear;
+    }
+
+    .accel-lift-phone::before,
+    .accel-shake-phone::before {
+      @apply absolute top-1.5 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-blue-300 content-[''];
+    }
+
+    .accel-lift-arrow,
+    .accel-shake-arrow {
+      @apply absolute z-4 size-4 border-t-[4px] border-l-[4px] border-current drop-shadow-md;
+    }
+
+    .accel-lift-arrow {
+      @apply left-1/2 text-blue-300;
+    }
+
+    .accel-lift-arrow--up {
+      @apply top-[10%] -translate-x-1/2 rotate-45;
+    }
+
+    .accel-lift-arrow--down {
+      @apply bottom-[10%] -translate-x-1/2 rotate-[225deg];
+    }
+
+    .accel-shake-phone {
+      @apply top-1/2 left-1/2;
+      transform: translate(calc(-50% + var(--accel-shake-offset, 0px)), -50%)
+        rotate(var(--accel-shake-rotation, 0deg));
+      transition: transform 70ms linear;
+    }
+
+    .accel-shake-arrow {
+      @apply top-1/2 text-blue-300;
+    }
+
+    .accel-shake-arrow--left {
+      @apply left-[10%] -translate-y-1/2 -rotate-45;
+    }
+
+    .accel-shake-arrow--right {
+      @apply right-[10%] -translate-y-1/2 rotate-[135deg];
+    }
+
+    .accel-3d-scene {
+      @apply relative grid h-full w-full place-items-center;
+      perspective: 900px;
+    }
+
+    .accel-3d-stage {
+      @apply relative h-44 w-22;
+      transform-style: preserve-3d;
+      transform: rotateZ(var(--accel-3d-z, 0deg)) rotateX(var(--accel-3d-x, 0deg))
+        rotateY(var(--accel-3d-y, 0deg));
+      transition: transform 90ms linear;
+    }
+
+    .accel-3d-face {
+      @apply absolute inset-0 rounded-3xl border-2 border-white bg-blue-500/30 ring-8 ring-blue-300/10;
+      backface-visibility: hidden;
+      transform: translateZ(0.5rem);
+    }
+
+    .accel-3d-face--back {
+      @apply bg-blue-950/70;
+      transform: rotateY(180deg) translateZ(0.5rem);
+    }
+
+    .accel-3d-notch {
+      @apply absolute top-2 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-white/80;
+    }
+
+    .accel-stage[data-check="flat"] .accel-check-visual--flat,
+    .accel-stage[data-check="tilt"] .accel-check-visual--tilt,
+    .accel-stage[data-check="lift"] .accel-check-visual--lift,
+    .accel-stage[data-check="shake"] .accel-check-visual--shake,
+    .accel-stage[data-check="3d"] .accel-check-visual--3d {
+      @apply opacity-100;
+    }
+
+    @supports not (translate: -50% -50%) {
+      .accel-bullseye-level::before,
+      .accel-bullseye-level::after,
+      .accel-inclinometer-axis,
+      .accel-inclinometer-center {
+        transform: translate(-50%, -50%);
+      }
+
+      .accel-inclinometer-axis--x::after {
+        transform: translateY(-50%);
+      }
+
+      .accel-inclinometer-axis--y::after,
+      .accel-motion-tile--lift::before,
+      .accel-lift-phone::before,
+      .accel-3d-notch {
+        transform: translateX(-50%);
+      }
+
+      .level-dot {
+        transform: translate(
+          calc(-50% + var(--dot-x, 0px)),
+          calc(-50% + var(--dot-y, 0px))
+        );
+      }
+
+      .axis-track i {
+        transform: translateY(-50%) translateX(var(--axis-offset, 0%))
+          scaleX(var(--axis-direction, 1));
+      }
+    }
+
+    .level-dot {
+      @apply absolute top-1/2 left-1/2 z-3 size-4 rounded-full border-2 border-white bg-blue-500 ring-4 ring-blue-300/10;
+      translate: calc(-50% + var(--dot-x, 0px)) calc(-50% + var(--dot-y, 0px));
+      transition:
+        opacity 160ms ease,
+        translate 80ms linear;
+    }
+
+    .accel-stage:not([data-check="flat"]) .level-dot {
+      @apply opacity-0;
+    }
+
+    .axis-track {
+      @apply border-accent-line bg-accent-wash relative h-4 w-full overflow-hidden rounded-full border;
+    }
+
+    .axis-track::before {
+      @apply absolute top-0 bottom-0 left-1/2 w-px bg-white/50 content-[''];
+    }
+
+    .axis-track i {
+      @apply absolute top-1/2 left-1/2 origin-left size-4 -translate-y-1/2 rounded-full border-4 border-slate-700 dark:border-slate-100;
+      width: var(--axis-width, 0%);
+      transform: translateX(var(--axis-offset, 0%))
+        scaleX(var(--axis-direction, 1));
+      transition:
+        width 80ms linear,
+        transform 80ms linear;
+    }
+
+    .axis-stat {
+      @apply border-accent-line grid gap-1.5 rounded-xl border bg-custom-100 px-2.5 py-2 sm:gap-2 sm:px-3 dark:bg-custom-700;
+    }
+
+    .axis-stat-row {
+      @apply flex items-center justify-between gap-2 sm:gap-4;
+    }
+
+    .axis-stat-label {
+      @apply text-xsmall font-bold text-slate-800 uppercase dark:text-slate-200;
+    }
+
+    .axis-stat-value {
+      @apply text-small sm:text-h4 text-slate-700 dark:text-slate-300;
+    }
+
+    .accel-graph {
+      @apply border-accent-line text-accent-ink block h-15 sm:h-20 w-full rounded-xl border bg-custom-100 dark:bg-custom-700;
+    }
+
+    .accel-diag-card {
+      @apply border-accent-line grid gap-2 rounded-xl border bg-custom-100 px-3 py-2 dark:bg-custom-700;
+    }
+
+    .accel-diag-row {
+      @apply flex min-w-0 items-baseline justify-between gap-2;
+    }
+
+    .accel-diag-label {
+      @apply text-xsmall min-w-0 font-medium text-slate-800 dark:text-slate-200;
+    }
+
+    .accel-diag-value {
+      @apply text-small shrink-0 text-slate-700 dark:text-slate-300;
+    }
+
+    .accel-diag-state {
+      @apply text-xsmall block text-slate-700 dark:text-slate-300;
+    }
+
+    .sensor-panel-title {
+      @apply text-small text-slate-800 dark:text-slate-200;
+    }
+
+    .sensor-panel-unit {
+      @apply text-xsmall text-right text-slate-700 dark:text-slate-300;
+    }
+  </style>
+
+  <script>
+    import { createSensorWatchdog } from "@/utils/phones/tools/sensor";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      onPageHide,
+      observeResize,
+      type ResizeHandle,
+    } from "@/utils/phones/tools/lifecycle";
+    import { createRafScheduler } from "@/utils/site/raf";
+    import {
+      requestMotionPermission,
+      requestOrientationPermission,
+      getMotionPermissionState,
+      describeSensorUnavailability,
+      type SensorPermissionReason,
+    } from "@/utils/phones/tools/capabilities";
+    import {
+      getScreenAngle,
+      remapDeviceAxes,
+      onOrientationChange,
+      type OrientationAngle,
+    } from "@/utils/phones/tools/orientation";
+
+    type GraphSeries = {
+      values: readonly number[];
+      sampleCount: number;
+      min: number;
+      max: number;
+      baseline?: number;
+      label: string;
+    };
+    type GenericMotionSensor = EventTarget & {
+      readonly x?: number;
+      readonly y?: number;
+      readonly z?: number;
+      start(): void;
+      stop(): void;
+    };
+    type GenericMotionSensorCtor = new (options?: {
+      frequency?: number;
+    }) => GenericMotionSensor;
+    type WindowWithGenericSensors = Window & {
+      GravitySensor?: GenericMotionSensorCtor;
+      LinearAccelerationSensor?: GenericMotionSensorCtor;
+    };
+
+    const ORIENTATION_STALE_MS = 2500;
+    const GRAVITY_LPF_ALPHA = 0.08;
+
+    const checkHints = {
+      flat: "Place the phone flat and watch whether total force settles near 1 g.",
+      tilt: "Tilt smoothly and confirm the X/Y inclinometer markers move independently.",
+      lift: "Lift gently and watch for a brief vertical acceleration pulse that returns to zero.",
+      shake:
+        "Shake gently once and confirm peak force and shake count rise briefly.",
+      "3d": "Tilt and rotate slowly and confirm the 3D model tracks the phone's real orientation.",
+    } as const;
+
+    type MotionCheck = keyof typeof checkHints;
+
+    const visibleStatsByCheck = {
+      flat: ["check", "status", "motion", "rate", "force"] as const,
+      tilt: ["check", "status", "motion", "rate", "force"] as const,
+      lift: ["check", "status", "motion", "rate", "force", "peak"] as const,
+      shake: ["check", "status", "motion", "rate", "peak", "shakes"] as const,
+      "3d": ["check", "status", "motion"] as const,
+    } as const;
+
+    const shell = document.getElementById(
+      "accel-shell",
+    ) as HTMLDivElement | null;
+    const stage = document.getElementById(
+      "accel-stage",
+    ) as HTMLDivElement | null;
+    const startButton = document.getElementById("accel-start");
+    const resetButton = document.getElementById("accel-reset");
+    const fullscreenButton = document.getElementById("accel-fullscreen");
+    const pauseNotice = document.getElementById("accel-pause-notice");
+    const levelDot = document.getElementById("level-dot");
+    const accel3dStage = document.getElementById("accel-3d-stage");
+    const stageCheckLegend = document.getElementById(
+      "accel-stage-check-legend",
+    );
+    const runStatus = document.getElementById("accel-run-status");
+    const stageStatus = document.getElementById("accel-stage-status");
+    const stageInfo = document.getElementById("accel-stage-info");
+    const dockTip = document.getElementById("accel-dock-tip");
+    const runMotionState = document.getElementById("accel-run-motion");
+    const stageMotionState = document.getElementById("accel-stage-motion");
+    const runRate = document.getElementById("accel-run-rate");
+    const stageForce = document.getElementById("accel-stage-force");
+    const stagePeak = document.getElementById("accel-stage-peak");
+    const stageShakes = document.getElementById("accel-stage-shakes");
+    const stageRate = document.getElementById("accel-stage-rate");
+    const totalGLabel = document.getElementById("total-g");
+    const peakGLabel = document.getElementById("peak-g");
+    const shakeCountLabel = document.getElementById("shake-count");
+    const motionDeltaLabel = document.getElementById("motion-delta");
+    const motionDeltaStateLabel = document.getElementById("motion-delta-state");
+    const peakDeltaLabel = document.getElementById("peak-delta");
+    const peakDeltaStateLabel = document.getElementById("peak-delta-state");
+    const graphWindowLabel = document.getElementById("graph-window-label");
+    const evidenceSourceLabel = document.getElementById("evidence-source");
+    const evidenceAxesLabel = document.getElementById("evidence-axes");
+    const evidenceRateLabel = document.getElementById("evidence-rate");
+    const evidenceGravityLabel = document.getElementById("evidence-gravity");
+    const evidenceGravityStateLabel = document.getElementById(
+      "evidence-gravity-state",
+    );
+    const evidenceNoiseLabel = document.getElementById("evidence-noise");
+    const evidenceNoiseStateLabel = document.getElementById(
+      "evidence-noise-state",
+    );
+    const xValue = document.getElementById("x-value");
+    const yValue = document.getElementById("y-value");
+    const zValue = document.getElementById("z-value");
+    const xBar = document.getElementById("x-bar");
+    const yBar = document.getElementById("y-bar");
+    const zBar = document.getElementById("z-bar");
+    const graphCanvas = document.getElementById(
+      "accel-graph",
+    ) as HTMLCanvasElement | null;
+    const runStats = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-stat-id]"),
+    );
+    const checkButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-accel-check]"),
+    );
+
+    const pageController = new AbortController();
+    const { signal } = pageController;
+    const wakeLock = createWakeLock({ signal });
+
+    onPageHide(cleanupSensorPage);
+    let graphResizeObserver: ResizeHandle | null = null;
+    let visualResizeObserver: ResizeHandle | null = null;
+    let stopOrientationWatch: (() => void) | null = null;
+    const accelVisual = document.querySelector<HTMLElement>(".accel-visual");
+
+    let visualScale = 1;
+    const VISUAL_SCALE_REFERENCE_HALF_EXTENT = 165;
+
+    function updateVisualScale(): void {
+      if (!accelVisual) return;
+      const rect = accelVisual.getBoundingClientRect();
+      const halfExtent = Math.min(rect.width, rect.height) / 2;
+      visualScale =
+        halfExtent > 0 ? halfExtent / VISUAL_SCALE_REFERENCE_HALF_EXTENT : 1;
+    }
+
+    let started = false;
+    let startInFlight = false;
+    let startCancelled = false;
+    let pausedForFullscreen = false;
+    let shouldResumeAfterFullscreen = false;
+    let motionPermissionGranted = false;
+    let orientationPermissionGranted = false;
+    let currentCheck: MotionCheck = "flat";
+    let hasGravityData = false;
+    let hasAnyMotionData = false;
+    let axisXAvailable = false;
+    let axisYAvailable = false;
+    let axisZAvailable = false;
+    let linearXAvailable = false;
+    let linearYAvailable = false;
+    let linearZAvailable = false;
+    let latestX = 0;
+    let latestY = 0;
+    let latestZ = 0;
+    let visualX = 0;
+    let visualY = 0;
+    let peakG = 0;
+    let peakDelta = 0;
+    let liftPeakSignal = 0;
+    let latestLiftSignal = 0;
+    let latestShakeSignal = 0;
+    let shakeCount = 0;
+    let sampleCount = 0;
+    let lastShakeAt = 0;
+    let animationFrame = 0;
+    let lastSampleTime = 0;
+    let graphWidth = 0;
+    let graphHeight = 0;
+    let pendingTotalG: number | null = null;
+    let pendingDelta = 0;
+    const forceHistory: number[] = [];
+    const stillForceHistory: number[] = [];
+    const deltaHistory: number[] = [];
+    const tiltHistory: number[] = [];
+    const liftHistory: number[] = [];
+    const shakeHistory: number[] = [];
+    const intervalHistory: number[] = [];
+    let lastUiRefresh = 0;
+    const uiRefreshInterval = 1000 / 12;
+    const uiScheduler = createRafScheduler(() => {
+      const now = performance.now();
+      if (now - lastUiRefresh < uiRefreshInterval) {
+        uiScheduler.request();
+        return;
+      }
+      lastUiRefresh = now;
+      updateSensorUi(pendingTotalG, pendingDelta);
+    });
+
+    let gravityEstX = 0;
+    let gravityEstY = 0;
+    let gravityEstZ = 9.80665;
+    let gravityEstReady = false;
+
+    let orientationAvailable = false;
+    let latestAlpha = 0;
+    let latestBeta = 0;
+    let latestGamma = 0;
+    let orientationLastSampleTime = 0;
+    let screenAngle: OrientationAngle = getScreenAngle();
+
+    let gravitySensor: GenericMotionSensor | null = null;
+    let linearAccelSensor: GenericMotionSensor | null = null;
+    let usingGenericSensors = false;
+    let latestGenericLinear: { x: number; y: number; z: number } | null = null;
+    let genericSensorLastSampleTime = 0;
+
+    function showRuntimeControls(): void {
+      shell?.dispatchEvent(
+        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
+      );
+    }
+
+    function format(value: number, suffix = ""): string {
+      return `${value.toFixed(2)}${suffix}`;
+    }
+
+    function finiteNumber(value: number | null | undefined): number | null {
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+
+    function setStatus(text: string): void {
+      if (runStatus) runStatus.textContent = text;
+      if (stageStatus) stageStatus.textContent = text;
+    }
+
+    function setAxisBar(bar: HTMLElement | null, valueG: number, maxG = 3): void {
+      if (!bar) return;
+      const width = Math.min(100, (Math.abs(valueG) / maxG) * 100);
+      bar.style.setProperty("--axis-width", `${width / 2}%`);
+      bar.style.setProperty("--axis-direction", valueG < 0 ? "-1" : "1");
+      bar.style.setProperty("--axis-offset", valueG < 0 ? "-100%" : "0%");
+    }
+
+    function hasCheckData(check: MotionCheck): boolean {
+      if (check === "flat" || check === "tilt") return hasGravityData;
+      if (check === "lift") return linearZAvailable || hasGravityData;
+      if (check === "3d")
+        return (
+          orientationAvailable &&
+          performance.now() - orientationLastSampleTime < ORIENTATION_STALE_MS
+        );
+      return (
+        linearXAvailable ||
+        linearYAvailable ||
+        linearZAvailable ||
+        hasGravityData
+      );
+    }
+
+    function hasAnyLinearData(): boolean {
+      return linearXAvailable || linearYAvailable || linearZAvailable;
+    }
+
+    function updateCheckAvailability(): void {
+      checkButtons.forEach((button) => {
+        const check = button.dataset.accelCheck as MotionCheck | undefined;
+        if (!check) return;
+        const unavailable = started && sampleCount > 0 && !hasCheckData(check);
+        button.disabled = unavailable;
+        button.title = unavailable
+          ? check === "flat" || check === "tilt"
+            ? "Gravity-inclusive acceleration data is unavailable."
+            : check === "lift"
+              ? "Vertical acceleration data is unavailable."
+              : check === "3d"
+                ? "Orientation data is unavailable."
+                : "Usable acceleration data is unavailable."
+          : "";
+      });
+    }
+
+    function average(values: number[]): number {
+      if (!values.length) return 0;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function standardDeviation(values: number[]): number {
+      if (values.length < 2) return 0;
+      const mean = average(values);
+      const variance =
+        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+        (values.length - 1);
+      return Math.sqrt(variance);
+    }
+
+    function graphLineColor(): { r: number; g: number; b: number } {
+      const fallback = { r: 142, g: 81, b: 255 };
+      if (!graphCanvas) return fallback;
+      const computed = getComputedStyle(graphCanvas).color;
+      const match = computed.match(
+        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/,
+      );
+      if (!match) return fallback;
+      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
+    }
+
+    function graphColors(): { grid: string; baseline: string; line: string } {
+      const c = graphLineColor();
+      const withAlpha = (alpha: number): string =>
+        `rgb(${c.r} ${c.g} ${c.b} / ${alpha})`;
+      return {
+        grid: withAlpha(0.1),
+        baseline: withAlpha(0.35),
+        line: withAlpha(0.9),
+      };
+    }
+
+    function resizeGraph(): void {
+      if (!graphCanvas) return;
+      const rect = graphCanvas.getBoundingClientRect();
+      graphWidth = rect.width;
+      graphHeight = rect.height;
+      if (graphWidth <= 0 || graphHeight <= 0) return;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      graphCanvas.width = Math.round(graphWidth * ratio);
+      graphCanvas.height = Math.round(graphHeight * ratio);
+      const context = graphCanvas.getContext("2d");
+      context?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawGraph();
+    }
+
+    function renderLevelDot(): void {
+      const { x: remappedX, y: remappedY } = remapDeviceAxes(
+        visualX,
+        visualY,
+        screenAngle,
+      );
+      const dotExtent = 112 * visualScale;
+      const tiltExtent = 86 * visualScale;
+      levelDot?.style.setProperty(
+        "--dot-x",
+        `${Math.max(-dotExtent, Math.min(dotExtent, remappedX * 12 * visualScale))}px`,
+      );
+      levelDot?.style.setProperty(
+        "--dot-y",
+        `${Math.max(-dotExtent, Math.min(dotExtent, remappedY * -12 * visualScale))}px`,
+      );
+      stage?.style.setProperty(
+        "--accel-tilt-x",
+        `${Math.max(-tiltExtent, Math.min(tiltExtent, remappedX * -9 * visualScale))}px`,
+      );
+      stage?.style.setProperty(
+        "--accel-tilt-y",
+        `${Math.max(-tiltExtent, Math.min(tiltExtent, remappedY * 9 * visualScale))}px`,
+      );
+    }
+
+    function render3dStage(): void {
+      accel3dStage?.style.setProperty("--accel-3d-z", `${-latestAlpha}deg`);
+      accel3dStage?.style.setProperty("--accel-3d-x", `${-latestBeta}deg`);
+      accel3dStage?.style.setProperty("--accel-3d-y", `${latestGamma}deg`);
+    }
+
+    function renderMotionVisuals(): void {
+      const liftExtent = 46 * visualScale;
+      const shakeExtent = 56 * visualScale;
+      stage?.style.setProperty(
+        "--accel-lift-offset",
+        `${Math.max(-liftExtent, Math.min(liftExtent, latestLiftSignal * 72 * visualScale))}px`,
+      );
+      stage?.style.setProperty(
+        "--accel-shake-offset",
+        `${Math.max(-shakeExtent, Math.min(shakeExtent, latestShakeSignal * 34 * visualScale))}px`,
+      );
+      stage?.style.setProperty(
+        "--accel-shake-rotation",
+        `${Math.max(-10, Math.min(10, latestShakeSignal * 5))}deg`,
+      );
+    }
+
+    function handleNoData(): void {
+      if (!started || sampleCount > 0) return;
+      setStatus("No data");
+      if (stageInfo) {
+        stageInfo.textContent =
+          "No accelerometer data has arrived yet. Move the phone once or check browser support.";
+      }
+    }
+
+    function handleStreamLoss(): void {
+      if (!started || sampleCount === 0) return;
+      hasGravityData = false;
+      hasAnyMotionData = false;
+      axisXAvailable = false;
+      axisYAvailable = false;
+      axisZAvailable = false;
+      linearXAvailable = false;
+      linearYAvailable = false;
+      linearZAvailable = false;
+      gravityEstReady = false;
+      lastSampleTime = 0;
+      setStatus("Signal lost");
+      updateCheckAvailability();
+      if (xValue) xValue.textContent = "--";
+      if (yValue) yValue.textContent = "--";
+      if (zValue) zValue.textContent = "--";
+      [xBar, yBar, zBar].forEach((bar) => setAxisBar(bar, 0));
+      if (totalGLabel) totalGLabel.textContent = "--";
+      if (stageForce) stageForce.textContent = "--";
+      if (stageInfo) {
+        stageInfo.textContent =
+          "Motion updates stopped. Move the phone again or check browser support.";
+      }
+    }
+
+    const sensorWatchdog = createSensorWatchdog({
+      onNoData: handleNoData,
+      onStale: handleStreamLoss,
+    });
+
+    function updateVisibleStats(): void {
+      const visible = new Set<string>(visibleStatsByCheck[currentCheck]);
+      runStats.forEach((item) => {
+        item.hidden = !visible.has(item.dataset.statId || "");
+      });
+    }
+
+    function currentTiltSignal(): number {
+      return hasGravityData ? Math.hypot(latestX, latestY) / 9.80665 : 0;
+    }
+
+    function currentGraphSeries(): GraphSeries {
+      if (currentCheck === "tilt") {
+        const tilt = currentTiltSignal();
+        const values = tiltHistory.length ? tiltHistory : [tilt];
+        const maxTilt = Math.max(0.5, tilt, ...tiltHistory);
+        return {
+          values,
+          sampleCount: tiltHistory.length,
+          min: 0,
+          max: maxTilt,
+          baseline: 0,
+          label: "Tilt amount",
+        };
+      }
+
+      if (currentCheck === "lift") {
+        const values = liftHistory.length ? liftHistory : [0];
+        const scale = Math.max(
+          0.35,
+          liftPeakSignal,
+          ...liftHistory.map(Math.abs),
+        );
+        return {
+          values,
+          sampleCount: liftHistory.length,
+          min: -scale,
+          max: scale,
+          baseline: 0,
+          label: "Lift trace",
+        };
+      }
+
+      if (currentCheck === "shake") {
+        const values = shakeHistory.length ? shakeHistory : [0];
+        const scale = Math.max(0.8, peakDelta, ...shakeHistory.map(Math.abs));
+        return {
+          values,
+          sampleCount: shakeHistory.length,
+          min: -scale,
+          max: scale,
+          baseline: 0,
+          label: "Shake trace",
+        };
+      }
+
+      const values = forceHistory.length ? forceHistory : [1];
+      const maxForce = Math.max(1.9, ...forceHistory, peakG, 1.15);
+      const minForce = Math.min(0.2, ...forceHistory, 0.8);
+      return {
+        values,
+        sampleCount: forceHistory.length,
+        min: minForce,
+        max: maxForce,
+        baseline: 1,
+        label: "Total Force",
+      };
+    }
+
+    function updateGraphLabels(series: GraphSeries): void {
+      if (graphWindowLabel) {
+        const sampleLabel =
+          series.sampleCount > 0
+            ? `Last ${series.sampleCount} sample${series.sampleCount === 1 ? "" : "s"}`
+            : "No samples yet";
+        graphWindowLabel.textContent = `${series.label} - ${sampleLabel}`;
+      }
+    }
+
+    function drawGraph(series = currentGraphSeries()): void {
+      updateGraphLabels(series);
+      if (!graphCanvas || graphWidth <= 0 || graphHeight <= 0) return;
+      const context = graphCanvas.getContext("2d");
+      if (!context) return;
+
+      context.clearRect(0, 0, graphWidth, graphHeight);
+      const colors = graphColors();
+
+      context.strokeStyle = colors.grid;
+      context.lineWidth = 1;
+      for (let index = 1; index < 4; index += 1) {
+        const y = (graphHeight / 4) * index;
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(graphWidth, y);
+        context.stroke();
+      }
+
+      const values = series.values;
+      let minValue: number;
+      let maxValue: number;
+      if (series.baseline !== undefined) {
+        const deviation = Math.max(
+          series.baseline - series.min,
+          series.max - series.baseline,
+          0.001,
+        );
+        minValue = series.baseline - deviation;
+        maxValue = series.baseline + deviation;
+      } else {
+        minValue = series.min;
+        maxValue = series.max;
+      }
+      const span = Math.max(0.001, maxValue - minValue);
+
+      if (series.baseline !== undefined) {
+        const baselineY =
+          graphHeight - ((series.baseline - minValue) / span) * graphHeight;
+        context.strokeStyle = colors.baseline;
+        context.setLineDash([6, 6]);
+        context.beginPath();
+        context.moveTo(0, baselineY);
+        context.lineTo(graphWidth, baselineY);
+        context.stroke();
+        context.setLineDash([]);
+      }
+
+      if (values.length <= 1) return;
+
+      context.strokeStyle = colors.line;
+      context.lineWidth = 2.25;
+      context.lineJoin = "round";
+      context.lineCap = "round";
+      context.beginPath();
+
+      values.forEach((value, index) => {
+        const x = (index / (values.length - 1)) * graphWidth;
+        const y = graphHeight - ((value - minValue) / span) * graphHeight;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.stroke();
+    }
+
+    function updateDiagnostics(delta: number): void {
+      const hasStillnessWindow = stillForceHistory.length >= 8;
+      const noise = standardDeviation(stillForceHistory);
+      const gravityError = Math.abs(average(stillForceHistory) - 1);
+      const avgInterval = average(intervalHistory);
+      const sampleRate = avgInterval > 0 ? 1000 / avgInterval : 0;
+      const rateText = sampleRate > 0 ? `${sampleRate.toFixed(1)} Hz` : "-- Hz";
+
+      if (motionDeltaLabel)
+        motionDeltaLabel.textContent = `${delta.toFixed(2)} g`;
+      if (motionDeltaStateLabel) {
+        motionDeltaStateLabel.textContent =
+          delta < 0.35
+            ? "Stable"
+            : delta < 1.2
+              ? "Moving"
+              : delta < 3
+                ? "Strong motion"
+                : "Sharp spike";
+      }
+
+      if (peakDeltaLabel)
+        peakDeltaLabel.textContent = `${peakDelta.toFixed(2)} g`;
+      if (peakDeltaStateLabel) {
+        peakDeltaStateLabel.textContent =
+          peakDelta < 0.35
+            ? "No spike yet"
+            : peakDelta < 1.2
+              ? "Light motion"
+              : peakDelta < 3
+                ? "Clear spike"
+                : "Heavy spike";
+      }
+
+      if (runRate) runRate.textContent = rateText;
+      if (stageRate) stageRate.textContent = rateText;
+
+      if (evidenceSourceLabel) {
+        evidenceSourceLabel.textContent = !started
+          ? "--"
+          : usingGenericSensors
+            ? "Source: Generic Sensor API"
+            : "Source: DeviceMotion";
+      }
+      if (evidenceAxesLabel) {
+        const axes = [
+          axisXAvailable ? "X" : null,
+          axisYAvailable ? "Y" : null,
+          axisZAvailable ? "Z" : null,
+        ].filter((axis): axis is string => axis !== null);
+        evidenceAxesLabel.textContent = axes.length ? axes.join(" ") : "--";
+      }
+      if (evidenceRateLabel) evidenceRateLabel.textContent = rateText;
+      if (evidenceGravityLabel)
+        evidenceGravityLabel.textContent = hasStillnessWindow
+          ? `${gravityError.toFixed(3)} g`
+          : "--";
+      if (evidenceGravityStateLabel) {
+        evidenceGravityStateLabel.textContent = !hasStillnessWindow
+          ? "Collecting flat samples"
+          : gravityError < 0.03
+            ? "On target"
+            : gravityError < 0.08
+              ? "Slight offset"
+              : "High offset";
+      }
+      if (evidenceNoiseLabel)
+        evidenceNoiseLabel.textContent = hasStillnessWindow
+          ? `${noise.toFixed(3)} g`
+          : "--";
+      if (evidenceNoiseStateLabel) {
+        evidenceNoiseStateLabel.textContent = !hasStillnessWindow
+          ? "Collecting flat samples"
+          : noise < 0.015
+            ? "Quiet"
+            : noise < 0.045
+              ? "Normal"
+              : noise < 0.09
+                ? "Noisy"
+                : "Very noisy";
+      }
+
+      const graphSeries = currentGraphSeries();
+      if (document.hidden) updateGraphLabels(graphSeries);
+      else drawGraph(graphSeries);
+    }
+
+    function requestSensorUiUpdate(totalG: number | null, delta: number): void {
+      if (document.hidden) return;
+      pendingTotalG = totalG;
+      pendingDelta = delta;
+      uiScheduler.request();
+    }
+
+    function updateSensorUi(totalG: number | null, delta: number): void {
+      if (xValue)
+        xValue.textContent = axisXAvailable ? format(latestX / 9.80665) : "--";
+      if (yValue)
+        yValue.textContent = axisYAvailable ? format(latestY / 9.80665) : "--";
+      if (zValue)
+        zValue.textContent = axisZAvailable ? format(latestZ / 9.80665) : "--";
+      setAxisBar(xBar, axisXAvailable ? latestX / 9.80665 : 0);
+      setAxisBar(yBar, axisYAvailable ? latestY / 9.80665 : 0);
+      setAxisBar(zBar, axisZAvailable ? latestZ / 9.80665 : 0);
+      if (totalGLabel)
+        totalGLabel.textContent = totalG === null ? "--" : format(totalG, " g");
+      if (stageForce)
+        stageForce.textContent = totalG === null ? "--" : format(totalG, " g");
+      if (peakGLabel) peakGLabel.textContent = format(peakG, " g");
+      if (stagePeak) stagePeak.textContent = format(peakG, " g");
+      if (shakeCountLabel) shakeCountLabel.textContent = String(shakeCount);
+      if (stageShakes) stageShakes.textContent = String(shakeCount);
+      if (currentCheck === "lift" || currentCheck === "shake")
+        renderMotionVisuals();
+      setStatus(
+        hasGravityData
+          ? "Live"
+          : hasAnyLinearData()
+            ? "Linear"
+            : hasAnyMotionData
+              ? "Partial"
+              : "Waiting",
+      );
+      updateCheckAvailability();
+      updateDiagnostics(delta);
+      updateStageInfo(totalG, average(deltaHistory));
+      ensureAnimation();
+    }
+
+    function setCheck(checkId: MotionCheck): void {
+      const changed = checkId !== currentCheck;
+      if (changed) {
+        stillForceHistory.length = 0;
+      }
+      if (changed && checkId === "lift") {
+        liftPeakSignal = 0;
+        latestLiftSignal = 0;
+        liftHistory.length = 0;
+        peakG = 0;
+      }
+      if (changed && checkId === "shake") {
+        latestShakeSignal = 0;
+        shakeHistory.length = 0;
+        shakeCount = 0;
+        peakG = 0;
+        lastShakeAt = 0;
+        if (shakeCountLabel) shakeCountLabel.textContent = "0";
+        if (stageShakes) stageShakes.textContent = "0";
+      }
+      if (changed && (checkId === "lift" || checkId === "shake")) {
+        if (peakGLabel) peakGLabel.textContent = "0.00 g";
+        if (stagePeak) stagePeak.textContent = "0.00 g";
+      }
+      if (changed && checkId === "tilt") {
+        tiltHistory.length = 0;
+      }
+      currentCheck = checkId;
+      if (stage) stage.dataset.check = checkId;
+      const activeCheckButton = checkButtons.find(
+        (button) => button.dataset.accelCheck === checkId,
+      );
+      if (dockTip && activeCheckButton?.dataset.accelTip) {
+        dockTip.textContent = activeCheckButton.dataset.accelTip;
+      }
+      const checkLabel =
+        checkId === "3d" ? "3D View" : checkId[0].toUpperCase() + checkId.slice(1);
+      if (stageCheckLegend) stageCheckLegend.textContent = checkLabel;
+      updateVisibleStats();
+      renderMotionVisuals();
+      drawGraph();
+      updateStageInfo();
+      ensureAnimation();
+    }
+
+    function updateStageInfo(totalG: number | null = null, avgDelta = 0): void {
+      if (!stageInfo) return;
+
+      let motionLabel =
+        avgDelta < 0.05
+          ? "Still"
+          : avgDelta < 0.22
+            ? "Settling"
+            : avgDelta < 0.55
+              ? "Moving"
+              : "Spike";
+      if (currentCheck === "lift" && liftPeakSignal >= 0.08) {
+        motionLabel = liftPeakSignal >= 0.18 ? "Lift spike" : "Light lift";
+      }
+      if (runMotionState) runMotionState.textContent = motionLabel;
+      if (stageMotionState) stageMotionState.textContent = motionLabel;
+
+      if (sampleCount === 0 && currentCheck !== "3d") {
+        stageInfo.textContent = checkHints[currentCheck];
+        return;
+      }
+
+      if (!hasCheckData(currentCheck)) {
+        stageInfo.textContent =
+          currentCheck === "flat" || currentCheck === "tilt"
+            ? "Gravity-inclusive acceleration data is unavailable, so this check cannot be evaluated."
+            : currentCheck === "lift"
+              ? "Vertical acceleration data is unavailable, so the lift check cannot be evaluated."
+              : currentCheck === "3d"
+                ? "Orientation data is unavailable, so the 3D view cannot be evaluated."
+                : "Usable acceleration data is unavailable, so the shake check cannot be evaluated.";
+        return;
+      }
+
+      if (currentCheck === "flat") {
+        stageInfo.textContent =
+          totalG !== null && avgDelta < 0.05 && totalG > 0.92 && totalG < 1.08
+            ? "Flat response looks stable. Total force is sitting close to 1 g."
+            : "Keep the phone flat and still. The readings should settle down near 1 g.";
+        return;
+      }
+
+      if (currentCheck === "tilt") {
+        const dominant =
+          Math.abs(latestX) > Math.abs(latestY)
+            ? "side tilt"
+            : "forward/back tilt";
+        stageInfo.textContent =
+          Math.abs(latestX) > 1 || Math.abs(latestY) > 1
+            ? `Tilt response is active. The strongest change right now looks like ${dominant}.`
+            : "Tilt the phone slowly and check that each inclinometer marker follows its own axis.";
+        return;
+      }
+
+      if (currentCheck === "lift") {
+        stageInfo.textContent =
+          liftPeakSignal >= 0.18
+            ? "Clear lift motion detected. The phone indicator captured a strong vertical response."
+            : liftPeakSignal >= 0.08
+              ? "Light lift motion detected. Try one smooth raise and lower pass for a clearer vertical pulse."
+              : "Lift and lower the phone smoothly. The indicator should move vertically, then return to center.";
+        return;
+      }
+
+      if (currentCheck === "3d") {
+        stageInfo.textContent =
+          "The model tracks the OS's fused orientation (accelerometer, gyroscope, and compass where present). It shows the orientation pipeline works -- it is not an isolated accelerometer reading.";
+        return;
+      }
+
+      stageInfo.textContent =
+        shakeCount > 0 || (totalG !== null && totalG > 1.65)
+          ? "Shake spike detected. Peak force and shake count should rise only during real movement."
+          : "Shake gently once. Peak force should jump briefly without constant false triggers.";
+    }
+
+    type SampleInput = {
+      gx: number | null;
+      gy: number | null;
+      gz: number | null;
+      lx: number | null;
+      ly: number | null;
+      lz: number | null;
+      intervalMs: number;
+    };
+
+    function ingestSample({ gx, gy, gz, lx, ly, lz, intervalMs }: SampleInput): void {
+      axisXAvailable = gx !== null;
+      axisYAvailable = gy !== null;
+      axisZAvailable = gz !== null;
+      linearXAvailable = lx !== null;
+      linearYAvailable = ly !== null;
+      linearZAvailable = lz !== null;
+      hasGravityData = axisXAvailable && axisYAvailable && axisZAvailable;
+      hasAnyMotionData =
+        axisXAvailable ||
+        axisYAvailable ||
+        axisZAvailable ||
+        linearXAvailable ||
+        linearYAvailable ||
+        linearZAvailable;
+      if (!hasAnyMotionData) return;
+
+      const prevX = latestX;
+      const prevY = latestY;
+      const prevZ = latestZ;
+      const hadPreviousSample = gravityEstReady;
+
+      if (gx !== null) latestX = gx;
+      if (gy !== null) latestY = gy;
+      if (gz !== null) latestZ = gz;
+      sampleCount += 1;
+
+      if (hasGravityData) {
+        if (!gravityEstReady) {
+          gravityEstX = latestX;
+          gravityEstY = latestY;
+          gravityEstZ = latestZ;
+          gravityEstReady = true;
+        } else {
+          gravityEstX += (latestX - gravityEstX) * GRAVITY_LPF_ALPHA;
+          gravityEstY += (latestY - gravityEstY) * GRAVITY_LPF_ALPHA;
+          gravityEstZ += (latestZ - gravityEstZ) * GRAVITY_LPF_ALPHA;
+        }
+      }
+
+      const totalG = hasGravityData
+        ? Math.sqrt(latestX ** 2 + latestY ** 2 + latestZ ** 2) / 9.80665
+        : null;
+      const tiltSignal = currentTiltSignal();
+      const gravityDelta =
+        hasGravityData && hadPreviousSample
+          ? Math.sqrt(
+              (latestX - prevX) ** 2 +
+                (latestY - prevY) ** 2 +
+                (latestZ - prevZ) ** 2,
+            ) / 9.80665
+          : 0;
+
+      const derivedLinearX = hasGravityData ? latestX - gravityEstX : 0;
+      const derivedLinearY = hasGravityData ? latestY - gravityEstY : 0;
+      const derivedLinearZ = hasGravityData ? latestZ - gravityEstZ : 0;
+
+      const linearAxes: number[] = [];
+      linearAxes.push(lx ?? (hasGravityData ? derivedLinearX : 0));
+      linearAxes.push(ly ?? (hasGravityData ? derivedLinearY : 0));
+      linearAxes.push(lz ?? (hasGravityData ? derivedLinearZ : 0));
+      const dominantLinearAxis = linearAxes.reduce(
+        (strongest, value) =>
+          Math.abs(value) > Math.abs(strongest) ? value : strongest,
+        0,
+      );
+      latestLiftSignal =
+        lz !== null
+          ? lz / 9.80665
+          : hasGravityData
+            ? derivedLinearZ / 9.80665
+            : 0;
+      latestShakeSignal = dominantLinearAxis / 9.80665;
+      const delta =
+        hasGravityData && hadPreviousSample
+          ? gravityDelta
+          : Math.abs(latestShakeSignal);
+      const liftSignal = Math.abs(latestLiftSignal);
+      lastSampleTime = performance.now();
+      if (intervalMs > 0) {
+        intervalHistory.push(intervalMs);
+        if (intervalHistory.length > 48) intervalHistory.shift();
+      }
+
+      if (totalG !== null) peakG = Math.max(peakG, totalG);
+      peakDelta = Math.max(peakDelta, delta);
+      liftPeakSignal = Math.max(liftPeakSignal, liftSignal);
+      if (totalG !== null) forceHistory.push(totalG);
+      if (hasGravityData) tiltHistory.push(tiltSignal);
+      deltaHistory.push(delta);
+      liftHistory.push(latestLiftSignal);
+      shakeHistory.push(latestShakeSignal);
+      if (forceHistory.length > 48) forceHistory.shift();
+      if (tiltHistory.length > 48) tiltHistory.shift();
+      if (deltaHistory.length > 48) deltaHistory.shift();
+      if (liftHistory.length > 48) liftHistory.shift();
+      if (shakeHistory.length > 48) shakeHistory.shift();
+      if (currentCheck === "flat" && totalG !== null && delta < 0.08) {
+        stillForceHistory.push(totalG);
+        if (stillForceHistory.length > 48) stillForceHistory.shift();
+      }
+
+      const now = lastSampleTime;
+      if (
+        currentCheck === "shake" &&
+        sampleCount > 1 &&
+        ((totalG !== null && totalG > 1.65) ||
+          delta > 0.8 ||
+          Math.abs(latestShakeSignal) > 0.8) &&
+        now - lastShakeAt > 500
+      ) {
+        shakeCount += 1;
+        lastShakeAt = now;
+      }
+
+      requestSensorUiUpdate(totalG, delta);
+      sensorWatchdog.markSample(now);
+    }
+
+    function handleMotion(event: DeviceMotionEvent): void {
+      if (pausedForFullscreen || sensorsPausedForVisibility) return;
+      const acceleration = event.accelerationIncludingGravity;
+      const linearAcceleration = event.acceleration;
+      const now = performance.now();
+      const measuredInterval = lastSampleTime ? now - lastSampleTime : 0;
+      const eventInterval =
+        typeof event.interval === "number" && event.interval > 0
+          ? event.interval
+          : 0;
+      ingestSample({
+        gx: finiteNumber(acceleration?.x),
+        gy: finiteNumber(acceleration?.y),
+        gz: finiteNumber(acceleration?.z),
+        lx: finiteNumber(linearAcceleration?.x),
+        ly: finiteNumber(linearAcceleration?.y),
+        lz: finiteNumber(linearAcceleration?.z),
+        intervalMs: measuredInterval || eventInterval,
+      });
+    }
+
+    function handleOrientation(event: DeviceOrientationEvent): void {
+      if (pausedForFullscreen || sensorsPausedForVisibility) return;
+      const alpha = finiteNumber(event.alpha);
+      const beta = finiteNumber(event.beta);
+      const gamma = finiteNumber(event.gamma);
+      if (alpha === null && beta === null && gamma === null) return;
+      if (alpha !== null) latestAlpha = alpha;
+      if (beta !== null) latestBeta = beta;
+      if (gamma !== null) latestGamma = gamma;
+      orientationAvailable = true;
+      orientationLastSampleTime = performance.now();
+      render3dStage();
+      if (currentCheck === "3d") updateCheckAvailability();
+    }
+
+    function genericSensorSupported(): boolean {
+      const win = window as WindowWithGenericSensors;
+      return (
+        typeof win.GravitySensor === "function" &&
+        typeof win.LinearAccelerationSensor === "function"
+      );
+    }
+
+    function handleGenericGravityReading(): void {
+      if (
+        !gravitySensor ||
+        !started ||
+        pausedForFullscreen ||
+        sensorsPausedForVisibility
+      )
+        return;
+      const now = performance.now();
+      const intervalMs = genericSensorLastSampleTime
+        ? now - genericSensorLastSampleTime
+        : 0;
+      genericSensorLastSampleTime = now;
+      ingestSample({
+        gx: finiteNumber(gravitySensor.x),
+        gy: finiteNumber(gravitySensor.y),
+        gz: finiteNumber(gravitySensor.z),
+        lx: latestGenericLinear ? latestGenericLinear.x : null,
+        ly: latestGenericLinear ? latestGenericLinear.y : null,
+        lz: latestGenericLinear ? latestGenericLinear.z : null,
+        intervalMs,
+      });
+    }
+
+    function handleGenericLinearReading(): void {
+      if (
+        !linearAccelSensor ||
+        !started ||
+        pausedForFullscreen ||
+        sensorsPausedForVisibility
+      )
+        return;
+      latestGenericLinear = {
+        x: linearAccelSensor.x ?? 0,
+        y: linearAccelSensor.y ?? 0,
+        z: linearAccelSensor.z ?? 0,
+      };
+    }
+
+    function stopGenericSensors(): void {
+      gravitySensor?.stop();
+      linearAccelSensor?.stop();
+      gravitySensor = null;
+      linearAccelSensor = null;
+      latestGenericLinear = null;
+      usingGenericSensors = false;
+      genericSensorLastSampleTime = 0;
+    }
+
+    function pauseGenericSensors(): void {
+      gravitySensor?.stop();
+      linearAccelSensor?.stop();
+      genericSensorLastSampleTime = 0;
+    }
+
+    function recoverFromGenericSensorFailure(): void {
+      stopGenericSensors();
+      if (
+        !started ||
+        pausedForFullscreen ||
+        sensorsPausedForVisibility ||
+        document.hidden ||
+        !motionPermissionGranted
+      ) {
+        return;
+      }
+      window.removeEventListener("devicemotion", handleMotion);
+      window.addEventListener("devicemotion", handleMotion, { signal });
+      setStatus("Waiting");
+      updateStageInfo();
+      sensorWatchdog.start();
+    }
+
+    function resumeGenericSensors(): void {
+      if (!usingGenericSensors || !gravitySensor || !linearAccelSensor) return;
+      try {
+        gravitySensor.start();
+        linearAccelSensor.start();
+      } catch {
+        recoverFromGenericSensorFailure();
+      }
+    }
+
+    function tryStartGenericSensors(): Promise<boolean> {
+      return new Promise((resolve) => {
+        const win = window as WindowWithGenericSensors;
+        if (!win.GravitySensor || !win.LinearAccelerationSensor) {
+          resolve(false);
+          return;
+        }
+        try {
+          const gravity = new win.GravitySensor({ frequency: 60 });
+          const linear = new win.LinearAccelerationSensor({ frequency: 60 });
+          let settled = false;
+          let gravityActivated = false;
+          let linearActivated = false;
+          let startupTimer = 0;
+          function settle(ok: boolean): void {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(startupTimer);
+            resolve(ok);
+          }
+          function settleWhenActivated(): void {
+            if (gravityActivated && linearActivated) settle(true);
+          }
+          function handleFailure(): void {
+            if (settled) {
+              recoverFromGenericSensorFailure();
+              return;
+            }
+            stopGenericSensors();
+            settle(false);
+          }
+          gravity.addEventListener("reading", handleGenericGravityReading, {
+            signal,
+          });
+          linear.addEventListener("reading", handleGenericLinearReading, {
+            signal,
+          });
+          gravity.addEventListener(
+            "activate",
+            () => {
+              gravityActivated = true;
+              settleWhenActivated();
+            },
+            { signal },
+          );
+          linear.addEventListener(
+            "activate",
+            () => {
+              linearActivated = true;
+              settleWhenActivated();
+            },
+            { signal },
+          );
+          gravity.addEventListener(
+            "error",
+            handleFailure,
+            { signal },
+          );
+          linear.addEventListener(
+            "error",
+            handleFailure,
+            { signal },
+          );
+          gravitySensor = gravity;
+          linearAccelSensor = linear;
+          startupTimer = window.setTimeout(() => {
+            stopGenericSensors();
+            settle(false);
+          }, 1000);
+          gravity.start();
+          linear.start();
+        } catch {
+          stopGenericSensors();
+          resolve(false);
+        }
+      });
+    }
+
+    function animate(): void {
+      visualX += (latestX - visualX) * 0.12;
+      visualY += (latestY - visualY) * 0.12;
+
+      renderLevelDot();
+
+      if (
+        !document.hidden &&
+        (currentCheck === "flat" || currentCheck === "tilt") &&
+        (Math.abs(latestX - visualX) > 0.01 ||
+          Math.abs(latestY - visualY) > 0.01)
+      ) {
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        animationFrame = 0;
+      }
+    }
+
+    function ensureAnimation(): void {
+      if (
+        document.hidden ||
+        pausedForFullscreen ||
+        (currentCheck !== "flat" && currentCheck !== "tilt")
+      )
+        return;
+      if (animationFrame !== 0) return;
+      animationFrame = requestAnimationFrame(animate);
+    }
+
+    async function startTest(): Promise<void> {
+      if (started || startInFlight) return;
+      startInFlight = true;
+      startCancelled = false;
+      syncStartButton();
+
+      const genericSupported = genericSensorSupported();
+      if (!("DeviceMotionEvent" in window) && !genericSupported) {
+        setStatus("Unavailable");
+        if (stageInfo)
+          stageInfo.textContent = describeSensorUnavailability("unsupported");
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+
+      usingGenericSensors = genericSupported && (await tryStartGenericSensors());
+      if (startCancelled) {
+        stopGenericSensors();
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+
+      const permission = await requestMotionPermission();
+      if (startCancelled) {
+        startInFlight = false;
+        syncStartButton();
+        return;
+      }
+      motionPermissionGranted = permission.granted;
+      if (!usingGenericSensors && !permission.granted) {
+          const reason: SensorPermissionReason = permission.reason;
+          const permanentlyDenied =
+            reason === "denied" &&
+            (await getMotionPermissionState()) === "denied";
+          setStatus("Permission blocked");
+          if (stageInfo)
+            stageInfo.textContent = describeSensorUnavailability(reason, {
+              permanentlyDenied,
+            });
+          startInFlight = false;
+          syncStartButton();
+          return;
+      }
+
+      started = true;
+      pausedForFullscreen = true;
+      pauseGenericSensors();
+
+      const orientationResult = await requestOrientationPermission();
+      orientationPermissionGranted =
+        !startCancelled && orientationResult.granted;
+
+      startInFlight = false;
+      if (startCancelled) return;
+      setStatus("Paused");
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    let sensorsPausedForVisibility = false;
+
+    function pauseSensorsForVisibility(): void {
+      if (!started || sensorsPausedForVisibility) return;
+      sensorsPausedForVisibility = true;
+      wakeLock.release();
+      window.removeEventListener("devicemotion", handleMotion);
+      pauseGenericSensors();
+      sensorWatchdog.stop();
+    }
+
+    function resumeSensorsForVisibility(): void {
+      if (!started || !sensorsPausedForVisibility) return;
+      sensorsPausedForVisibility = false;
+      if (pausedForFullscreen) return;
+      if (usingGenericSensors) {
+        resumeGenericSensors();
+      } else if (motionPermissionGranted) {
+        window.addEventListener("devicemotion", handleMotion, { signal });
+      }
+      if (orientationPermissionGranted) {
+        window.addEventListener("deviceorientation", handleOrientation, {
+          signal,
+        });
+      }
+      sensorWatchdog.start();
+      wakeLock.request();
+    }
+
+    function isFullscreenActive(): boolean {
+      return shell?.dataset.fullscreen === "true";
+    }
+
+    function syncPauseNotice(): void {
+      if (pauseNotice) {
+        pauseNotice.hidden = isFullscreenActive() || !pausedForFullscreen;
+      }
+    }
+
+    function syncStartButton(): void {
+      if (!startButton) return;
+      const isRunning = started && !pausedForFullscreen;
+      startButton.classList.toggle("is-running", isRunning);
+      startButton.setAttribute("aria-pressed", String(isRunning));
+      startButton.toggleAttribute("disabled", startInFlight);
+      startButton.textContent = startInFlight
+        ? "Starting..."
+        : isRunning
+          ? "Pause"
+          : pausedForFullscreen
+            ? "Resume"
+            : "Start";
+    }
+
+    function pauseSensorTest(): void {
+      if (!started || pausedForFullscreen) return;
+      pausedForFullscreen = true;
+      shouldResumeAfterFullscreen = false;
+      wakeLock.release();
+      window.removeEventListener("devicemotion", handleMotion);
+      window.removeEventListener("deviceorientation", handleOrientation);
+      pauseGenericSensors();
+      sensorWatchdog.stop();
+      uiScheduler.cancel();
+      if (animationFrame !== 0) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+      setStatus("Paused");
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    function resumeSensorTest(): void {
+      if (!started || document.hidden) return;
+      pausedForFullscreen = false;
+      sensorsPausedForVisibility = false;
+      wakeLock.request();
+      if (usingGenericSensors) {
+        resumeGenericSensors();
+      } else if (motionPermissionGranted) {
+        window.addEventListener("devicemotion", handleMotion, { signal });
+      }
+      if (orientationPermissionGranted) {
+        window.addEventListener("deviceorientation", handleOrientation, {
+          signal,
+        });
+      }
+      setStatus(hasAnyMotionData ? "Live" : "Waiting");
+      updateStageInfo();
+      sensorWatchdog.start();
+      requestSensorUiUpdate(pendingTotalG, pendingDelta);
+      ensureAnimation();
+      syncStartButton();
+      syncPauseNotice();
+    }
+
+    function requestSensorFullscreen(): void {
+      shouldResumeAfterFullscreen = true;
+      if (isFullscreenActive()) {
+        shouldResumeAfterFullscreen = false;
+        resumeSensorTest();
+        return;
+      }
+      fullscreenButton?.click();
+      showRuntimeControls();
+    }
+
+    async function handleStartButton(): Promise<void> {
+      if (startInFlight) return;
+      if (!started) {
+        await startTest();
+        if (!started) return;
+      } else if (!pausedForFullscreen) {
+        pauseSensorTest();
+        showRuntimeControls();
+        return;
+      }
+      requestSensorFullscreen();
+    }
+
+    function resetTest(): void {
+      startCancelled = true;
+      wakeLock.release();
+      window.removeEventListener("devicemotion", handleMotion);
+      window.removeEventListener("deviceorientation", handleOrientation);
+      stopGenericSensors();
+      started = false;
+      sensorsPausedForVisibility = false;
+      pausedForFullscreen = false;
+      shouldResumeAfterFullscreen = false;
+      motionPermissionGranted = false;
+      orientationPermissionGranted = false;
+      sensorWatchdog.stop();
+      uiScheduler.cancel();
+      if (animationFrame !== 0) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+
+      latestX = 0;
+      latestY = 0;
+      latestZ = 0;
+      visualX = 0;
+      visualY = 0;
+      peakG = 0;
+      peakDelta = 0;
+      liftPeakSignal = 0;
+      latestLiftSignal = 0;
+      latestShakeSignal = 0;
+      shakeCount = 0;
+      sampleCount = 0;
+      hasGravityData = false;
+      hasAnyMotionData = false;
+      axisXAvailable = false;
+      axisYAvailable = false;
+      axisZAvailable = false;
+      linearXAvailable = false;
+      linearYAvailable = false;
+      linearZAvailable = false;
+      lastShakeAt = 0;
+      lastSampleTime = 0;
+      gravityEstX = 0;
+      gravityEstY = 0;
+      gravityEstZ = 9.80665;
+      gravityEstReady = false;
+      orientationAvailable = false;
+      latestAlpha = 0;
+      latestBeta = 0;
+      latestGamma = 0;
+      orientationLastSampleTime = 0;
+      genericSensorLastSampleTime = 0;
+      forceHistory.length = 0;
+      stillForceHistory.length = 0;
+      deltaHistory.length = 0;
+      tiltHistory.length = 0;
+      liftHistory.length = 0;
+      shakeHistory.length = 0;
+      intervalHistory.length = 0;
+      pendingTotalG = null;
+      pendingDelta = 0;
+      lastUiRefresh = 0;
+
+      [xValue, yValue, zValue].forEach((item) => {
+        if (item) item.textContent = "--";
+      });
+      [xBar, yBar, zBar].forEach((item) => setAxisBar(item, 0));
+      if (totalGLabel) totalGLabel.textContent = "--";
+      if (stageForce) stageForce.textContent = "--";
+      if (peakGLabel) peakGLabel.textContent = "--";
+      if (stagePeak) stagePeak.textContent = "--";
+      if (shakeCountLabel) shakeCountLabel.textContent = "0";
+      if (stageShakes) stageShakes.textContent = "0";
+      if (runRate) runRate.textContent = "-- Hz";
+      if (stageRate) stageRate.textContent = "-- Hz";
+      if (motionDeltaLabel) motionDeltaLabel.textContent = "--";
+      if (motionDeltaStateLabel) motionDeltaStateLabel.textContent = "Waiting";
+      if (peakDeltaLabel) peakDeltaLabel.textContent = "--";
+      if (peakDeltaStateLabel) peakDeltaStateLabel.textContent = "Waiting";
+      if (graphWindowLabel) graphWindowLabel.textContent = "No samples yet";
+      if (evidenceSourceLabel) evidenceSourceLabel.textContent = "--";
+      if (evidenceAxesLabel) evidenceAxesLabel.textContent = "--";
+      if (evidenceRateLabel) evidenceRateLabel.textContent = "-- Hz";
+      if (evidenceGravityLabel) evidenceGravityLabel.textContent = "--";
+      if (evidenceGravityStateLabel)
+        evidenceGravityStateLabel.textContent = "Waiting";
+      if (evidenceNoiseLabel) evidenceNoiseLabel.textContent = "--";
+      if (evidenceNoiseStateLabel)
+        evidenceNoiseStateLabel.textContent = "Waiting";
+      if (runMotionState) runMotionState.textContent = "Waiting";
+      if (stageMotionState) stageMotionState.textContent = "Waiting";
+      renderMotionVisuals();
+      render3dStage();
+
+      setStatus("Ready");
+      syncStartButton();
+      syncPauseNotice();
+      updateCheckAvailability();
+      drawGraph();
+      updateStageInfo();
+      renderLevelDot();
+    }
+
+    function queueGraphResize(): void {
+      window.setTimeout(resizeGraph, 40);
+    }
+
+    function cleanupSensorPage(): void {
+      resetTest();
+      pageController.abort();
+      graphResizeObserver?.disconnect();
+      graphResizeObserver = null;
+      visualResizeObserver?.disconnect();
+      visualResizeObserver = null;
+      stopOrientationWatch?.();
+      stopOrientationWatch = null;
+    }
+
+    checkButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const checkId = button.dataset.accelCheck as MotionCheck | undefined;
+          if (!checkId) return;
+          setCheck(checkId);
+        },
+        { signal },
+      );
+    });
+
+    startButton?.addEventListener("click", () => void handleStartButton(), {
+      signal,
+    });
+    resetButton?.addEventListener("click", resetTest, { signal });
+    shell?.addEventListener(
+      "tool-runtime:fullscreen-change",
+      (event) => {
+        const detail = (event as CustomEvent<{ isExpanded: boolean }>).detail;
+        if (detail.isExpanded) {
+          if (shouldResumeAfterFullscreen) {
+            shouldResumeAfterFullscreen = false;
+            resumeSensorTest();
+          }
+        } else {
+          shouldResumeAfterFullscreen = false;
+          if (started && !pausedForFullscreen) pauseSensorTest();
+        }
+        syncPauseNotice();
+        queueGraphResize();
+        showRuntimeControls();
+      },
+      { signal },
+    );
+    graphResizeObserver = observeResize(graphCanvas, resizeGraph);
+    visualResizeObserver = observeResize(accelVisual, () => {
+      updateVisualScale();
+      renderLevelDot();
+      renderMotionVisuals();
+    });
+    stopOrientationWatch = onOrientationChange(() => {
+      screenAngle = getScreenAngle();
+      renderLevelDot();
+    });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden) {
+          pauseSensorsForVisibility();
+          if (animationFrame !== 0) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = 0;
+          }
+        } else {
+          resumeSensorsForVisibility();
+          requestSensorUiUpdate(pendingTotalG, pendingDelta);
+          ensureAnimation();
+        }
+      },
+      { signal },
+    );
+
+    updateVisualScale();
+    setCheck("flat");
+    resetTest();
+    resizeGraph();
+  </script>
+</BaseLayout>

@@ -1,0 +1,237 @@
+---
+// src/pages/methodology.astro
+
+export const prerender = true;
+
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import {
+  LABS_ID,
+  ORGANIZATION_ID,
+  SITE_ORIGIN,
+  labsSchema,
+} from "@/utils/site/schema";
+
+const title = "Methodology - Sorted Tech";
+const metaDescription =
+  "Sorted Tech Methodology: learn how we test and research, following strict standards to give you 100% confidence in your tech buying decisions.";
+const ogImage = DEFAULT_OG_IMAGE;
+
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Methodology",
+    description: metaDescription,
+    url: `${SITE_ORIGIN}/methodology`,
+    mainEntity: {
+      "@id": LABS_ID,
+    },
+    publisher: {
+      "@id": ORGANIZATION_ID,
+    },
+  },
+  labsSchema,
+];
+---
+
+<BaseLayout {title} {metaDescription} {ogImage} {structuredData}>
+  <section class="content-card rounded-none">
+    <h1>Methodology</h1>
+    <p class="mb-4 lg:mb-6">
+      At Sorted Tech, all product evaluations are finalized by Sorted Tech <strong
+        >L.A.B.S. (Laboratory for Assessment, Benchmarking & Studies)</strong
+      >. This independent framework was developed to protect consumers from
+      market noise by filtering every device through a rigorous multi-stage
+      verification process.
+    </p>
+
+    <h2>1. Product Selection</h2>
+    <p>We shortlist products using the following criteria:</p>
+    <ul class="mb-6 list-disc pl-6 lg:mb-6">
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Relevance & Availability</strong>
+        <p>
+          Devices must have been released within the last 18 months and remain
+          actively available for purchase in retail channels (no discontinued
+          models).
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Software Longevity & Support</strong>
+        <p>
+          Devices must run Android 12 or later, and the manufacturer must
+          provide a clear, publicly stated commitment to future software and
+          security updates.
+          <br />
+          <span class="italic">
+            Note: For newer brands without an established track record, this
+            commitment is treated as a high-risk factor.
+          </span>
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Product Integrity</strong>
+        <p>
+          The specifications printed on the box <strong>must</strong> match the actual
+          hardware. We exclude any device where our technical audit finds discrepancies
+          in advertised specifications. If a company is dishonest about what's inside
+          the box, we won't review it.
+        </p>
+      </li>
+    </ul>
+
+    <h2>2. What We Score</h2>
+    <p>
+      We score each device by evaluating its major components individually.
+      Every component is assessed using measurable factors that affect everyday
+      use. Here's what each category represents and what it's based on:
+    </p>
+    <ul class="mb-6 list-disc pl-6 lg:mb-6">
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Display Quality</strong>
+        <p>
+          Based on: panel quality, resolution, pixel density, refresh rate,
+          brightness, dynamic range, and touch response.
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Battery & Charging</strong>
+        <p>Based on: overall endurance, power efficiency, and charging time.</p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Camera Quality</strong>
+        <p>
+          Based on: hardware elements such as resolution, aperture and lenses,
+          as well as image quality in both daylight and low-light environments.
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Hardware Performance</strong>
+        <p>
+          Based on: overall CPU (Single-Core and Multi-Core), GPU, RAM, and
+          storage performance as measured by benchmarks.
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Software Experience</strong>
+        <p>
+          Based on: software optimization, RAM management behavior, the presence
+          of bloatware (OEM or third-party; type, size, background activity),
+          the intrusiveness of services or ads (type, frequency, overall
+          impact), as well as software and security updates (number of
+          years/versions, frequency, consistency).
+        </p>
+      </li>
+    </ul>
+
+    <h2>3. What We Do Not Score</h2>
+    <p>We intentionally do not score the following:</p>
+    <ul class="mb-6 list-disc pl-6 lg:mb-6">
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Design</strong>
+        <p>
+          Design is subjective, and different users have different preferences
+          when it comes to weight, size, and overall aesthetics. As such, we
+          avoid assigning scores to these elements. The IP rating, however, is
+          an objective measure of a device's durability against dust and water,
+          and since it already provides a clear indication of a device's build
+          quality, we don't feel it's necessary to assign an additional score
+          for it.
+        </p>
+      </li>
+      <li class="text-slate-800 dark:text-slate-200">
+        <strong>Network & Connectivity</strong>
+        <p>
+          Testing network and connectivity performance in a consistent,
+          reproducible way is incredibly challenging. Factors like location and
+          network conditions can drastically affect performance, and with most
+          devices having similar configurations, results are often
+          indistinguishable. Until a reliable, universal testing method is
+          available, we do not rank these features. We will revisit this in the
+          future if a robust benchmarking tool becomes available.
+        </p>
+      </li>
+    </ul>
+
+    <h2>4. How We Score</h2>
+    <ul class="mb-6 list-disc pl-6 lg:mb-6">
+      <li>
+        We do not use composite benchmark scores such as AnTuTu. Instead, we
+        prioritize component-level and sustained performance signals.
+      </li>
+      <li>
+        We noticed that some important parts of a device like camera quality and
+        long-term software experience are often judged through personal
+        impressions, which adds unavoidable bias. We wanted to change that. We
+        assess camera images using an in-house utility that applies multiple
+        machine-learning techniques focused on noise, detail, exposure
+        consistency, and overall perceptual quality.
+      </li>
+      <li>
+        Evaluating software presents a similar challenge. Raw optimization is
+        measurable, but long-term performance is much harder to capture. A
+        device may feel fast when new but behave differently after extended use,
+        and one review unit can't represent every user's experience. To reduce
+        that gap, we leverage aspect-based sentiment analysis to refine our own
+        testing, ensuring the end result reflects real-world behavior more
+        accurately.
+      </li>
+      <li class="mb-4 lg:mb-6">
+        Additionally, our scoring schema combines individual sub-component
+        results and adjusts them for price, ensuring that the final ranking
+        reflects a device's value within its price range.
+      </li>
+    </ul>
+
+    <h2>5. Price Range Classification</h2>
+    <p class="mb-4 lg:mb-6">
+      We determine a device's price range by researching its minimum and maximum
+      prices using multiple price-comparison sources. Promotional or
+      limited-time sale prices are excluded. We then calculate the average
+      market price and assign the device to the appropriate price bracket.
+    </p>
+
+    <h2>6. Device Availability and Research</h2>
+    <p>
+      Due to limited funding, we do not purchase every device we review.
+      Instead, we rely on crowdsourcing, reaching out to friends, family, and
+      local distributors to borrow devices for testing. When in-house testing
+      isn't possible, we conduct thorough component-specific research and rely
+      on reputable third-party benchmark data, cross-checking it against trusted
+      sources, including respected reviewers and publications.
+    </p>
+    <p class="mb-4 lg:mb-6">
+      If we cannot find sufficient data on a device, especially if it is new or
+      has not been widely available, we will not include it. We prioritize
+      credible, verified sources and only add a device to our curations when we
+      can confirm its performance through reliable, reproducible data.<br />
+      You can find a list of all devices added or removed with each update on the
+      respective curated pages in the "Overview and Changelog" section.
+    </p>
+
+    <h2>7. Update Frequency</h2>
+    <p class="mb-4 lg:mb-6">
+      We review our curations every fortnight. If we identify a new device for
+      assessment, it will be published in the next update cycle, provided it
+      meets the criteria outlined above. Each curated page includes a changelog
+      detailing all devices that have been added, updated, or removed with each
+      release.
+    </p>
+
+    <h2>Dev Note</h2>
+    <p>
+      Our goal is simple: to provide you with clear, objective insights into
+      tech, with transparency at the heart of everything we do. We want to
+      empower curious minds to make informed decisions, whether you're a tech
+      enthusiast or just looking for solid advice.
+    </p>
+    <p>
+      While our process is always evolving, we are committed to improving with
+      each review, adapting to new tools, devices, and methods as they become
+      available. We're always learning and growing right alongside the tech. If
+      you have any feedback or ideas, please feel free to share. We value
+      constructive criticism more than praise.
+    </p>
+  </section>
+</BaseLayout>

@@ -1,0 +1,311 @@
+---
+// src/components/site/Sidebar.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+
+interface Props {
+  closeOnAction?: boolean;
+  mobileAriaLabel?: string;
+  mobileLabel?: string;
+  panelLabel?: string;
+  peek?: boolean;
+  sticky?: boolean;
+  variant?: "default" | "tools";
+}
+
+const {
+  closeOnAction = false,
+  mobileAriaLabel,
+  mobileLabel,
+  panelLabel = "Sidebar",
+  peek = true,
+  sticky = true,
+  variant = "default",
+} = Astro.props;
+
+const sidebarId = "sidebar-panel";
+const isToolsVariant = variant === "tools";
+const resolvedMobileLabel = mobileLabel ?? (isToolsVariant ? "Tests" : "Menu");
+const openLabel =
+  mobileAriaLabel ??
+  (isToolsVariant
+    ? "Open tool tests"
+    : `Open ${resolvedMobileLabel.toLowerCase()}`);
+const closeLabel = isToolsVariant
+  ? "Close tool sidebar"
+  : `Close ${resolvedMobileLabel.toLowerCase()}`;
+---
+
+<sidebar-drawer
+  class:list={[
+    "block lg:col-span-1 lg:min-w-0 lg:self-start",
+    sticky && "lg:sticky lg:top-[75px]",
+    peek && "sidebar-drawer--peek max-lg:contents",
+    isToolsVariant && "sidebar-drawer--tools",
+  ]}
+  data-close-on-action={closeOnAction ? "true" : "false"}
+  data-sidebar-state="closed"
+>
+  <div
+    class="sidebar-overlay bg-custom-100/80 dark:bg-custom-900/80 pointer-events-none fixed inset-0 z-30 opacity-0 transition-opacity duration-300 lg:hidden"
+    aria-hidden="true"
+  >
+  </div>
+
+  <button
+    type="button"
+    aria-label={openLabel}
+    aria-expanded="false"
+    aria-controls={sidebarId}
+    aria-haspopup="dialog"
+    data-open-label={openLabel}
+    data-close-label={closeLabel}
+    class:list={[
+      "sidebar-toggle bg-accent-500 fixed top-16 right-0 z-50 flex h-10 w-10 items-center justify-center gap-0 overflow-hidden rounded-l-xl px-0 py-0 transition-all duration-300 ease-in-out motion-reduce:duration-0 lg:hidden",
+      "in-data-[sidebar-state=open]:right-75 in-data-[sidebar-state=open]:sm:right-80 in-data-[sidebar-state=open]:md:right-85",
+      "in-data-[sidebar-state=peek]:right-8 in-data-[sidebar-state=peek]:w-28 in-data-[sidebar-state=peek]:min-w-28 in-data-[sidebar-state=peek]:justify-start in-data-[sidebar-state=peek]:gap-2 in-data-[sidebar-state=peek]:pl-2 in-data-[sidebar-state=peek]:pr-3 in-data-[sidebar-state=peek]:duration-1000",
+      "in-data-[sidebar-state=peek-dismissing]:duration-1000",
+      isToolsVariant && "sidebar-toggle--tools",
+    ]}
+  >
+    <svg
+      class="sidebar-btn-icon h-5 w-5 shrink-0 text-white transition-transform duration-300 ease-in-out in-data-[sidebar-state=open]:-scale-x-100"
+      aria-hidden="true"
+    >
+      <use href={`${Icons}#sidebar`}></use>
+    </svg>
+    <span
+      class="sidebar-toggle-label text-small block max-w-0 overflow-hidden leading-none font-bold whitespace-nowrap text-white opacity-0 transition-all duration-300 ease-in-out motion-reduce:duration-0 in-data-[sidebar-state=peek]:max-w-16 in-data-[sidebar-state=peek]:opacity-100 in-data-[sidebar-state=peek]:duration-1000 in-data-[sidebar-state=peek-dismissing]:duration-1000"
+    >
+      {resolvedMobileLabel}
+    </span>
+  </button>
+
+  <aside
+    id={sidebarId}
+    class="sidebar-panel bg-custom-100 dark:bg-custom-700 shadow-accent-glow pointer-events-none fixed top-14 right-0 bottom-0 z-40 w-75 translate-x-full scrollbar-none overflow-y-auto shadow-[-4px_0_4px_-1px_var(--tw-shadow-color)] transition-all duration-300 ease-in-out motion-reduce:duration-0 sm:w-80 md:top-15 md:w-85 lg:pointer-events-auto lg:static lg:right-auto lg:bottom-auto lg:z-auto lg:h-auto lg:w-full lg:translate-x-0 lg:overflow-y-visible lg:rounded-none lg:bg-transparent lg:shadow-none lg:transition-none lg:dark:bg-transparent in-data-[sidebar-state=open]:pointer-events-auto in-data-[sidebar-state=open]:translate-x-0 in-data-[sidebar-state=peek]:right-8 in-data-[sidebar-state=peek]:shadow-md in-data-[sidebar-state=peek]:duration-1000 in-data-[sidebar-state=peek-dismissing]:duration-1000"
+    aria-label={panelLabel}
+    tabindex="-1"
+  >
+    <div class="space-y-4 p-3 lg:space-y-0 lg:p-0">
+      <slot />
+    </div>
+  </aside>
+</sidebar-drawer>
+
+<script>
+  import { lockScroll, unlockScroll } from "@/utils/site/scrollLock";
+
+  type SidebarState = "closed" | "open" | "peek" | "peek-dismissing";
+
+  class SidebarDrawer extends HTMLElement {
+    private controller: AbortController | null = null;
+    private triggerButton: HTMLButtonElement | null = null;
+    private scrollLocked = false;
+
+    private setState(state: SidebarState): void {
+      this.dataset.sidebarState = state;
+    }
+
+    connectedCallback() {
+      const panel = this.querySelector<HTMLElement>(".sidebar-panel");
+      const toggle = this.querySelector<HTMLButtonElement>(".sidebar-toggle");
+      const overlay = this.querySelector<HTMLElement>(".sidebar-overlay");
+      const openLabel = toggle?.dataset.openLabel ?? "Open sidebar";
+      const closeLabel = toggle?.dataset.closeLabel ?? "Close sidebar";
+      const closeOnAction = this.dataset.closeOnAction === "true";
+      const isPeekEnabled = this.classList.contains("sidebar-drawer--peek");
+      const desktopMedia = window.matchMedia("(min-width: 1024px)");
+      const firstInteractive = panel?.querySelector<HTMLElement>(
+        "a, button, input, select, textarea, [tabindex]:not([tabindex='-1'])",
+      );
+
+      if (!panel || !toggle || !overlay) return;
+      this.triggerButton = toggle;
+
+      this.controller = new AbortController();
+      const { signal } = this.controller;
+      let peekRevealTimer = 0;
+      let peekSettleTimer = 0;
+      let peekTransitionTimer = 0;
+      let peekDismissed = false;
+      const peekRevealDelay = 650;
+      const peekHoldDuration = 8000;
+      const peekTransitionDuration = 1000;
+
+      const isDrawerOpen = () =>
+        toggle.getAttribute("aria-expanded") === "true";
+
+      const syncPanelAccessibility = () => {
+        if (desktopMedia.matches) {
+          panel.removeAttribute("aria-hidden");
+          panel.removeAttribute("aria-modal");
+          panel.removeAttribute("inert");
+          panel.removeAttribute("role");
+          return;
+        }
+
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-modal", "true");
+        panel.setAttribute("aria-hidden", String(!isDrawerOpen()));
+        panel.toggleAttribute("inert", !isDrawerOpen());
+      };
+
+      const clearPeekTimers = () => {
+        if (peekRevealTimer !== 0) {
+          window.clearTimeout(peekRevealTimer);
+          peekRevealTimer = 0;
+        }
+        if (peekSettleTimer !== 0) {
+          window.clearTimeout(peekSettleTimer);
+          peekSettleTimer = 0;
+        }
+        if (peekTransitionTimer !== 0) {
+          window.clearTimeout(peekTransitionTimer);
+          peekTransitionTimer = 0;
+        }
+      };
+
+      const hidePeek = () => {
+        peekDismissed = true;
+        this.setState("closed");
+        clearPeekTimers();
+      };
+
+      const showPeek = () => {
+        peekRevealTimer = 0;
+        if (peekDismissed || desktopMedia.matches || isDrawerOpen()) {
+          return;
+        }
+
+        this.setState("peek");
+
+        if (peekSettleTimer !== 0) window.clearTimeout(peekSettleTimer);
+        peekSettleTimer = window.setTimeout(() => {
+          peekSettleTimer = 0;
+          this.setState("peek-dismissing");
+          peekTransitionTimer = window.setTimeout(() => {
+            peekTransitionTimer = 0;
+            this.setState("closed");
+          }, peekTransitionDuration);
+        }, peekHoldDuration);
+      };
+
+      const queuePeekReveal = () => {
+        if (!isPeekEnabled || peekDismissed || peekRevealTimer !== 0) return;
+        peekRevealTimer = window.setTimeout(showPeek, peekRevealDelay);
+      };
+
+      const openDrawer = () => {
+        hidePeek();
+        this.setState("open");
+        if (!this.scrollLocked) {
+          lockScroll();
+          this.scrollLocked = true;
+        }
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.setAttribute("aria-label", closeLabel);
+        syncPanelAccessibility();
+        overlay.classList.remove("opacity-0", "pointer-events-none");
+        overlay.classList.add("opacity-100", "pointer-events-auto");
+        requestAnimationFrame(() => {
+          (firstInteractive ?? panel).focus();
+        });
+      };
+
+      this.close = () => {
+        this.setState("closed");
+        overlay.classList.remove("opacity-100", "pointer-events-auto");
+        overlay.classList.add("opacity-0", "pointer-events-none");
+        if (this.scrollLocked) {
+          unlockScroll();
+          this.scrollLocked = false;
+        }
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", openLabel);
+        syncPanelAccessibility();
+        if (!desktopMedia.matches) this.triggerButton?.focus();
+      };
+
+      syncPanelAccessibility();
+
+      toggle.addEventListener(
+        "click",
+        () =>
+          toggle.getAttribute("aria-expanded") === "true"
+            ? this.close()
+            : openDrawer(),
+        { signal },
+      );
+
+      overlay.addEventListener("click", () => this.close(), { signal });
+
+      queuePeekReveal();
+
+      panel.addEventListener(
+        "click",
+        (event) => {
+          if (
+            !closeOnAction ||
+            toggle.getAttribute("aria-expanded") !== "true"
+          ) {
+            return;
+          }
+          if (desktopMedia.matches) return;
+
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const action = target.closest("a[href], [data-pattern-button]");
+          if (!action || action.closest("[data-keep-sidebar-open]")) return;
+
+          requestAnimationFrame(() => this.close());
+        },
+        { signal },
+      );
+
+      document.addEventListener(
+        "keydown",
+        (e) => {
+          if (
+            e.key === "Escape" &&
+            toggle.getAttribute("aria-expanded") === "true"
+          ) {
+            this.close();
+          }
+        },
+        { signal },
+      );
+
+      desktopMedia.addEventListener(
+        "change",
+        (e) => {
+          if (e.matches) {
+            hidePeek();
+            this.close();
+          } else {
+            syncPanelAccessibility();
+            queuePeekReveal();
+          }
+        },
+        { signal },
+      );
+
+      signal.addEventListener("abort", clearPeekTimers, { once: true });
+    }
+
+    close() {}
+
+    disconnectedCallback() {
+      this.controller?.abort();
+      this.controller = null;
+      if (this.scrollLocked) {
+        unlockScroll();
+        this.scrollLocked = false;
+      }
+    }
+  }
+
+  if (!customElements.get("sidebar-drawer")) {
+    customElements.define("sidebar-drawer", SidebarDrawer);
+  }
+</script>

@@ -1,0 +1,143 @@
+---
+title: "What is a SoC? Smartphone System on Chip Explained"
+metaDescription: "Explore how a smartphone SoC is made, its core components, and how this tiny chip defines performance and efficiency."
+authorName: "Sorted Tech Editorial"
+authorUrl: "/editorial"
+cardTitle: "The Foundation: SoC"
+cardDescription: "From sand to silicon: the journey of a smartphone SoC"
+heading: "Smartphone SoC Explained: How One Tiny Chip Powers Everything"
+image: "../../../../assets/images/phones/explainers/soc/soc.avif"
+publishedAt: "2026-05-10"
+series: "Smartphone System on Chip Explained"
+role: "overview"
+order: 1
+---
+
+import socDiagram from "@/assets/images/phones/explainers/soc/soc-diagram.svg?url";
+import DiagramViewer from "@/components/site/DiagramViewer.astro";
+import { socBlocks } from "@/content/phones/explainers/soc/soc-diagram.ts";
+
+Imagine this, you are scrolling through social media while listening to music and you feel like sharing a pic. You open the camera, click, and post it. Takes maybe two seconds. But in those two seconds your phone recognized your face, adjusted for the light, processed the image, and saved it, all while keeping the music going and staying connected.
+
+Now consider something even more demanding. You're using GPS while driving, Spotify is playing, and you receive a message. Your phone reads it out loud while the screen continues to show navigation and the music keeps playing. You can install countless apps, all creating different combinations of possibilities on your phone, but a tiny chip handles it all. It is called the SoC, short for System on Chip.
+
+## What Is a System on Chip? And How Is a Smartphone SoC Different?
+
+Think of it like a company where different departments have to work together: processing, graphics, connectivity, and more. Now imagine each of those departments is in a separate building across a large campus. Every time one department needs something from another, a courier has to carry the request across campus and deliver it. That takes time, wastes energy, and slows everything down.
+
+Now imagine moving every department into the same building. No travel time, no couriers, and information passes down the hallway in an instant. That building is a single chip, roughly the size of a fingernail, and it is called a System on Chip.
+
+Not every SoC is built the same, though. The chip inside a smart TV or a Wi-Fi router is also an SoC, but it is built for one narrow job. A smartphone SoC has to handle calls, messages, navigation, photography, video calls, voice assistants, 5G connectivity, gaming, and all your apps at once, while fitting in your pocket and lasting a full day on battery. That demands a far more sophisticated design, with billions of microscopic components and multiple specialized engines all working together.
+
+## How Is a Smartphone SoC Actually Made?
+
+It begins with one of the most common materials on earth: sand. But not just any sand.
+
+Silicon, the material chips are made from, is purified from a specific type of high-purity silica sand, mostly quartz, that contains over 95% silicon dioxide. For use in electronics, it gets refined even further until it reaches a purity of 99.9999% or higher. It gets processed into large cylindrical blocks, which are then sliced into thin circular discs called wafers. The name is quite literal, actually. They look a lot like the wafer chips you find in a snack pack, just made of silicon instead of potato.
+
+On each wafer, manufacturers print hundreds of individual chips at once using a process called photolithography. The wafer is first coated with a light-sensitive material, then a circuit pattern is projected onto it using Extreme Ultraviolet (EUV) light. It is an extremely short-wavelength light that can't pass through normal lenses or even air, because it gets absorbed. As a result, the system uses a series of special mirrors inside a vacuum to guide the light. Where the light hits, the coating undergoes a chemical change, making those areas easier to remove. The wafer is then etched, washing away the exposed material and leaving the circuit pattern behind. This process happens layer by layer, gradually building up the chip at a nanometer scale. The result is what engineers call Very Large Scale Integration, or VLSI: billions of transistors packed into a tiny space. If that rabbit hole interests you, there is a whole field of engineering behind it.
+
+Once the wafer is finished, it is cut into individual chips. Each one is tested, and the ones that pass get packaged into the familiar chip casing. The ones that fail get discarded.
+
+When you see a spec like 4nm or 6nm next to a chip's name, it is easy to assume that refers to a physical size. It used to, back in the 1990s. Today it does not. These numbers are generation labels, shorthand for a new tier of technology that generally packs in more transistors and runs more efficiently. That said, smaller nodes also introduce new challenges such as power leakage and interconnect resistance, so the gains are not always linear.
+
+Some companies design their chips but do not manufacture them. They send the designs to specialist foundries like Taiwan Semiconductor Manufacturing Company (TSMC) that operate the incredibly expensive equipment needed to actually build them. Others, like Samsung, both design and manufacture their own chips.
+
+## Who Makes Smartphone SoCs?
+
+The names you see on spec sheets, Qualcomm Snapdragon, MediaTek Dimensity, Samsung Exynos, Apple Silicon, are all different companies building their own chips, but almost all of them share a common foundation: ARM architecture.
+
+Arm Holdings plc is a British semiconductor design company founded in 1990. It designs the core blueprints that most smartphone chips are built on, but it does not manufacture chips itself. Instead, it licenses its designs to chip makers, who then build on top of them, adding their own components, customizations, and optimizations. This is why a Snapdragon and an Exynos can feel architecturally similar under the hood even though they come from competing companies.
+
+The CPU explainer goes deeper on what ARM's architecture means in practice, since that is where it has the most direct impact on the performance you actually feel.
+
+Now that you know how the chip is made and who makes it, here is what is actually inside it.
+
+## What Are the Main Components of a Smartphone SoC?
+
+Remember the "departments" from the beginning? In a smartphone SoC, each one corresponds to a specialized component, each built for a specific type of work. The diagram below provides an overview of the main components of a modern SoC. It uses general industry terminology; while naming may vary across vendors, the components are functionally equivalent. For example, a Secure Enclave may be referred to as a Secure Processing Unit.
+
+<div class="flex justify-center">
+  <DiagramViewer
+    src={socDiagram}
+    blocks={socBlocks}
+    alt="SoC Block Diagram"
+    note="A simple block diagram based on a mid-range SoC die shot."
+  />
+</div>
+
+<h3 class="text-h4 mt-2! mb-1!"> The Logic Core: CPU </h3>
+
+The Central Processing Unit (CPU) runs your apps, responds to every tap, and coordinates most of the work happening across the chip.
+
+<h3 class="text-h4 mt-1!"> The Visual Engine: GPU and Display Processor </h3>
+
+The Graphics Processing Unit (GPU) handles all visual rendering, from game graphics to animations. The Display Processor takes that output and drives it to your screen, managing refresh rates and HDR tone mapping.
+
+<h3 class="text-h4 mt-1!"> The Neural Engine: NPU </h3>
+
+The Neural Processing Unit (NPU) handles machine learning tasks like face recognition, voice processing, and AI-powered photography, all processed directly on the device.
+
+<h3 class="text-h4 mt-1!"> The Multimedia Subsystem: ISP and VPU </h3>
+The Image Signal Processor (ISP) processes raw light from your camera sensor
+into the photos and videos you see. The Video Processing Unit (VPU) handles the
+encoding and decoding of video.
+
+<h3 class="text-h4 mt-1!">
+  {" "}
+  The Signal Suite: Modem, Wi-Fi, Bluetooth, and GNSS{" "}
+</h3>
+
+The Modem manages your cellular connection including calls, texts, and mobile data. Wi-Fi and Bluetooth handle short-range wireless connections. The Global Navigation Satellite System (GNSS) handles location via GPS and other satellite systems.
+
+<h3 class="text-h4 mt-1!">
+  {" "}
+  The System Fabric: Memory Controller, Storage Controller, NoC, and SLC{" "}
+</h3>
+
+The Memory Controller manages how data moves between the SoC and your phone's RAM. The Storage Controller handles reads and writes to internal storage. The Network-on-Chip (NoC) is the internal backbone routing data between every component simultaneously. The System Level Cache (SLC) is a shared buffer where components can cache data.
+
+<h3 class="text-h4 mt-1!"> The Always-On Layer: DSP, AOP, and Sensor Hub </h3>
+
+The Digital Signal Processor (DSP) handles repetitive low-power tasks like audio processing and voice detection. The Always-On Processor (AOP) keeps the chip partially alive when the screen is off, enabling features like raise-to-wake and always-on display. The Sensor Hub aggregates data from all physical sensors like accelerometer, gyroscope, barometer, and more.
+
+<h3 class="text-h4 mt-1!"> The Hardware Vault: Secure Subsystem </h3>
+
+A completely isolated processor with its own encrypted memory, responsible for storing and processing your most sensitive data, like biometric templates, encryption keys, payment credentials, and device certificates.
+
+<h3 class="text-h4 mt-1!"> The Infrastructure Management: SCU and TMU </h3>
+
+The System Control Unit (SCU) manages power states across the chip, controlling which components are active and which are powered down. The Thermal Management Unit (TMU) monitors temperatures and adjusts performance to prevent overheating. Together they determine how the chip behaves under load and how efficiently it uses every milliwatt.
+
+How well all of these components work together determines everything from how smooth your phone feels to how long the battery lasts. Learn more about them in our component specific deep dives.
+
+## The SoC and Your Next Phone
+
+Nobody shops for a chip. You shop for a phone.
+
+Within the same price tier, most phones use a similar class of SoC. Phones at the same price point compete on cameras, design, and software, not raw chip performance.
+
+**For everyday use**, calls, messaging, social media, streaming, and casual photography are well within what a low-end SoC handles comfortably.
+
+**For battery life**, the process node and the overall efficiency of the chip matter most. A newer generation chip on a smaller node generally does more work per milliwatt, which directly extends how long your phone lasts. The Always-On Processor (AOP) and Digital Signal Processor (DSP) also play a role, handling always-on tasks at very low power so the main cores can stay asleep longer.
+
+**For photography**, the megapixel count is largely a marketing number. What actually determines photo quality, especially in low light, is the combination of the camera sensor and the ISP. A larger sensor captures more light, and a well-tuned ISP processes that data into a better image.
+
+**For gaming**, both the CPU and GPU matter. CPU performance affects how responsive a game feels, while the GPU handles rendering the graphics. Mid-range chips today are capable of 120Hz gaming in many titles. Where flagship chips earn their place is in sustaining that performance over longer sessions without throttling and handling the most demanding games at higher settings. Thermal design and software optimization matter just as much as the chip itself.
+
+**For AI features**, the NPU is the key component. On-device tasks like real-time translation, voice processing, and photo enhancement all run here. If AI features matter to you, TOPS (Tera Operations Per Second) is the spec to compare, not clock speed or core count.
+
+One more thing worth knowing: flagship-level performance does not always require paying flagship prices. Some manufacturers place top-tier chips into more affordable phones to compete aggressively.
+
+That said, the chip alone does not determine the entire experience. Even when two phones use the same SoC, they may not perform the same. Cooling design, RAM speed, storage speed, and software optimization all affect how that chip behaves in the real world.
+
+For example, a chip might support fast Low Power Double Data Rate 5X (LPDDR5X) memory and Universal Flash Storage 4.0 (UFS 4.0), but one manufacturer may pair it with slower LPDDR4 memory and UFS 2.2 to reduce cost. Another phone using the same chip might include faster memory and better cooling. On paper the SoC is identical, but the real-world experience can feel noticeably different.
+
+In other words, the chip sets the potential, but the rest of the phone determines how much of that potential you actually experience.
+
+The chip does not define how good a phone is. But knowing what is inside it, and which parts matter for the things you care about, means you are shopping with your eyes open instead of guessing your way through a spec sheet.
+
+### Did You Know?
+
+The CPU in your phone doesn't execute code in the order it was written. It constantly reorders instructions, predicts which path a program will take next, and sometimes runs steps before it even knows if they'll be needed. That technique is called out-of-order execution, and it is one of the main reasons modern chips feel fast even under unpredictable workloads. The CPU article gets into exactly how that works, and why it affects the phones you are actually choosing between.
+

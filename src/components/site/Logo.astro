@@ -1,0 +1,212 @@
+---
+// src/components/site/Logo.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+
+interface Props {
+  definitionsOnly?: boolean;
+  variant?: "desktop" | "mobile";
+}
+
+const { definitionsOnly = false, variant = "desktop" } = Astro.props;
+
+const isDesktop = variant === "desktop";
+const markClass = [
+  "block",
+  isDesktop ? "w-[38px] h-[38px]" : "w-[30px] h-[30px]",
+  "drop-shadow-[0_3px_3px_rgba(43,127,255,0.5)]",
+  "logo-poweron-image",
+].join(" ");
+const wordmarkClass = [
+  isDesktop ? "h-[34px]" : "h-[26px]",
+  "w-auto",
+  "drop-shadow-[0_3px_3px_rgba(43,127,255,0.5)]",
+  "logo-poweron-text",
+].join(" ");
+---
+
+{
+
+  definitionsOnly && (
+    <svg
+      aria-hidden="true"
+      style="position:absolute;width:0;height:0;overflow:hidden"
+    >
+      <defs>
+        <symbol id="sorto-wordmark" viewBox="0 0 250 50">
+          <text
+            x="50%"
+            y="40"
+            text-anchor="middle"
+            style="font-family:var(--font-sorted-logo),sans-serif"
+            font-size="48"
+            font-weight="700"
+            stroke="#2B7FFF"
+            stroke-width="4"
+            paint-order="stroke fill"
+            fill="#EFF6FF"
+            letter-spacing="2"
+          >
+            Sor<tspan dx="2.5">t</tspan>ed
+            <tspan fill="#8EC5FF" dx="6">
+              Tech
+            </tspan>
+          </text>
+        </symbol>
+      </defs>
+    </svg>
+  )
+}
+
+{
+  !definitionsOnly && (
+    <svg
+      viewBox="0 0 1025 1025"
+      fill="none"
+      aria-hidden="true"
+      class={markClass}
+    >
+      <use href={`${Icons}#sorto-logo-mark`} />
+    </svg>
+  )
+}
+
+{
+  !definitionsOnly && (
+    <svg viewBox="0 0 250 50" aria-hidden="true" class={wordmarkClass}>
+      <use href="#sorto-wordmark" />
+    </svg>
+  )
+}
+
+<style>
+  .logo-poweron-text {
+    fill-opacity: 0.6;
+    stroke-opacity: 0;
+    animation: power-on-text 10s ease-out 2.2s forwards;
+  }
+
+  .logo-poweron-image {
+    fill-opacity: 0.8;
+    stroke-opacity: 0.2;
+    animation: power-on-image 10s ease-out 2s forwards;
+  }
+
+  @keyframes power-on-text {
+    0% {
+      fill-opacity: 0.2;
+      stroke-opacity: 0.2;
+    }
+    2% {
+      fill-opacity: 0.5;
+      stroke-opacity: 0.6;
+    }
+    3% {
+      fill-opacity: 0.3;
+      stroke-opacity: 0.4;
+    }
+    4% {
+      fill-opacity: 0.6;
+      stroke-opacity: 0.7;
+    }
+    5% {
+      fill-opacity: 0.4;
+      stroke-opacity: 0.5;
+    }
+    6% {
+      fill-opacity: 0.7;
+      stroke-opacity: 0.8;
+    }
+    8% {
+      fill-opacity: 0.5;
+      stroke-opacity: 0.6;
+    }
+    12% {
+      fill-opacity: 0.8;
+      stroke-opacity: 0.9;
+    }
+    16% {
+      fill-opacity: 0.5;
+      stroke-opacity: 0.6;
+    }
+    20%,
+    94% {
+      fill-opacity: 1;
+      stroke-opacity: 1;
+    }
+    95% {
+      fill-opacity: 0.5;
+      stroke-opacity: 0.6;
+    }
+    96% {
+      fill-opacity: 0.8;
+      stroke-opacity: 0.9;
+    }
+    98% {
+      fill-opacity: 0.5;
+      stroke-opacity: 0.6;
+    }
+    100% {
+      fill-opacity: 1;
+      stroke-opacity: 1;
+    }
+  }
+
+  @keyframes power-on-image {
+    0% {
+      stroke-opacity: 0.2;
+    }
+    2% {
+      stroke-opacity: 0.6;
+    }
+    3% {
+      stroke-opacity: 0.4;
+    }
+    4% {
+      stroke-opacity: 0.7;
+    }
+    5% {
+      stroke-opacity: 0.5;
+    }
+    6% {
+      stroke-opacity: 0.8;
+    }
+    8% {
+      stroke-opacity: 0.6;
+    }
+    12% {
+      stroke-opacity: 0.9;
+    }
+    16% {
+      stroke-opacity: 0.6;
+    }
+    20%,
+    94% {
+      fill-opacity: 1;
+      stroke-opacity: 1;
+    }
+    95% {
+      stroke-opacity: 0.6;
+    }
+    96% {
+      stroke-opacity: 0.9;
+    }
+    98% {
+      stroke-opacity: 0.6;
+    }
+    100% {
+      fill-opacity: 1;
+      stroke-opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .logo-poweron-text,
+    .logo-poweron-image {
+      animation: none !important;
+      opacity: 1 !important;
+      fill-opacity: 1 !important;
+      stroke-opacity: 1 !important;
+    }
+  }
+</style>

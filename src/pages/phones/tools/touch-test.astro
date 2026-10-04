@@ -1,0 +1,2293 @@
+---
+// src/pages/phones/tools/touch-test.astro
+
+export const prerender = true;
+
+import { getToolBySlug } from "@/content/phones/tools";
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+
+const tool = getToolBySlug("touch-test");
+const ogImage = tool.image.src;
+const title = "Free Online Touch Screen Test: Dead Zones & Multi-Touch";
+const metaDescription =
+  "Check touchscreen dead zones, multi-touch contacts, tap precision, ghost touches, and tracking drift with browser-based grids, targets, guides, and live data.";
+
+const stageLayerClasses = "pointer-events-none absolute inset-0 h-full w-full";
+
+const referenceItems = [
+  {
+    label: "Dead Zones",
+    check: "Drag slowly until every cell in the visible grid fills once.",
+    reading:
+      "A filled cell means the browser received at least one touch or pointer event there. Coverage is scored on a fixed grid independent of screen rotation, so turning the phone mid-test never changes the percentage on its own.",
+    good: "The full surface responds continuously, including corners and the very edges.",
+    concern:
+      "Cells stay blank, lines break, or one strip of the screen stops responding.",
+  },
+  {
+    label: "Multi-touch",
+    check:
+      "Place two or more fingers down together and watch the live markers and counters.",
+    reading:
+      "Each colored marker represents one current contact. Active is how many fingers are down now, while Peak is the highest simultaneous contact count reached since reset.",
+    good: "Each finger keeps its own marker, active rises correctly, and peak matches the highest simultaneous touch count you reached.",
+    concern:
+      "One contact cancels another, markers merge together, or peak stays too low for the number of fingers on screen.",
+  },
+  {
+    label: "Precision",
+    check:
+      "Tap the single highlighted target and aim for the center dot before it advances to the next one.",
+    reading:
+      "Targets are presented one at a time, in order. Done counts targets that have been resolved, either by hitting the center or by reaching three missed attempts. Last shows whether the most recent tap was centered, missed, or failed.",
+    good: "Targets complete without repeated retries, and the touch lands close to the middle.",
+    concern:
+      "The same target needs several tries, taps land visibly off-center, or some positions are much harder to clear than others.",
+  },
+  {
+    label: "Ghost Touch",
+    check:
+      "Clean and dry the screen, unplug the charger, set the phone flat, and do not touch it during the countdown or watch window. Test with the phone in its normal setup first; if phantom touches appear, repeat after removing the case or an easily removable screen protector.",
+    reading:
+      "Any pointer event the browser receives during the watch window with nobody touching the screen is a phantom. Each one is logged and plotted at the position it was reported.",
+    good: "No phantom touches are recorded during the full watch window.",
+    concern:
+      "One or more phantom touches appear, especially if they repeat in the same screen area.",
+  },
+  {
+    label: "Drift & Linearity",
+    check:
+      "Trace each dashed guide slowly with one finger, start to end. Use the path button at the bottom left to change direction.",
+    reading:
+      "Horizontal, vertical, and both diagonal paths are measured separately. Deviation is the farthest your actual path strayed from the active guide, in pixels. Coverage is how much of the active guide you traced within the allowed distance. A suspected gap requires both an unusually long event stall and movement when reporting resumes.",
+    good: "The traced line stays close to the guide with no jumps or breaks.",
+    concern:
+      "The path wanders far from the guide, or breaks and resumes elsewhere on the panel.",
+  },
+  {
+    label: "What It Means",
+    check:
+      "Compare which mode shows the problem, and check the live input readouts below the stage.",
+    reading:
+      "Dead Zone Grid checks whether touches register anywhere, Multi-touch checks simultaneous contacts, Precision checks where taps land, Ghost Touch checks for phantom input, and Drift checks tracking continuity. Browser frame wait, pressure, contact size, and pointer type update live from whatever is currently touching the screen. Frame wait is event timestamp to the next animation callback, not raw touch latency. Sample rate is what this browser received, not your panel's digitizer rate -- iOS Safari caps it near 60 by default regardless of the display.",
+    good: "Dead Zone, Multi-touch, Precision, Ghost Touch, and Drift all behave consistently across the whole panel.",
+    concern:
+      "If only one mode fails, that usually points to a specific digitizer behavior rather than a general screen issue.",
+  },
+];
+
+const touchModes = [
+  {
+    id: "swipe",
+    icon: "touch-swipe",
+    label: "Dead Zone Grid",
+    meta: "Fill every cell",
+    tip: "Drag slowly through every cell, including the edges and corners.",
+  },
+  {
+    id: "multitouch",
+    icon: "touch-multitouch",
+    label: "Multi-touch",
+    meta: "Track several fingers",
+    tip: "Place two or more fingers together and check that each marker stays separate.",
+  },
+  {
+    id: "precision",
+    icon: "touch-precision",
+    label: "Precision",
+    meta: "Tap 16 targets in order",
+    tip: "Aim for each center dot and avoid correcting the tap after contact.",
+  },
+  {
+    id: "ghost",
+    icon: "touch-ghost",
+    label: "Ghost Touch",
+    meta: "Leave the screen untouched",
+    tip: "Clean and unplug the phone, then leave the screen completely untouched.",
+  },
+  {
+    id: "drift",
+    icon: "touch-drift",
+    label: "Drift & Linearity",
+    meta: "Trace every guide direction",
+    tip: "Trace slowly from start to end, then use the bottom-left path button to change direction.",
+  },
+];
+
+const sidebarGroups = [
+  {
+    title: "Select test",
+    openByDefault: true,
+    attributes: { "data-touch-accordion": "" },
+    items: touchModes.map((mode, index) => ({
+      label: mode.label,
+      meta: mode.meta,
+      visual: {
+        type: "icon" as const,
+        spriteUrl: ToolIcons,
+        spriteId: mode.icon,
+      },
+      active: index === 0,
+      attributes: {
+        "data-touch-mode-button": "",
+        "data-mode-id": mode.id,
+        "data-mode-label": mode.label,
+        "data-mode-tip": mode.tip,
+      },
+    })),
+  },
+];
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{ tools: "Tools", "touch-test": "Touchscreen Test" }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Touchscreen Tester: Touch and Dead Zone Checks</h1>
+        <p>
+          Test five parts of touchscreen behavior directly in your browser. Fill
+          the Dead Zone Grid to find areas that do not register, track multiple
+          fingers and peak contact count, tap 16 targets to check precision, run
+          a hands-off Ghost Touch watch for phantom input, and trace horizontal,
+          vertical, and diagonal guides to examine drift and linearity. Live
+          readings show coverage, active contacts, frame wait, browser-received
+          sample rate, pressure, contact size, and pointer type. The tool measures
+          input exposed to the browser; it does not measure raw digitizer latency
+          or recalibrate the touchscreen.
+        </p>
+      </div>
+      <p
+        id="touch-mouse-notice"
+        class="text-small bg-custom-100 dark:bg-custom-700 border-accent-line rounded-xl border px-3 py-2 text-slate-700 dark:text-slate-300"
+        role="status"
+        aria-live="polite"
+        hidden
+      >
+        Mouse pointer detected. Coverage and precision will still register, but
+        multi-touch, pressure, and ghost touch results won't be meaningful from
+        a mouse. Test on a touchscreen device for accurate results.
+      </p>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="touch-test-shell"
+          fullscreenButtonId="touch-fullscreen"
+          stageVariant="tall"
+          controlsAutoHide={true}
+          actionBarLabel="Touch test actions"
+          stageStatsMode="fullscreen-only"
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              attributes: { id: "touch-start" },
+            },
+            {
+              label: "Reset",
+              tone: "danger",
+              attributes: { id: "touch-reset" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Active",
+              value: "0",
+              labelAttributes: { "data-stat-label": "primary" },
+              valueAttributes: { "data-stat": "primary" },
+            },
+            {
+              label: "Coverage",
+              value: "0%",
+              labelAttributes: { "data-stat-label": "secondary" },
+              valueAttributes: { "data-stat": "secondary" },
+            },
+          ]}
+          secondaryStats={[
+            {
+              label: "Viewport",
+              value: "--",
+              valueAttributes: { "data-device-info": "viewport" },
+            },
+            {
+              label: "Pixel Ratio",
+              value: "--",
+              valueAttributes: { "data-device-info": "pixelRatio" },
+            },
+            {
+              label: "Sample rate",
+              value: "-- Hz",
+              valueAttributes: { "data-stat": "rate" },
+            },
+          ]}
+          stageStats={[
+            {
+              label: "Active",
+              value: "0",
+              labelAttributes: {
+                id: "touch-stage-primary-label",
+                "data-stat-label": "primary",
+              },
+              valueAttributes: { "data-stat": "primary" },
+            },
+            {
+              label: "Coverage",
+              value: "0%",
+              labelAttributes: {
+                id: "touch-stage-secondary-label",
+                "data-stat-label": "secondary",
+              },
+              valueAttributes: { "data-stat": "secondary" },
+            },
+            {
+              label: "Frame wait",
+              value: "-- ms",
+              valueAttributes: { "data-stat": "latency" },
+            },
+            {
+              label: "Sample rate",
+              value: "-- Hz",
+              valueAttributes: { "data-stat": "rate" },
+            },
+          ]}
+        >
+          <div
+            id="touch-stage"
+            class="touch-stage"
+            data-active="false"
+            data-mode="swipe"
+          >
+            <div
+              id="touch-fullscreen-notice"
+              class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-none absolute top-1/2 left-1/2 z-6 grid w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-1 rounded-2xl border px-4 py-3 text-center shadow-md"
+              hidden
+              role="status"
+              aria-live="polite"
+            >
+              <strong
+                class="text-small text-slate-800 dark:text-slate-200 leading-tight"
+                >Paused</strong
+              >
+              <span
+                class="text-xsmall text-slate-700 dark:text-slate-300 leading-snug"
+                >Press Resume to continue in fullscreen.</span
+              >
+            </div>
+            <div
+              id="touch-ghost-panel"
+              class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-auto absolute top-1/2 left-1/2 z-6 grid w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-2xl border px-4 py-4 text-center shadow-md"
+              hidden
+              role="status"
+              aria-live="polite"
+            >
+              <div>
+                <strong
+                  id="touch-ghost-panel-title"
+                  class="text-small text-slate-800 dark:text-slate-200 leading-tight"
+                  >Prepare the screen</strong
+                >
+                <p
+                  id="touch-ghost-panel-body"
+                  class="text-xsmall text-slate-700 dark:text-slate-300 leading-snug mb-0"
+                >
+                  Clean and dry the screen, unplug the charger, and set the phone
+                  on a flat surface. Test the normal setup first. If phantom
+                  touches appear, repeat without the case or an easily removable
+                  screen protector. Press Start, then do not touch the screen until
+                  the watch window ends.
+                </p>
+              </div>
+              <div
+                class="flex flex-wrap justify-center gap-1.5"
+                role="group"
+                aria-label="Watch duration"
+              >
+                <button
+                  type="button"
+                  data-ghost-duration="15000"
+                  class="text-xsmall border-accent-line aria-pressed:border-accent-500 aria-pressed:bg-accent-500/15 rounded-lg border px-2.5 py-1 font-medium text-slate-700 dark:text-slate-300"
+                  aria-pressed="true"
+                >
+                  15s
+                </button>
+                <button
+                  type="button"
+                  data-ghost-duration="30000"
+                  class="text-xsmall border-accent-line aria-pressed:border-accent-500 aria-pressed:bg-accent-500/15 rounded-lg border px-2.5 py-1 font-medium text-slate-700 dark:text-slate-300"
+                  aria-pressed="false"
+                >
+                  30s
+                </button>
+                <button
+                  type="button"
+                  data-ghost-duration="60000"
+                  class="text-xsmall border-accent-line aria-pressed:border-accent-500 aria-pressed:bg-accent-500/15 rounded-lg border px-2.5 py-1 font-medium text-slate-700 dark:text-slate-300"
+                  aria-pressed="false"
+                >
+                  60s
+                </button>
+              </div>
+            </div>
+            <div
+              id="touch-overlay"
+              class={`${stageLayerClasses} z-1 grid`}
+              aria-hidden="true"
+            >
+            </div>
+            <div
+              id="touch-precision-layer"
+              class={`${stageLayerClasses} z-2`}
+              aria-hidden="true"
+            >
+            </div>
+            <div
+              id="touch-drift-layer"
+              class={`${stageLayerClasses} z-2`}
+              aria-hidden="true"
+            >
+            </div>
+            <div class="drift-option-actions">
+              <button
+                type="button"
+                id="touch-drift-guide-option"
+                class="drift-stage-btn"
+                hidden
+                aria-label="Change drift path"
+              >
+                <svg
+                  class="drift-option-icon"
+                  viewBox="0 0 24 24"
+                  focusable="false"
+                  aria-hidden="true"
+                >
+                  <use href={`${ToolIcons}#angle`}></use>
+                </svg>
+                <span id="touch-drift-guide-option-label" class="drift-option-label">Path Horizontal</span>
+              </button>
+            </div>
+            <div
+              id="touch-markers"
+              class={`${stageLayerClasses} z-4`}
+              aria-hidden="true"
+            >
+            </div>
+          </div>
+
+          <p slot="dockLead" id="touch-dock-tip">
+            {touchModes[0]?.tip}
+          </p>
+        </ToolRuntime>
+
+        <div
+          class="border-accent-line grid gap-2 rounded-2xl border bg-custom-200/50 p-3 dark:bg-custom-800/50"
+        >
+          <div>
+            <h2
+              class="text-accent-ink text-xsmall mb-0 font-bold tracking-widest uppercase"
+            >
+              Report
+            </h2>
+          </div>
+          <p
+            id="touch-report-summary"
+            class="text-2xsmall font-medium mb-0 text-slate-800 dark:text-slate-200"
+          >
+            Run a test to see a summary of coverage, peak touches, precision,
+            ghost touches, drift, frame wait, and sample rate.
+          </p>
+        </div>
+
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="xl:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Touch checks and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    .touch-stage {
+      @apply relative size-full cursor-default touch-pan-y touch-pinch-zoom overscroll-none select-none [-webkit-tap-highlight-color:transparent] [-webkit-user-select:none];
+    }
+
+    .touch-stage[data-active="true"] {
+      @apply cursor-crosshair touch-none;
+    }
+
+    .drift-stage-btn {
+      @apply absolute z-5 inline-grid place-items-center border-2 border-violet-500/50 bg-black/50 text-white transition duration-200;
+    }
+
+    .drift-option-actions {
+      @apply absolute bottom-4 left-4 z-5 flex items-center gap-2;
+    }
+
+    .drift-option-actions .drift-stage-btn {
+      @apply static;
+    }
+
+    #touch-drift-guide-option {
+      @apply text-small h-10 rounded-2xl px-4;
+    }
+
+    .drift-option-icon {
+      @apply hidden size-5;
+    }
+
+    .drift-stage-btn:hover {
+      @apply bg-accent-500/50;
+    }
+
+    :global(
+      #touch-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        #touch-drift-guide-option
+    ) {
+      @apply pointer-events-none translate-y-2 opacity-0;
+    }
+
+    @media (width < 40rem) {
+      :global(
+        #touch-test-shell[data-fullscreen="true"] #touch-drift-guide-option
+      ) {
+        @apply size-10 rounded-full p-0;
+      }
+
+      :global(
+        #touch-test-shell[data-fullscreen="true"] .drift-option-icon
+      ) {
+        @apply block;
+      }
+
+      :global(
+        #touch-test-shell[data-fullscreen="true"] .drift-option-label
+      ) {
+        @apply hidden;
+      }
+    }
+
+    :global(.touch-cell) {
+      @apply relative box-border border border-white/50 border-dotted bg-transparent bg-[radial-gradient(circle,rgb(255_255_255_/_50%)_1px,transparent_1px)] bg-center bg-no-repeat transition-colors duration-150 ease-out;
+    }
+
+    :global(.touch-cell.touch-cell--hit) {
+      @apply border-blue-500 bg-blue-300 bg-none;
+    }
+
+    :global(.precision-target) {
+      @apply absolute size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500 bg-blue-300/20 shadow-xl shadow-blue-600/40 transition duration-150 ease-out;
+    }
+
+    :global(.precision-target-center) {
+      @apply absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50;
+    }
+
+    :global(.precision-target.precision-target--current) {
+      @apply scale-105 border-blue-500 bg-blue-300/20 shadow-xl shadow-blue-600/40 ring-5 ring-blue-300/20;
+    }
+
+    :global(.precision-target.precision-target--complete) {
+      @apply border-green-600 bg-green-400 shadow-xl shadow-green-600/40 ring-5 ring-green-400/10 ring-inset;
+    }
+
+    :global(.precision-target.precision-target--complete .precision-target-center) {
+      @apply bg-green-700 shadow-none;
+    }
+
+    :global(.precision-target.precision-target--attempt-one) {
+      @apply border-yellow-500 bg-yellow-300 shadow-xl ring-5 shadow-yellow-600/40 ring-yellow-400/10 ring-inset;
+    }
+
+    :global(.precision-target.precision-target--attempt-two) {
+      @apply border-orange-600 bg-orange-400 shadow-xl ring-5 shadow-orange-600/40 ring-orange-500/10 ring-inset;
+    }
+
+    :global(.precision-target.precision-target--failed) {
+      @apply border-red-700 bg-red-500 shadow-xl ring-5 shadow-red-700/40 ring-red-500/10 ring-inset;
+    }
+
+    :global(.precision-impact) {
+      @apply absolute z-3 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500/40 bg-white shadow-xl ring-5 shadow-blue-600/40 ring-blue-300/10;
+    }
+
+    :global(.precision-impact.precision-impact--pass) {
+      @apply border-green-700 bg-green-400 shadow-green-600/40 ring-green-400/10;
+    }
+
+    :global(.precision-impact.precision-impact--miss-one) {
+      @apply border-yellow-600 bg-yellow-300 shadow-yellow-600/40 ring-yellow-400/10;
+    }
+
+    :global(.precision-impact.precision-impact--miss-two) {
+      @apply border-orange-700 bg-orange-400 shadow-orange-600/40 ring-orange-500/10;
+    }
+
+    :global(.precision-impact.precision-impact--miss-three) {
+      @apply border-red-700 bg-red-500 shadow-red-700/40 ring-red-500/10;
+    }
+
+    :global(.touch-marker) {
+      @apply absolute top-0 left-0 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/50 shadow-xl ring-5 shadow-blue-600/40 ring-blue-300/10 will-change-transform ring-inset;
+    }
+
+    :global(.touch-marker)::after {
+      @apply text-xsmall absolute bottom-[calc(100%+0.5rem)] left-1/2 grid h-6 min-w-6 -translate-x-1/2 place-items-center rounded-full border border-white bg-blue-500/40 px-1.5 leading-none font-bold text-white shadow-xl shadow-blue-600/40 content-[attr(data-touch-label)];
+    }
+
+    :global(.ghost-marker) {
+      @apply absolute top-0 left-0 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-red-500 bg-red-500/20 shadow-xl shadow-red-600/40;
+    }
+
+    :global(.ghost-marker)::after {
+      @apply text-2xsmall absolute -bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-0.5 leading-none font-bold whitespace-nowrap text-white content-[attr(data-ghost-label)];
+    }
+
+    :global(#touch-start.touch-start--running) {
+      @apply bg-linear-to-br from-orange-400 to-orange-600;
+    }
+
+    :global(
+      #touch-test-shell[data-fullscreen="true"]:has(
+          #touch-stage[data-active="false"]
+        )
+        .tool-runtime-dock-primary
+    ) {
+      @apply pointer-events-auto z-20 translate-x-0 translate-y-0 opacity-100;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :global(.touch-cell),
+      :global(.precision-target) {
+        @apply transition-none;
+      }
+    }
+  </style>
+
+  <script>
+    import { onPageHide, observeResize } from "@/utils/phones/tools/lifecycle";
+    import { createRafScheduler } from "@/utils/site/raf";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+
+    function dispatchShowRuntimeControls(
+      shell: Element | null | undefined,
+    ): void {
+      shell?.dispatchEvent(
+        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
+      );
+    }
+
+    function openSidebarAccordion(
+      trigger: Element | null | undefined,
+    ): void {
+      const accordion = trigger?.closest("details");
+      if (accordion instanceof HTMLDetailsElement) {
+        accordion.dispatchEvent(
+          new CustomEvent("tool-sidebar:open-accordion", { bubbles: true }),
+        );
+      }
+    }
+
+    type TouchMode = "swipe" | "multitouch" | "precision" | "ghost" | "drift";
+    type Point = { x: number; y: number };
+    type TimedPoint = Point & { timestamp: number };
+    type ColoredPoint = Point & { color: string };
+    type PrecisionResult = "pending" | "passed" | "failed";
+    type DriftGuideId =
+      | "horizontal"
+      | "vertical"
+      | "diagonal-down"
+      | "diagonal-up";
+    type DriftGuide = {
+      id: DriftGuideId;
+      label: string;
+      controlPoints: readonly [Point, Point, Point, Point];
+    };
+    type DriftResult = {
+      traceStrokes: Point[][];
+      tracePointCount: number;
+      lastPoint: Point | null;
+      lastTime: number;
+      sampleIntervals: number[];
+      sampleSteps: number[];
+      maxDeviation: number;
+      deviationSum: number;
+      deviationCount: number;
+      coveredGuideSamples: Set<number>;
+      gapCount: number;
+    };
+
+    const SCORE_COLS = 32;
+    const SCORE_ROWS = 32;
+    const SCORE_BUCKET_TOTAL = SCORE_COLS * SCORE_ROWS;
+    const CELL_TARGET_PX = 44;
+    const LATENCY_SAMPLE_LIMIT = 20;
+    const SAMPLE_RATE_WINDOW_MS = 1000;
+    const DRIFT_TRACE_POINT_LIMIT = 720;
+    const DRIFT_GUIDE_STEPS = 160;
+    const DRIFT_COVERAGE_TOLERANCE_PX = 24;
+    const DRIFT_BASELINE_SAMPLE_LIMIT = 24;
+    const DRIFT_BASELINE_WARMUP = 6;
+    const DRIFT_GAP_MIN_INTERVAL_MS = 50;
+    const DRIFT_GAP_INTERVAL_MULTIPLIER = 3;
+    const DRIFT_GAP_MAD_MULTIPLIER = 6;
+    const DRIFT_GAP_MIN_STEP_PX = 8;
+    const DRIFT_GAP_STEP_MULTIPLIER = 2;
+    const GHOST_DEFAULT_DURATION_MS = 15000;
+
+    const COLOR_PALETTE = [
+      "#2563eb",
+      "#7c3aed",
+      "#93c5fd",
+      "#c4b5fd",
+      "#ffffff",
+    ];
+
+    const PRECISION_POINTS = [
+      { x: 0.14, y: 0.14 },
+      { x: 0.38, y: 0.14 },
+      { x: 0.62, y: 0.14 },
+      { x: 0.86, y: 0.14 },
+      { x: 0.14, y: 0.38 },
+      { x: 0.38, y: 0.38 },
+      { x: 0.62, y: 0.38 },
+      { x: 0.86, y: 0.38 },
+      { x: 0.14, y: 0.62 },
+      { x: 0.38, y: 0.62 },
+      { x: 0.62, y: 0.62 },
+      { x: 0.86, y: 0.62 },
+      { x: 0.14, y: 0.86 },
+      { x: 0.38, y: 0.86 },
+      { x: 0.62, y: 0.86 },
+      { x: 0.86, y: 0.86 },
+    ] as const;
+
+    const DRIFT_GUIDES = [
+      {
+        id: "horizontal",
+        label: "Horizontal",
+        controlPoints: [
+          { x: 0.12, y: 0.5 },
+          { x: 0.35, y: 0.15 },
+          { x: 0.65, y: 0.85 },
+          { x: 0.88, y: 0.5 },
+        ],
+      },
+      {
+        id: "vertical",
+        label: "Vertical",
+        controlPoints: [
+          { x: 0.5, y: 0.12 },
+          { x: 0.85, y: 0.35 },
+          { x: 0.15, y: 0.65 },
+          { x: 0.5, y: 0.88 },
+        ],
+      },
+      {
+        id: "diagonal-down",
+        label: "Diagonal Down",
+        controlPoints: [
+          { x: 0.14, y: 0.14 },
+          { x: 0.38, y: 0.38 },
+          { x: 0.62, y: 0.62 },
+          { x: 0.86, y: 0.86 },
+        ],
+      },
+      {
+        id: "diagonal-up",
+        label: "Diagonal Up",
+        controlPoints: [
+          { x: 0.14, y: 0.86 },
+          { x: 0.38, y: 0.62 },
+          { x: 0.62, y: 0.38 },
+          { x: 0.86, y: 0.14 },
+        ],
+      },
+    ] as const satisfies readonly DriftGuide[];
+
+    const MODE_META: Record<TouchMode, { label: string; detail: string }> = {
+      swipe: { label: "Dead Zone Grid", detail: "Fill every cell" },
+      multitouch: {
+        label: "Multi-touch",
+        detail: "Place several fingers at once and track them independently",
+      },
+      precision: {
+        label: "Precision",
+        detail: "Tap the highlighted target and aim for the center dot",
+      },
+      ghost: {
+        label: "Ghost Touch",
+        detail: "Leave the screen untouched during the watch window",
+      },
+      drift: {
+        label: "Drift & Linearity",
+        detail: "Trace every guide direction slowly with one finger",
+      },
+    };
+
+    const testShell = document.getElementById(
+      "touch-test-shell",
+    ) as HTMLDivElement | null;
+    const stage = document.getElementById(
+      "touch-stage",
+    ) as HTMLDivElement | null;
+    const overlay = document.getElementById(
+      "touch-overlay",
+    ) as HTMLDivElement | null;
+    const precisionLayer = document.getElementById(
+      "touch-precision-layer",
+    ) as HTMLDivElement | null;
+    const driftLayer = document.getElementById(
+      "touch-drift-layer",
+    ) as HTMLDivElement | null;
+    const driftGuideOptionButton = document.getElementById(
+      "touch-drift-guide-option",
+    ) as HTMLButtonElement | null;
+    const driftGuideOptionLabel = document.getElementById(
+      "touch-drift-guide-option-label",
+    );
+    const markersLayer = document.getElementById(
+      "touch-markers",
+    ) as HTMLDivElement | null;
+    const fullscreenNotice = document.getElementById(
+      "touch-fullscreen-notice",
+    ) as HTMLDivElement | null;
+    const ghostPanel = document.getElementById(
+      "touch-ghost-panel",
+    ) as HTMLDivElement | null;
+    const ghostPanelTitle = document.getElementById(
+      "touch-ghost-panel-title",
+    ) as HTMLElement | null;
+    const ghostPanelBody = document.getElementById(
+      "touch-ghost-panel-body",
+    ) as HTMLParagraphElement | null;
+    const ghostDurationButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-ghost-duration]"),
+    );
+    const fullscreenButton = document.getElementById(
+      "touch-fullscreen",
+    ) as HTMLButtonElement | null;
+    const startButton = document.getElementById(
+      "touch-start",
+    ) as HTMLButtonElement | null;
+    const resetButton = document.getElementById(
+      "touch-reset",
+    ) as HTMLButtonElement | null;
+    const mouseNotice = document.getElementById(
+      "touch-mouse-notice",
+    ) as HTMLParagraphElement | null;
+    const reportSummary = document.getElementById(
+      "touch-report-summary",
+    ) as HTMLParagraphElement | null;
+    const statTargets = {
+      primary: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat='primary']"),
+      ),
+      secondary: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat='secondary']"),
+      ),
+      latency: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat='latency']"),
+      ),
+      rate: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat='rate']"),
+      ),
+    };
+    const statLabelTargets = {
+      primary: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat-label='primary']"),
+      ),
+      secondary: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat-label='secondary']"),
+      ),
+    };
+    const modeButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-touch-mode-button]"),
+    );
+    const dockTip = document.getElementById("touch-dock-tip");
+
+    const deviceInfoElements = {
+      viewport: document.querySelector<HTMLElement>(
+        "[data-device-info='viewport']",
+      ),
+      pixelRatio: document.querySelector<HTMLElement>(
+        "[data-device-info='pixelRatio']",
+      ),
+    };
+
+    const activeTouches = new Map<number, ColoredPoint>();
+    const markerElements = new Map<number, HTMLDivElement>();
+    const pendingMoves = new Map<number, TimedPoint[]>();
+    const pointerSlots = new Map<number, number>();
+    const usedSlots = new Set<number>();
+    let currentMode: TouchMode = "swipe";
+    let stageRect: DOMRect | null = null;
+    let shouldStartAfterFullscreen = false;
+    let pausedForFullscreen = false;
+    let lastPointerType: PointerEvent["pointerType"] | null = null;
+    let lastPressure: number | null = null;
+    let lastContactWidth: number | null = null;
+    let lastContactHeight: number | null = null;
+    let mouseDetected = false;
+
+    const visitedScoreBuckets = new Set<string>();
+    const cellElements = new Map<string, HTMLDivElement>();
+    let gridCols = 0;
+    let gridRows = 0;
+    let maxTouches = 0;
+
+    const precisionTargets: HTMLDivElement[] = [];
+    const precisionAttempts = Array<number>(PRECISION_POINTS.length).fill(0);
+    const precisionResults = Array<PrecisionResult>(PRECISION_POINTS.length).fill(
+      "pending",
+    );
+    let currentPrecisionIndex = 0;
+    let precisionLastResult:
+      | "center"
+      | "miss-one"
+      | "miss-two"
+      | "failed"
+      | null = null;
+
+    type GhostPhase = "idle" | "priming" | "watching";
+    let ghostPhase: GhostPhase = "idle";
+    let ghostDurationMs = GHOST_DEFAULT_DURATION_MS;
+    let ghostPrimeRemaining = 0;
+    let ghostWatchEndAt = 0;
+    let ghostTimerId: number | null = null;
+    let ghostPhantomCount = 0;
+
+    let driftGuideSamples: Point[] = [];
+    let driftTracePathEl: SVGPathElement | null = null;
+    let currentDriftGuideIndex = 0;
+    const driftResults = new Map<DriftGuideId, DriftResult>();
+
+    function createDriftResult(): DriftResult {
+      return {
+        traceStrokes: [],
+        tracePointCount: 0,
+        lastPoint: null,
+        lastTime: 0,
+        sampleIntervals: [],
+        sampleSteps: [],
+        maxDeviation: 0,
+        deviationSum: 0,
+        deviationCount: 0,
+        coveredGuideSamples: new Set<number>(),
+        gapCount: 0,
+      };
+    }
+
+    function currentDriftGuide(): (typeof DRIFT_GUIDES)[number] {
+      return DRIFT_GUIDES[currentDriftGuideIndex] ?? DRIFT_GUIDES[0];
+    }
+
+    function driftResultFor(guideId: DriftGuideId): DriftResult {
+      const existing = driftResults.get(guideId);
+      if (existing) return existing;
+      const result = createDriftResult();
+      driftResults.set(guideId, result);
+      return result;
+    }
+
+    function currentDriftResult(): DriftResult {
+      return driftResultFor(currentDriftGuide().id);
+    }
+
+    function syncDriftGuideOption(): void {
+      if (!driftGuideOptionButton) return;
+      const guide = currentDriftGuide();
+      if (driftGuideOptionLabel) {
+        driftGuideOptionLabel.textContent = `Path ${guide.label}`;
+      }
+      driftGuideOptionButton.setAttribute(
+        "aria-label",
+        `Change drift path, current path ${guide.label}`,
+      );
+    }
+
+    const latencySamples: number[] = [];
+    let sampleTimestamps: number[] = [];
+
+    const pageController = new AbortController();
+    const wakeLock = createWakeLock({ signal: pageController.signal });
+
+    function showRuntimeControls(): void {
+      dispatchShowRuntimeControls(testShell);
+    }
+
+    function isFullscreenActive(): boolean {
+      return testShell?.dataset.fullscreen === "true";
+    }
+
+    function isCoverageMode(): boolean {
+      return currentMode === "swipe";
+    }
+
+    function isPrecisionMode(): boolean {
+      return currentMode === "precision";
+    }
+
+    function isGhostMode(): boolean {
+      return currentMode === "ghost";
+    }
+
+    function isDriftMode(): boolean {
+      return currentMode === "drift";
+    }
+
+    function isTestActive(): boolean {
+      return stage?.dataset.active === "true";
+    }
+
+    function clamp01(value: number): number {
+      return Math.min(1, Math.max(0, value));
+    }
+
+    function median(values: readonly number[]): number | null {
+      if (values.length === 0) return null;
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const middle = sorted[mid];
+      const before = sorted[mid - 1];
+      if (middle === undefined) return null;
+      return sorted.length % 2 === 1 || before === undefined
+        ? middle
+        : (before + middle) / 2;
+    }
+
+    function refreshStageRect(): DOMRect | null {
+      stageRect = stage?.getBoundingClientRect() ?? null;
+      return stageRect;
+    }
+
+    function allocatePointerSlot(pointerId: number): number {
+      const existing = pointerSlots.get(pointerId);
+      if (existing !== undefined) return existing;
+      let slot = 0;
+      while (usedSlots.has(slot)) slot += 1;
+      pointerSlots.set(pointerId, slot);
+      usedSlots.add(slot);
+      return slot;
+    }
+
+    function releasePointerSlot(pointerId: number): void {
+      const slot = pointerSlots.get(pointerId);
+      if (slot === undefined) return;
+      pointerSlots.delete(pointerId);
+      usedSlots.delete(slot);
+    }
+
+    function slotColor(slot: number): string {
+      return (
+        COLOR_PALETTE[slot % COLOR_PALETTE.length] ??
+        COLOR_PALETTE[0] ??
+        "#2563eb"
+      );
+    }
+
+    function setStat(name: keyof typeof statTargets, value: string): void {
+      statTargets[name].forEach((target) => {
+        target.textContent = value;
+      });
+    }
+
+    function setStatLabel(
+      name: keyof typeof statLabelTargets,
+      value: string,
+    ): void {
+      statLabelTargets[name].forEach((target) => {
+        target.textContent = value;
+      });
+    }
+
+    function updateDeviceInfo(): void {
+      if (deviceInfoElements.viewport) {
+        deviceInfoElements.viewport.textContent = `${Math.round(window.innerWidth)} × ${Math.round(window.innerHeight)}`;
+      }
+      if (deviceInfoElements.pixelRatio) {
+        deviceInfoElements.pixelRatio.textContent = `${window.devicePixelRatio}x`;
+      }
+    }
+
+    function formatGhostTimeLeft(): string {
+      if (ghostPhase === "priming") return `${ghostPrimeRemaining}s`;
+      if (ghostPhase !== "watching")
+        return `${Math.round(ghostDurationMs / 1000)}s`;
+      const remainingMs = Math.max(0, ghostWatchEndAt - performance.now());
+      return `${Math.ceil(remainingMs / 1000)}s`;
+    }
+
+    function coverageLabel(): string {
+      if (visitedScoreBuckets.size === 0) return "0%";
+      return `${Math.round((visitedScoreBuckets.size / SCORE_BUCKET_TOTAL) * 100)}%`;
+    }
+
+    function driftCoverageLabel(result: DriftResult): string {
+      return `${Math.round(
+        (result.coveredGuideSamples.size / (DRIFT_GUIDE_STEPS + 1)) * 100,
+      )}%`;
+    }
+
+    function precisionResultCount(result: PrecisionResult): number {
+      return precisionResults.filter((value) => value === result).length;
+    }
+
+    function primaryLabel(): string {
+      switch (currentMode) {
+        case "precision":
+          return "Done";
+        case "ghost":
+          return "Time left";
+        case "drift":
+          return "Deviation";
+        default:
+          return "Active";
+      }
+    }
+
+    function primaryValue(): string {
+      switch (currentMode) {
+        case "precision":
+          return `${currentPrecisionIndex}/${PRECISION_POINTS.length}`;
+        case "ghost":
+          return formatGhostTimeLeft();
+        case "drift": {
+          const result = currentDriftResult();
+          return result.deviationCount === 0
+            ? "--"
+            : `${Math.round(result.maxDeviation)}px`;
+        }
+        default:
+          return String(activeTouches.size);
+      }
+    }
+
+    function secondaryLabel(): string {
+      switch (currentMode) {
+        case "swipe":
+          return "Coverage";
+        case "precision":
+          return "Last";
+        case "ghost":
+          return "Phantoms";
+        case "drift":
+          return "Coverage";
+        default:
+          return "Peak";
+      }
+    }
+
+    function secondaryValue(): string {
+      switch (currentMode) {
+        case "swipe":
+          return coverageLabel();
+        case "precision":
+          if (precisionLastResult === "center") return "Center";
+          if (precisionLastResult === "miss-one") return "Miss 1/3";
+          if (precisionLastResult === "miss-two") return "Miss 2/3";
+          if (precisionLastResult === "failed") return "Failed";
+          return "--";
+        case "ghost":
+          return String(ghostPhantomCount);
+        case "drift": {
+          const result = currentDriftResult();
+          return driftCoverageLabel(result);
+        }
+        default:
+          return String(maxTouches);
+      }
+    }
+
+    function currentSampleRate(): number | null {
+      if (sampleTimestamps.length < 2) return null;
+      const first = sampleTimestamps[0];
+      const last = sampleTimestamps[sampleTimestamps.length - 1];
+      if (first === undefined || last === undefined) return null;
+      const span = last - first;
+      if (span <= 0) return null;
+      return Math.round(((sampleTimestamps.length - 1) / span) * 1000);
+    }
+
+    function updateStatus(): void {
+      if (!stage) return;
+      const meta = MODE_META[currentMode];
+      let progress: string;
+      if (isCoverageMode()) {
+        progress = `Progress ${coverageLabel()}.`;
+      } else if (isPrecisionMode()) {
+        progress = `Completed ${currentPrecisionIndex} of ${PRECISION_POINTS.length}. ${precisionResultCount("passed")} passed and ${precisionResultCount("failed")} failed.`;
+      } else if (isGhostMode()) {
+        progress = `${formatGhostTimeLeft()} remaining. ${ghostPhantomCount} phantom touches.`;
+      } else if (isDriftMode()) {
+        const guide = currentDriftGuide();
+        const result = currentDriftResult();
+        progress =
+          result.deviationCount === 0
+            ? `${guide.label} path not tested.`
+            : `${guide.label} path. Max deviation ${Math.round(result.maxDeviation)} pixels. Coverage ${driftCoverageLabel(result)}. ${result.gapCount} suspected gaps.`;
+      } else {
+        progress = `Active ${activeTouches.size}. Peak ${maxTouches}.`;
+      }
+      stage.setAttribute(
+        "aria-label",
+        `${meta.label}. ${meta.detail}. ${progress}`,
+      );
+    }
+
+    function updateStats(): void {
+      maxTouches = Math.max(maxTouches, activeTouches.size);
+      setStatLabel("primary", primaryLabel());
+      setStat("primary", primaryValue());
+      setStatLabel("secondary", secondaryLabel());
+      setStat("secondary", secondaryValue());
+      const rate = currentSampleRate();
+      setStat("rate", rate === null ? "-- Hz" : `${rate} Hz`);
+      const latencyMedian = median(latencySamples);
+      setStat(
+        "latency",
+        latencyMedian === null ? "-- ms" : `${Math.round(latencyMedian)} ms`,
+      );
+      updateStatus();
+      updateReportSummary();
+    }
+
+    function scoreBucketKey(normX: number, normY: number): string {
+      const col = Math.min(
+        SCORE_COLS - 1,
+        Math.max(0, Math.floor(normX * SCORE_COLS)),
+      );
+      const row = Math.min(
+        SCORE_ROWS - 1,
+        Math.max(0, Math.floor(normY * SCORE_ROWS)),
+      );
+      return `${col}:${row}`;
+    }
+
+    function visualCellKey(normX: number, normY: number): string | null {
+      if (gridCols === 0 || gridRows === 0) return null;
+      const col = Math.min(
+        gridCols - 1,
+        Math.max(0, Math.floor(normX * gridCols)),
+      );
+      const row = Math.min(
+        gridRows - 1,
+        Math.max(0, Math.floor(normY * gridRows)),
+      );
+      return `${col}:${row}`;
+    }
+
+    function markPoint(point: Point): void {
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+      const normX = clamp01(point.x / rect.width);
+      const normY = clamp01(point.y / rect.height);
+      visitedScoreBuckets.add(scoreBucketKey(normX, normY));
+      const visualKey = visualCellKey(normX, normY);
+      if (visualKey)
+        cellElements.get(visualKey)?.classList.add("touch-cell--hit");
+    }
+
+    function markSegment(from: Point, to: Point): void {
+      const distance = Math.hypot(to.x - from.x, to.y - from.y);
+      const steps = Math.max(1, Math.ceil(distance / 6));
+      for (let index = 0; index <= steps; index += 1) {
+        const t = index / steps;
+        markPoint({
+          x: from.x + (to.x - from.x) * t,
+          y: from.y + (to.y - from.y) * t,
+        });
+      }
+    }
+
+    function buildOverlay(): void {
+      if (!stage || !overlay) return;
+      overlay.hidden = !isCoverageMode();
+      overlay.replaceChildren();
+      cellElements.clear();
+
+      if (!isCoverageMode()) {
+        overlay.style.gridTemplateColumns = "";
+        overlay.style.gridTemplateRows = "";
+        return;
+      }
+
+      const rect = refreshStageRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+      gridCols = Math.max(6, Math.round(rect.width / CELL_TARGET_PX));
+      gridRows = Math.max(6, Math.round(rect.height / CELL_TARGET_PX));
+      overlay.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
+      overlay.style.gridTemplateRows = `repeat(${gridRows}, minmax(0, 1fr))`;
+
+      for (let row = 0; row < gridRows; row += 1) {
+        for (let col = 0; col < gridCols; col += 1) {
+          const cell = document.createElement("div");
+          cell.className = "touch-cell";
+          const normX = (col + 0.5) / gridCols;
+          const normY = (row + 0.5) / gridRows;
+          if (visitedScoreBuckets.has(scoreBucketKey(normX, normY))) {
+            cell.classList.add("touch-cell--hit");
+          }
+          overlay.append(cell);
+          cellElements.set(`${col}:${row}`, cell);
+        }
+      }
+    }
+
+    function renderPrecisionTargets(): void {
+      if (!precisionLayer) return;
+      precisionLayer.replaceChildren();
+      precisionTargets.length = 0;
+
+      PRECISION_POINTS.forEach((point) => {
+        const target = document.createElement("div");
+        target.className = "precision-target";
+        target.style.left = `${point.x * 100}%`;
+        target.style.top = `${point.y * 100}%`;
+        const center = document.createElement("span");
+        center.className = "precision-target-center";
+        target.append(center);
+        precisionLayer.append(target);
+        precisionTargets.push(target);
+      });
+    }
+
+    function syncPrecisionTarget(index: number): void {
+      const target = precisionTargets[index];
+      if (!target) return;
+      const isPrecision = isPrecisionMode();
+      const result = precisionResults[index] ?? "pending";
+      const attempts = precisionAttempts[index] ?? 0;
+      target.classList.toggle(
+        "precision-target--complete",
+        result === "passed",
+      );
+      target.classList.toggle(
+        "precision-target--current",
+        isPrecision && index === currentPrecisionIndex && result === "pending",
+      );
+      target.classList.toggle(
+        "precision-target--attempt-one",
+        isPrecision &&
+          index === currentPrecisionIndex &&
+          result === "pending" &&
+          attempts === 1,
+      );
+      target.classList.toggle(
+        "precision-target--attempt-two",
+        isPrecision &&
+          index === currentPrecisionIndex &&
+          result === "pending" &&
+          attempts === 2,
+      );
+      target.classList.toggle(
+        "precision-target--failed",
+        result === "failed",
+      );
+    }
+
+    function syncAllPrecisionTargets(): void {
+      precisionTargets.forEach((_, index) => syncPrecisionTarget(index));
+    }
+
+    function handlePrecisionTap(point: Point): void {
+      if (!isPrecisionMode()) return;
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect) return;
+      const target = PRECISION_POINTS[currentPrecisionIndex];
+      if (!target) return;
+
+      const targetX = rect.width * target.x;
+      const targetY = rect.height * target.y;
+      const distance = Math.hypot(point.x - targetX, point.y - targetY);
+      const targetElement = precisionTargets[currentPrecisionIndex];
+      const centerBounds = targetElement
+        ?.querySelector<HTMLElement>(".precision-target-center")
+        ?.getBoundingClientRect();
+      const centerRadius = (centerBounds?.width ?? 8) / 2;
+      let impactClass = "precision-impact--pass";
+      const completedIndex = currentPrecisionIndex;
+
+      if (distance <= centerRadius) {
+        precisionLastResult = "center";
+        precisionResults[completedIndex] = "passed";
+        currentPrecisionIndex += 1;
+      } else {
+        const attempts = (precisionAttempts[completedIndex] ?? 0) + 1;
+        precisionAttempts[completedIndex] = attempts;
+        if (attempts >= 3) {
+          precisionLastResult = "failed";
+          precisionResults[completedIndex] = "failed";
+          impactClass = "precision-impact--miss-three";
+          currentPrecisionIndex += 1;
+        } else if (attempts === 2) {
+          precisionLastResult = "miss-two";
+          impactClass = "precision-impact--miss-two";
+        } else {
+          precisionLastResult = "miss-one";
+          impactClass = "precision-impact--miss-one";
+        }
+      }
+
+      if (precisionLayer) {
+        const impact = document.createElement("div");
+        impact.className = `precision-impact ${impactClass}`;
+        impact.style.left = `${point.x}px`;
+        impact.style.top = `${point.y}px`;
+        precisionLayer.append(impact);
+        window.setTimeout(() => impact.remove(), 600);
+      }
+
+      syncPrecisionTarget(completedIndex);
+      if (currentPrecisionIndex < precisionTargets.length) {
+        syncPrecisionTarget(currentPrecisionIndex);
+      }
+
+      updateStats();
+    }
+
+    function clearGhostTimer(): void {
+      if (ghostTimerId !== null) {
+        window.clearInterval(ghostTimerId);
+        ghostTimerId = null;
+      }
+    }
+
+    function resetGhostState(): void {
+      clearGhostTimer();
+      ghostPhase = "idle";
+      ghostPrimeRemaining = 0;
+      ghostPhantomCount = 0;
+      if (markersLayer) {
+        markersLayer
+          .querySelectorAll(".ghost-marker")
+          .forEach((marker) => marker.remove());
+      }
+      if (ghostPanel) ghostPanel.hidden = !isGhostMode();
+      if (ghostPanelTitle) ghostPanelTitle.textContent = "Prepare the screen";
+      if (ghostPanelBody) {
+        ghostPanelBody.textContent =
+          "Clean and dry the screen, unplug the charger, and set the phone on a flat surface. Test the normal setup first. If phantom touches appear, repeat without the case or an easily removable screen protector. Press Start, then do not touch the screen until the watch window ends.";
+      }
+    }
+
+    function logGhostPhantom(point: Point): void {
+      ghostPhantomCount += 1;
+      if (markersLayer) {
+        const marker = document.createElement("div");
+        marker.className = "ghost-marker";
+        marker.dataset.ghostLabel = String(ghostPhantomCount);
+        marker.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+        markersLayer.append(marker);
+      }
+      updateStats();
+    }
+
+    function beginGhostWatch(): void {
+      ghostPhase = "watching";
+      ghostWatchEndAt = performance.now() + ghostDurationMs;
+      if (ghostPanel) ghostPanel.hidden = true;
+      clearGhostTimer();
+      ghostTimerId = window.setInterval(() => {
+        if (performance.now() >= ghostWatchEndAt) {
+          finishGhostWatch();
+          return;
+        }
+        updateStats();
+      }, 250);
+      updateStats();
+    }
+
+    function finishGhostWatch(): void {
+      clearGhostTimer();
+      ghostPhase = "idle";
+      setTestActive(false);
+      if (ghostPanel) {
+        ghostPanel.hidden = false;
+        if (ghostPanelTitle) {
+          ghostPanelTitle.textContent =
+            ghostPhantomCount > 0
+              ? "Phantom touches detected"
+              : "No phantom touches detected";
+        }
+        if (ghostPanelBody) {
+          ghostPanelBody.textContent =
+            ghostPhantomCount > 0
+              ? `${ghostPhantomCount} phantom touch${ghostPhantomCount === 1 ? "" : "es"} were logged during the watch window. Press Start to run it again.`
+              : "The screen looked clean for the full watch window. Press Start to run it again.";
+        }
+      }
+      updateStats();
+      showRuntimeControls();
+    }
+
+    function startGhostSequence(): void {
+      ghostPhantomCount = 0;
+      if (markersLayer) {
+        markersLayer
+          .querySelectorAll(".ghost-marker")
+          .forEach((marker) => marker.remove());
+      }
+      ghostPhase = "priming";
+      ghostPrimeRemaining = 3;
+      setTestActive(true);
+      if (ghostPanel) {
+        ghostPanel.hidden = false;
+        if (ghostPanelTitle) ghostPanelTitle.textContent = "Starting…";
+        if (ghostPanelBody) {
+          ghostPanelBody.textContent = `Let go of the phone. Watching begins in ${ghostPrimeRemaining}.`;
+        }
+      }
+      clearGhostTimer();
+      ghostTimerId = window.setInterval(() => {
+        ghostPrimeRemaining -= 1;
+        if (ghostPrimeRemaining <= 0) {
+          beginGhostWatch();
+          return;
+        }
+        if (ghostPanelBody) {
+          ghostPanelBody.textContent = `Let go of the phone. Watching begins in ${ghostPrimeRemaining}.`;
+        }
+        updateStats();
+      }, 1000);
+      updateStats();
+    }
+
+    ghostDurationButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const duration = Number.parseInt(
+            button.dataset.ghostDuration ?? "",
+            10,
+          );
+          if (!Number.isFinite(duration) || duration <= 0) return;
+          ghostDurationMs = duration;
+          ghostDurationButtons.forEach((other) => {
+            other.setAttribute("aria-pressed", String(other === button));
+          });
+        },
+        { signal: pageController.signal },
+      );
+    });
+
+    function buildDriftGuide(): void {
+      if (!driftLayer) return;
+      driftLayer.replaceChildren();
+      driftGuideSamples = [];
+      driftTracePathEl = null;
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+
+      const width = rect.width;
+      const height = rect.height;
+      const guide = currentDriftGuide();
+      const scalePoint = (point: Point): Point => ({
+        x: width * point.x,
+        y: height * point.y,
+      });
+      const p0 = scalePoint(guide.controlPoints[0]);
+      const p1 = scalePoint(guide.controlPoints[1]);
+      const p2 = scalePoint(guide.controlPoints[2]);
+      const p3 = scalePoint(guide.controlPoints[3]);
+
+      const samples: Point[] = [];
+      for (let index = 0; index <= DRIFT_GUIDE_STEPS; index += 1) {
+        const t = index / DRIFT_GUIDE_STEPS;
+        const mt = 1 - t;
+        const x =
+          mt ** 3 * p0.x +
+          3 * mt * mt * t * p1.x +
+          3 * mt * t * t * p2.x +
+          t ** 3 * p3.x;
+        const y =
+          mt ** 3 * p0.y +
+          3 * mt * mt * t * p1.y +
+          3 * mt * t * t * p2.y +
+          t ** 3 * p3.y;
+        samples.push({ x, y });
+      }
+      driftGuideSamples = samples;
+
+      const svgNs = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNs, "svg");
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.setAttribute("class", "h-full w-full");
+      svg.setAttribute("preserveAspectRatio", "none");
+
+      const guidePath = document.createElementNS(svgNs, "path");
+      guidePath.setAttribute(
+        "d",
+        `M ${p0.x} ${p0.y} C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`,
+      );
+      guidePath.setAttribute("fill", "none");
+      guidePath.setAttribute("stroke", "currentColor");
+      guidePath.setAttribute("stroke-width", "4");
+      guidePath.setAttribute("stroke-linecap", "round");
+      guidePath.setAttribute("stroke-dasharray", "5 15");
+      guidePath.setAttribute("class", "text-blue-500");
+
+      const tracePath = document.createElementNS(svgNs, "path");
+      tracePath.setAttribute("fill", "none");
+      tracePath.setAttribute("stroke", "currentColor");
+      tracePath.setAttribute("stroke-width", "20");
+      tracePath.setAttribute("stroke-opacity", "0.5");
+      tracePath.setAttribute("stroke-linecap", "round");
+      tracePath.setAttribute("stroke-linejoin", "round");
+      tracePath.setAttribute("class", "text-blue-300");
+
+      svg.append(guidePath, tracePath);
+      driftLayer.append(svg);
+      driftTracePathEl = tracePath;
+      renderDriftTrace();
+      syncDriftGuideOption();
+    }
+
+    function resetDriftTrace(): void {
+      currentDriftGuideIndex = 0;
+      driftResults.clear();
+      DRIFT_GUIDES.forEach((guide) => {
+        driftResults.set(guide.id, createDriftResult());
+      });
+      driftTracePathEl?.setAttribute("d", "");
+      syncDriftGuideOption();
+    }
+
+    function resetDriftCadence(result: DriftResult): void {
+      result.sampleIntervals.length = 0;
+      result.sampleSteps.length = 0;
+    }
+
+    function startDriftTraceStroke(result: DriftResult): void {
+      const lastStroke = result.traceStrokes[result.traceStrokes.length - 1];
+      if (lastStroke?.length === 0) return;
+      result.traceStrokes.push([]);
+    }
+
+    function beginDriftInputStroke(result: DriftResult): void {
+      startDriftTraceStroke(result);
+      result.lastPoint = null;
+      result.lastTime = 0;
+      resetDriftCadence(result);
+    }
+
+    function appendDriftTracePoint(result: DriftResult, point: Point): void {
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+      let stroke = result.traceStrokes[result.traceStrokes.length - 1];
+      if (!stroke) {
+        stroke = [];
+        result.traceStrokes.push(stroke);
+      }
+      stroke.push({
+        x: clamp01(point.x / rect.width),
+        y: clamp01(point.y / rect.height),
+      });
+      result.tracePointCount += 1;
+
+      while (result.tracePointCount > DRIFT_TRACE_POINT_LIMIT) {
+        while (
+          result.traceStrokes.length > 1 &&
+          result.traceStrokes[0]?.length === 0
+        ) {
+          result.traceStrokes.shift();
+        }
+        const oldestStroke = result.traceStrokes[0];
+        if (!oldestStroke || oldestStroke.length === 0) {
+          result.tracePointCount = 0;
+          break;
+        }
+        oldestStroke.shift();
+        result.tracePointCount -= 1;
+        if (oldestStroke.length === 0 && result.traceStrokes.length > 1) {
+          result.traceStrokes.shift();
+        }
+      }
+    }
+
+    function renderDriftTrace(): void {
+      if (!driftTracePathEl) return;
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+      const pathData = currentDriftResult()
+        .traceStrokes.map((stroke) =>
+          stroke
+            .map((point, index) => {
+              const x = point.x * rect.width;
+              const y = point.y * rect.height;
+              return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+            })
+            .join(" "),
+        )
+        .filter(Boolean)
+        .join(" ");
+      driftTracePathEl.setAttribute("d", pathData);
+    }
+
+    function nearestGuideDistance(point: Point): number {
+      let nearest = Infinity;
+      for (let index = 1; index < driftGuideSamples.length; index += 1) {
+        const start = driftGuideSamples[index - 1];
+        const end = driftGuideSamples[index];
+        if (!start || !end) continue;
+        const segmentX = end.x - start.x;
+        const segmentY = end.y - start.y;
+        const lengthSquared = segmentX ** 2 + segmentY ** 2;
+        const projection =
+          lengthSquared === 0
+            ? 0
+            : Math.max(
+                0,
+                Math.min(
+                  1,
+                  ((point.x - start.x) * segmentX +
+                    (point.y - start.y) * segmentY) /
+                    lengthSquared,
+                ),
+              );
+        const nearestX = start.x + projection * segmentX;
+        const nearestY = start.y + projection * segmentY;
+        const distance = Math.hypot(point.x - nearestX, point.y - nearestY);
+        if (distance < nearest) nearest = distance;
+      }
+      return nearest;
+    }
+
+    function recordDriftCoverage(result: DriftResult, point: Point): void {
+      driftGuideSamples.forEach((guidePoint, index) => {
+        if (
+          Math.hypot(point.x - guidePoint.x, point.y - guidePoint.y) <=
+          DRIFT_COVERAGE_TOLERANCE_PX
+        ) {
+          result.coveredGuideSamples.add(index);
+        }
+      });
+    }
+
+    function recordDriftSample(point: Point, timestamp: number): void {
+      if (driftGuideSamples.length < 2) buildDriftGuide();
+      const distance = nearestGuideDistance(point);
+      if (!Number.isFinite(distance)) return;
+      const result = currentDriftResult();
+      result.maxDeviation = Math.max(result.maxDeviation, distance);
+      result.deviationSum += distance;
+      result.deviationCount += 1;
+      recordDriftCoverage(result, point);
+
+      if (result.lastPoint) {
+        const jump = Math.hypot(
+          point.x - result.lastPoint.x,
+          point.y - result.lastPoint.y,
+        );
+        const elapsed = timestamp - result.lastTime;
+        if (elapsed <= 0) {
+          appendDriftTracePoint(result, point);
+          return;
+        }
+
+        const baselineInterval = median(result.sampleIntervals);
+        const baselineStep = median(result.sampleSteps);
+        const hasBaseline =
+          result.sampleIntervals.length >= DRIFT_BASELINE_WARMUP &&
+          result.sampleSteps.length >= DRIFT_BASELINE_WARMUP &&
+          baselineInterval !== null &&
+          baselineStep !== null;
+        const intervalMad =
+          baselineInterval === null
+            ? 0
+            : (median(
+                result.sampleIntervals.map((sample) =>
+                  Math.abs(sample - baselineInterval),
+                ),
+              ) ?? 0);
+        const gapInterval = Math.max(
+          DRIFT_GAP_MIN_INTERVAL_MS,
+          (baselineInterval ?? 0) * DRIFT_GAP_INTERVAL_MULTIPLIER,
+          (baselineInterval ?? 0) + intervalMad * DRIFT_GAP_MAD_MULTIPLIER,
+        );
+        const gapStep = Math.max(
+          DRIFT_GAP_MIN_STEP_PX,
+          (baselineStep ?? 0) * DRIFT_GAP_STEP_MULTIPLIER,
+        );
+        const isSuspectedGap =
+          hasBaseline && elapsed >= gapInterval && jump >= gapStep;
+        const isStationaryPause =
+          hasBaseline && elapsed >= gapInterval && jump < gapStep;
+
+        if (isSuspectedGap) {
+          result.gapCount += 1;
+          startDriftTraceStroke(result);
+        } else if (isStationaryPause) {
+          resetDriftCadence(result);
+        } else {
+          result.sampleIntervals.push(elapsed);
+          if (result.sampleIntervals.length > DRIFT_BASELINE_SAMPLE_LIMIT) {
+            result.sampleIntervals.shift();
+          }
+          if (jump > 0) {
+            result.sampleSteps.push(jump);
+            if (result.sampleSteps.length > DRIFT_BASELINE_SAMPLE_LIMIT) {
+              result.sampleSteps.shift();
+            }
+          }
+        }
+      }
+      result.lastPoint = point;
+      result.lastTime = timestamp;
+      appendDriftTracePoint(result, point);
+    }
+
+    function advanceDriftGuide(): void {
+      if (activeTouches.size > 0) return;
+      currentDriftGuideIndex =
+        (currentDriftGuideIndex + 1) % DRIFT_GUIDES.length;
+      buildDriftGuide();
+      updateStats();
+      showRuntimeControls();
+    }
+
+    function setTestActive(active: boolean): void {
+      if (!stage || !startButton) return;
+      if (active) wakeLock.request();
+      else wakeLock.release();
+      stage.dataset.active = String(active);
+      startButton.classList.toggle("touch-start--running", active);
+      startButton.textContent = active
+        ? "Pause"
+        : pausedForFullscreen
+          ? "Resume"
+          : "Start";
+      startButton.setAttribute("aria-pressed", String(active));
+      if (active) {
+        pausedForFullscreen = false;
+        syncFullscreenNotice();
+      }
+      if (!active) {
+        activeTouches.clear();
+        pointerSlots.clear();
+        usedSlots.clear();
+        renderMarkers();
+        updateStats();
+      }
+      setOverscrollLock(active);
+    }
+
+    function setOverscrollLock(active: boolean): void {
+      document.documentElement.style.overscrollBehavior = active ? "none" : "";
+      document.body.style.overscrollBehavior = active ? "none" : "";
+    }
+
+    function syncFullscreenNotice(): void {
+      if (!fullscreenNotice) return;
+      fullscreenNotice.hidden = isFullscreenActive() || !pausedForFullscreen;
+      if (startButton && !isTestActive() && ghostPhase !== "watching") {
+        startButton.textContent = pausedForFullscreen ? "Resume" : "Start";
+      }
+    }
+
+    function renderMarkers(): void {
+      if (!markersLayer) return;
+      if (isPrecisionMode() || isGhostMode() || isDriftMode()) {
+        markerElements.forEach((marker) => marker.remove());
+        markerElements.clear();
+        return;
+      }
+
+      const activeIds = new Set(activeTouches.keys());
+      markerElements.forEach((marker, pointerId) => {
+        if (activeIds.has(pointerId)) return;
+        marker.remove();
+        markerElements.delete(pointerId);
+      });
+
+      activeTouches.forEach((point, pointerId) => {
+        let marker = markerElements.get(pointerId);
+        if (!marker) {
+          marker = document.createElement("div");
+          marker.className = "touch-marker";
+          const slot = pointerSlots.get(pointerId) ?? 0;
+          marker.dataset.touchLabel = String(slot + 1);
+          markersLayer.append(marker);
+          markerElements.set(pointerId, marker);
+        }
+        marker.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+        marker.style.background = `${point.color}33`;
+        marker.style.borderColor = point.color;
+      });
+    }
+
+    function resetTest(): void {
+      activeTouches.clear();
+      pendingMoves.clear();
+      pointerSlots.clear();
+      usedSlots.clear();
+      rafScheduler.cancel();
+      maxTouches = 0;
+      visitedScoreBuckets.clear();
+      currentPrecisionIndex = 0;
+      precisionAttempts.fill(0);
+      precisionResults.fill("pending");
+      precisionLastResult = null;
+      latencySamples.length = 0;
+      sampleTimestamps = [];
+      resetGhostState();
+      resetDriftTrace();
+      renderMarkers();
+      buildOverlay();
+      renderPrecisionTargets();
+      syncAllPrecisionTargets();
+      buildDriftGuide();
+      updateStats();
+    }
+
+    function requestTouchFullscreen(): void {
+      shouldStartAfterFullscreen = true;
+      pausedForFullscreen = false;
+      syncFullscreenNotice();
+      fullscreenButton?.click();
+      showRuntimeControls();
+    }
+
+    function beginActiveMode(): void {
+      shouldStartAfterFullscreen = false;
+      if (isGhostMode()) {
+        startGhostSequence();
+      } else {
+        setTestActive(true);
+      }
+      queueOverlayResize();
+      showRuntimeControls();
+    }
+
+    function startFullscreenTest(): void {
+      if (isFullscreenActive()) {
+        beginActiveMode();
+        return;
+      }
+      requestTouchFullscreen();
+    }
+
+    function activateMode(mode: TouchMode): void {
+      currentMode = mode;
+      if (stage) stage.dataset.mode = mode;
+      modeButtons.forEach((button) => {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.modeId === mode),
+        );
+      });
+      const activeModeButton = modeButtons.find(
+        (button) => button.dataset.modeId === mode,
+      );
+      if (dockTip && activeModeButton?.dataset.modeTip) {
+        dockTip.textContent = activeModeButton.dataset.modeTip;
+      }
+      if (ghostPanel) ghostPanel.hidden = !isGhostMode();
+      if (precisionLayer) precisionLayer.hidden = !isPrecisionMode();
+      if (driftLayer) driftLayer.hidden = !isDriftMode();
+      if (driftGuideOptionButton)
+        driftGuideOptionButton.hidden = !isDriftMode();
+      resetTest();
+      showRuntimeControls();
+    }
+
+    function resizeOverlay(): void {
+      if (pausedForFullscreen && !isFullscreenActive()) {
+        updateDeviceInfo();
+        return;
+      }
+      if (isDriftMode() && activeTouches.size > 0) {
+        pendingMoves.clear();
+        beginDriftInputStroke(currentDriftResult());
+      }
+      refreshStageRect();
+      if (isCoverageMode()) buildOverlay();
+      if (isDriftMode()) buildDriftGuide();
+      renderMarkers();
+      updateStats();
+      updateDeviceInfo();
+    }
+
+    const rafScheduler = createRafScheduler(flushPointerMoves);
+    const resizeScheduler = createRafScheduler(resizeOverlay);
+
+    function queueOverlayResize(): void {
+      resizeScheduler.request();
+    }
+
+    function pointFromClient(clientX: number, clientY: number): Point | null {
+      const rect = stageRect ?? refreshStageRect();
+      if (!rect) return null;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function isWithinStage(point: Point, rect: DOMRect): boolean {
+      return (
+        point.x >= 0 &&
+        point.y >= 0 &&
+        point.x <= rect.width &&
+        point.y <= rect.height
+      );
+    }
+
+    function collectPointerSamples(event: PointerEvent): PointerEvent[] {
+      if (typeof event.getCoalescedEvents === "function") {
+        const coalesced = event.getCoalescedEvents();
+        if (coalesced.length > 0) return coalesced;
+      }
+      return [event];
+    }
+
+    function normalizePointerTimestamp(timestamp: number): number {
+      return timestamp > performance.timeOrigin
+        ? timestamp - performance.timeOrigin
+        : timestamp;
+    }
+
+    function recordSampleTiming(timestamp: number): void {
+      const normalizedTimestamp = normalizePointerTimestamp(timestamp);
+      sampleTimestamps.push(normalizedTimestamp);
+      const cutoff = normalizedTimestamp - SAMPLE_RATE_WINDOW_MS;
+      while (
+        sampleTimestamps.length > 0 &&
+        (sampleTimestamps[0] ?? 0) < cutoff
+      ) {
+        sampleTimestamps.shift();
+      }
+    }
+
+    function recordInputMetrics(event: PointerEvent): void {
+      const wasMouse = mouseDetected;
+      lastPointerType = event.pointerType;
+      lastPressure = event.pressure;
+      lastContactWidth = event.width;
+      lastContactHeight = event.height;
+      mouseDetected = event.pointerType === "mouse";
+      if (mouseDetected && !wasMouse && mouseNotice) mouseNotice.hidden = false;
+    }
+
+    function recordLatencySample(startTime: number): void {
+      requestAnimationFrame((frameTime) => {
+        const performanceStartTime =
+          startTime > performance.timeOrigin
+            ? startTime - performance.timeOrigin
+            : startTime;
+        const elapsed = Math.max(0, frameTime - performanceStartTime);
+        latencySamples.push(elapsed);
+        if (latencySamples.length > LATENCY_SAMPLE_LIMIT)
+          latencySamples.shift();
+        updateStats();
+      });
+    }
+
+    function formatInputReadout(): string {
+      if (!lastPointerType) return "--";
+      const typeLabel =
+        lastPointerType === "touch"
+          ? "Finger"
+          : lastPointerType === "pen"
+            ? "Stylus"
+            : "Mouse";
+      const parts = [typeLabel];
+
+      if (
+        lastPointerType !== "mouse" &&
+        lastPressure !== null &&
+        lastPressure !== 0.5 &&
+        lastPressure > 0
+      ) {
+        parts.push(`${Math.round(lastPressure * 100)}%`);
+      }
+      if (
+        lastContactWidth &&
+        lastContactHeight &&
+        (lastContactWidth > 1 || lastContactHeight > 1)
+      ) {
+        parts.push(
+          `${Math.round(lastContactWidth)}×${Math.round(lastContactHeight)}px`,
+        );
+      }
+      return parts.join(" · ");
+    }
+
+    function updateReportSummary(): void {
+      if (!reportSummary) return;
+      const driftGuideLabel = isDriftMode()
+        ? ` (${currentDriftGuide().label})`
+        : "";
+      reportSummary.textContent = `${MODE_META[currentMode].label}${driftGuideLabel}: ${primaryLabel()} ${primaryValue()}, ${secondaryLabel()} ${secondaryValue()}.`;
+    }
+
+    function flushPointerMoves(): void {
+      pendingMoves.forEach((points, pointerId) => {
+        const previous = activeTouches.get(pointerId);
+        if (!previous || points.length === 0) return;
+        let cursor: Point = previous;
+        for (const point of points) {
+          if (currentMode === "swipe") markSegment(cursor, point);
+          if (currentMode === "drift")
+            recordDriftSample(point, point.timestamp);
+          cursor = point;
+        }
+        const last = points[points.length - 1];
+        if (last)
+          activeTouches.set(pointerId, {
+            x: last.x,
+            y: last.y,
+            color: previous.color,
+          });
+      });
+      pendingMoves.clear();
+      if (currentMode === "drift") renderDriftTrace();
+      renderMarkers();
+      updateStats();
+    }
+
+    stage?.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!isTestActive()) return;
+        recordInputMetrics(event);
+        const point = pointFromClient(event.clientX, event.clientY);
+        if (!point) return;
+        const rect = stageRect;
+        if (!rect || !isWithinStage(point, rect)) return;
+
+        if (isGhostMode()) {
+          if (ghostPhase === "watching")
+            logGhostPhantom(point);
+          return;
+        }
+
+        if (isDriftMode() && activeTouches.size > 0) return;
+
+        event.preventDefault();
+        stage.setPointerCapture(event.pointerId);
+        recordLatencySample(event.timeStamp);
+        recordSampleTiming(event.timeStamp);
+        const slot = allocatePointerSlot(event.pointerId);
+        activeTouches.set(event.pointerId, {
+          ...point,
+          color: slotColor(slot),
+        });
+
+        if (currentMode === "swipe") {
+          markPoint(point);
+        } else if (currentMode === "precision") {
+          handlePrecisionTap(point);
+        } else if (currentMode === "drift") {
+          const result = currentDriftResult();
+          beginDriftInputStroke(result);
+          recordDriftSample(point, normalizePointerTimestamp(event.timeStamp));
+          renderDriftTrace();
+        }
+        renderMarkers();
+        updateStats();
+      },
+      { signal: pageController.signal },
+    );
+
+    stage?.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!isTestActive() || isGhostMode()) return;
+        if (!activeTouches.has(event.pointerId)) return;
+        event.preventDefault();
+        const rect = stageRect ?? refreshStageRect();
+        if (!rect) return;
+        const samples = collectPointerSamples(event);
+        const points = pendingMoves.get(event.pointerId) ?? [];
+        for (const sample of samples) {
+          const point = pointFromClient(sample.clientX, sample.clientY);
+          if (!point || !isWithinStage(point, rect)) continue;
+          points.push({
+            ...point,
+            timestamp: normalizePointerTimestamp(sample.timeStamp),
+          });
+          recordSampleTiming(sample.timeStamp);
+        }
+        if (points.length > 0) pendingMoves.set(event.pointerId, points);
+        recordInputMetrics(event);
+        rafScheduler.request();
+      },
+      { signal: pageController.signal },
+    );
+
+    function removeTouch(event: PointerEvent): void {
+      const pending = pendingMoves.get(event.pointerId);
+      const previous = activeTouches.get(event.pointerId);
+      if (pending && previous) {
+        let cursor: Point = previous;
+        for (const point of pending) {
+          if (currentMode === "swipe") markSegment(cursor, point);
+          if (currentMode === "drift")
+            recordDriftSample(point, point.timestamp);
+          cursor = point;
+        }
+      }
+      if (currentMode === "drift") renderDriftTrace();
+      pendingMoves.delete(event.pointerId);
+      activeTouches.delete(event.pointerId);
+      releasePointerSlot(event.pointerId);
+      renderMarkers();
+      updateStats();
+    }
+
+    stage?.addEventListener("pointerup", removeTouch, {
+      signal: pageController.signal,
+    });
+    stage?.addEventListener("pointercancel", removeTouch, {
+      signal: pageController.signal,
+    });
+
+    driftGuideOptionButton?.addEventListener(
+      "pointerdown",
+      (event) => event.stopPropagation(),
+      { signal: pageController.signal },
+    );
+    driftGuideOptionButton?.addEventListener(
+      "click",
+      (event) => {
+        event.stopPropagation();
+        advanceDriftGuide();
+      },
+      { signal: pageController.signal },
+    );
+
+    modeButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const modeId = button.dataset.modeId;
+          if (
+            modeId !== "swipe" &&
+            modeId !== "multitouch" &&
+            modeId !== "precision" &&
+            modeId !== "ghost" &&
+            modeId !== "drift"
+          )
+            return;
+          openSidebarAccordion(button);
+          activateMode(modeId);
+        },
+        { signal: pageController.signal },
+      );
+    });
+
+    resetButton?.addEventListener(
+      "click",
+      () => {
+        shouldStartAfterFullscreen = false;
+        pausedForFullscreen = false;
+        setTestActive(false);
+        resetTest();
+        syncFullscreenNotice();
+        showRuntimeControls();
+      },
+      { signal: pageController.signal },
+    );
+
+    startButton?.addEventListener(
+      "click",
+      () => {
+        if (isGhostMode() && ghostPhase !== "idle") {
+          clearGhostTimer();
+          ghostPhase = "idle";
+          pausedForFullscreen = true;
+          setTestActive(false);
+          resetGhostState();
+          syncFullscreenNotice();
+          showRuntimeControls();
+          return;
+        }
+        if (isTestActive()) {
+          shouldStartAfterFullscreen = false;
+          pausedForFullscreen = true;
+          setTestActive(false);
+          syncFullscreenNotice();
+          showRuntimeControls();
+          return;
+        }
+        startFullscreenTest();
+      },
+      { signal: pageController.signal },
+    );
+
+    testShell?.addEventListener(
+      "tool-runtime:fullscreen-change",
+      (event) => {
+        const detail = (event as CustomEvent<{ isExpanded: boolean }>).detail;
+        if (detail.isExpanded) {
+          if (shouldStartAfterFullscreen) {
+            beginActiveMode();
+          } else if (!isTestActive()) {
+            syncFullscreenNotice();
+            showRuntimeControls();
+          }
+        } else {
+          shouldStartAfterFullscreen = false;
+          if (
+            isTestActive() ||
+            ghostPhase === "watching" ||
+            ghostPhase === "priming"
+          ) {
+            clearGhostTimer();
+            ghostPhase = "idle";
+            pausedForFullscreen = true;
+            setTestActive(false);
+          }
+        }
+        syncFullscreenNotice();
+        showRuntimeControls();
+        queueOverlayResize();
+      },
+      { signal: pageController.signal },
+    );
+
+    const stageResizeObserver = observeResize(stage, queueOverlayResize);
+
+    function cleanupTouchPage(): void {
+      rafScheduler.cancel();
+      resizeScheduler.cancel();
+      clearGhostTimer();
+      stageResizeObserver?.disconnect();
+      pageController.abort();
+      wakeLock.release();
+      setOverscrollLock(false);
+    }
+
+    onPageHide(cleanupTouchPage);
+
+    updateDeviceInfo();
+    activateMode("swipe");
+    setTestActive(false);
+    syncFullscreenNotice();
+  </script>
+</BaseLayout>

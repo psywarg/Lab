@@ -1,0 +1,25 @@
+{
+  "name": "Sorted Tech",
+  "short_name": "Sorted Tech",
+  "description": "Independent tech explainers, buying guidance, and browser-based device tools.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/site/favicons/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/site/favicons/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#17181b",
+  "background_color": "#17181b",
+  "display": "standalone"
+}

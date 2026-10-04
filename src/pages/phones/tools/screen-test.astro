@@ -1,0 +1,2340 @@
+---
+// src/pages/phones/tools/screen-test.astro
+
+export const prerender = true;
+
+import { getToolBySlug } from "@/content/phones/tools";
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteIcons from "@/assets/icons/site-sprites.svg?url";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+
+const tool = getToolBySlug("screen-test");
+const ogImage = tool.image.src;
+const title = "Free Online Screen Test: Color, Banding, Sharpness & Gamma";
+const metaDescription =
+  "Run an online screen test with full-screen color, grayscale, gradient, banding, sharpness, black and white level, motion, image retention, and gamma patterns.";
+
+const referenceItems = [
+  {
+    label: "Set up",
+    check:
+      "Clean the screen, choose a fixed normal brightness, and disable automatic display changes such as auto-brightness, True Tone or adaptive color, Night Shift or a blue-light filter, and color filters before judging color, uniformity, clipping, or gamma.",
+    reading:
+      "These settings can change color or intensity while a pattern is displayed, making comparisons unreliable. Keep browser zoom at its normal setting and test in stable room lighting.",
+    good: "Brightness and color stay fixed as the patterns change.",
+    concern:
+      "Color temperature or brightness changes during the test, or a tint appears only while a system filter is enabled.",
+  },
+  {
+    label: "Colors",
+    check: "Run the solid colors at normal and high brightness.",
+    reading:
+      "Each solid color lights a different combination of red, green, and blue sub-pixels. A defect that stays in the same screen position across several colors is more likely to be a panel issue.",
+    good: "The full screen stays even, with no fixed bright or dark dots.",
+    concern:
+      "A dot, line, tint patch, or corner glow stays visible across colors.",
+  },
+  {
+    label: "Greys",
+    check: "Move through 5% to 95% grey in a dim room.",
+    reading:
+      "The percentage runs from nearly black toward nearly white. Grey should remain neutral, so colored clouds or uneven bright areas reveal tint and uniformity differences.",
+    good: "Grey looks neutral and evenly lit from edge to edge.",
+    concern: "Green, pink, yellow, cloudy, or darker zones stand out.",
+  },
+  {
+    label: "Gradients",
+    check: "Use radial gradients, ramps, hue spectrum, and saturation grid.",
+    reading:
+      "A gradient should change continuously. Visible rings, stripes, or sudden color steps are banding or posterization rather than intentional pattern boundaries.",
+    good: "Transitions look smooth with clean color changes and no harsh rings.",
+    concern:
+      "You see color banding, sudden jumps, posterization, or uneven saturation.",
+  },
+  {
+    label: "Patterns",
+    check:
+      "Use edge frame, checkerboards, stripes, diagonal lines, and crosshatch.",
+    reading:
+      "The repeated lines and squares provide known geometry, rendered at your screen's actual pixel grid rather than an approximation. Compare their width, spacing, and visibility from the center to every edge and corner.",
+    good: "Lines stay straight, spacing looks consistent, and edges are not cropped.",
+    concern:
+      "Patterns shimmer badly, warp, blur, or disappear in parts of the screen.",
+  },
+  {
+    label: "Banding",
+    check: "Compare 16, 32, and 64 steps in grey, red, green, and blue.",
+    reading:
+      "These patterns intentionally contain separate brightness steps. The number is how many steps are shown; neighboring steps merging together indicates lost tonal detail.",
+    good: "Each step is visible and spacing feels consistent across the panel.",
+    concern:
+      "Several steps merge together, or one color channel bands much worse.",
+  },
+  {
+    label: "Sharpness",
+    check:
+      "Use the text pattern and inspect letters from normal viewing distance.",
+    reading:
+      "Clean letter edges test pixel-level focus and sub-pixel rendering. Colored outlines, doubled strokes, or fuzzy edges make sharpness problems easier to see.",
+    good: "Characters look crisp with no color fringes, blur, or uneven rendering.",
+    concern: "Letters look fuzzy, doubled, jagged, or tinted around the edges.",
+  },
+  {
+    label: "Shadow detail",
+    check:
+      "Use black level and near-black gradient with brightness set for normal use.",
+    reading:
+      "Near-black steps are deliberately only slightly brighter than black. Distinguishing more early steps means the display preserves more dark-scene detail instead of crushing it.",
+    good: "Low values separate gradually instead of turning into one black block.",
+    concern:
+      "The first visible steps are crushed, tinted, or flicker while viewing.",
+  },
+  {
+    label: "Highlights",
+    check:
+      "Use white saturation and near-white gradient without maxing brightness.",
+    reading:
+      "Near-white steps are deliberately only slightly dimmer than white. Separate visible steps mean bright detail is preserved instead of clipping into one white block.",
+    good: "Bright steps remain distinct and whites do not look heavily tinted.",
+    concern:
+      "Light steps clip into one flat white area or show a strong color cast.",
+  },
+  {
+    label: "Image retention & motion",
+    check:
+      "Play the color wash, bars, checker flip, or gradient sweep in a dim room, ideally full screen.",
+    reading:
+      "Moving patterns make a fixed patch easier to notice while also revealing response trails, flicker, or panel non-uniformity. Recheck any mark on several solid colors to distinguish temporary image retention from possible permanent burn-in.",
+    good: "Uniform fields stay even, and moving patterns show no fixed shadow or unusual trail.",
+    concern:
+      "A patch, band, or logo-shaped mark remains in the same place across multiple fields.",
+  },
+  {
+    label: "Gamma check",
+    check:
+      "Open Visual Gamma and step through candidate values until the center patch disappears into the surrounding stripes.",
+    reading:
+      "The striped border is a fixed reference; only the center patch changes as you step. The candidate that blends in is a visual estimate of your screen's effective gamma. This page does not calibrate the display.",
+    good: "One candidate clearly blends the patch into the stripes.",
+    concern:
+      "Nothing blends cleanly, which usually means auto-brightness or True Tone is shifting the display while you test.",
+  },
+];
+
+type PatternItem = {
+  id: string;
+  label: string;
+  kind: string;
+  bg: string;
+  meta: string;
+  swatch?: string;
+  swatchText?: string;
+  swatchTextColor?: string;
+};
+
+type PatternGroup = {
+  label: string;
+  patterns: PatternItem[];
+};
+
+const patternGroups: PatternGroup[] = [
+  {
+    label: "Colors",
+    patterns: [
+      {
+        id: "black",
+        label: "Black",
+        kind: "solid",
+        bg: "#000000",
+        meta: "#000000",
+      },
+      {
+        id: "white",
+        label: "White",
+        kind: "solid",
+        bg: "#ffffff",
+        meta: "#ffffff",
+      },
+      {
+        id: "red",
+        label: "Red",
+        kind: "solid",
+        bg: "#ff0000",
+        meta: "#ff0000",
+      },
+      {
+        id: "green",
+        label: "Green",
+        kind: "solid",
+        bg: "#00ff00",
+        meta: "#00ff00",
+      },
+      {
+        id: "blue",
+        label: "Blue",
+        kind: "solid",
+        bg: "#0000ff",
+        meta: "#0000ff",
+      },
+      {
+        id: "cyan",
+        label: "Cyan",
+        kind: "solid",
+        bg: "#00ffff",
+        meta: "#00ffff",
+      },
+      {
+        id: "magenta",
+        label: "Magenta",
+        kind: "solid",
+        bg: "#ff00ff",
+        meta: "#ff00ff",
+      },
+      {
+        id: "yellow",
+        label: "Yellow",
+        kind: "solid",
+        bg: "#ffff00",
+        meta: "#ffff00",
+      },
+    ],
+  },
+  {
+    label: "Greys",
+    patterns: [
+      {
+        id: "gray-5",
+        label: "5%",
+        kind: "solid",
+        bg: "oklch(5% 0 0)",
+        meta: "oklch(5% 0 0)",
+      },
+      {
+        id: "gray-15",
+        label: "15%",
+        kind: "solid",
+        bg: "oklch(15% 0 0)",
+        meta: "oklch(15% 0 0)",
+      },
+      {
+        id: "gray-25",
+        label: "25%",
+        kind: "solid",
+        bg: "oklch(25% 0 0)",
+        meta: "oklch(25% 0 0)",
+      },
+      {
+        id: "gray-35",
+        label: "35%",
+        kind: "solid",
+        bg: "oklch(35% 0 0)",
+        meta: "oklch(35% 0 0)",
+      },
+      {
+        id: "gray-45",
+        label: "45%",
+        kind: "solid",
+        bg: "oklch(45% 0 0)",
+        meta: "oklch(45% 0 0)",
+      },
+      {
+        id: "gray-50-srgb",
+        label: "50% sRGB",
+        kind: "solid",
+        bg: "#808080",
+        meta: "#808080",
+      },
+      {
+        id: "gray-55",
+        label: "55%",
+        kind: "solid",
+        bg: "oklch(55% 0 0)",
+        meta: "oklch(55% 0 0)",
+      },
+      {
+        id: "gray-65",
+        label: "65%",
+        kind: "solid",
+        bg: "oklch(65% 0 0)",
+        meta: "oklch(65% 0 0)",
+      },
+      {
+        id: "gray-75",
+        label: "75%",
+        kind: "solid",
+        bg: "oklch(75% 0 0)",
+        meta: "oklch(75% 0 0)",
+      },
+      {
+        id: "gray-85",
+        label: "85%",
+        kind: "solid",
+        bg: "oklch(85% 0 0)",
+        meta: "oklch(85% 0 0)",
+      },
+      {
+        id: "gray-95",
+        label: "95%",
+        kind: "solid",
+        bg: "oklch(95% 0 0)",
+        meta: "oklch(95% 0 0)",
+      },
+    ],
+  },
+  {
+    label: "Gradients",
+    patterns: [
+      {
+        id: "radial-gray",
+        label: "Radial Grey",
+        kind: "gradient-radial",
+        bg: "#808080",
+        swatch: "radial-gradient(circle, #fff, #777, #000)",
+        meta: "radial grey",
+      },
+      {
+        id: "radial-red",
+        label: "Radial Red",
+        kind: "gradient-radial-red",
+        bg: "#4d0000",
+        swatch: "radial-gradient(circle, #ff0000, #4d0000, #000)",
+        meta: "radial red",
+      },
+      {
+        id: "radial-green",
+        label: "Radial Green",
+        kind: "gradient-radial-green",
+        bg: "#004d00",
+        swatch: "radial-gradient(circle, #00ff00, #004d00, #000)",
+        meta: "radial green",
+      },
+      {
+        id: "radial-blue",
+        label: "Radial Blue",
+        kind: "gradient-radial-blue",
+        bg: "#00004d",
+        swatch: "radial-gradient(circle, #0000ff, #00004d, #000)",
+        meta: "radial blue",
+      },
+      {
+        id: "gray-ramp",
+        label: "Grey Ramp",
+        kind: "gradient-gray-ramp",
+        bg: "#808080",
+        swatch: "linear-gradient(90deg, #000, #fff)",
+        meta: "#000000 -> #ffffff",
+      },
+      {
+        id: "red-ramp",
+        label: "Red Ramp",
+        kind: "gradient-red-ramp",
+        bg: "#800000",
+        swatch: "linear-gradient(90deg, #000, #ff0000)",
+        meta: "#000000 -> #ff0000",
+      },
+      {
+        id: "green-ramp",
+        label: "Green Ramp",
+        kind: "gradient-green-ramp",
+        bg: "#008000",
+        swatch: "linear-gradient(90deg, #000, #00ff00)",
+        meta: "#000000 -> #00ff00",
+      },
+      {
+        id: "blue-ramp",
+        label: "Blue Ramp",
+        kind: "gradient-blue-ramp",
+        bg: "#000080",
+        swatch: "linear-gradient(90deg, #000, #0000ff)",
+        meta: "#000000 -> #0000ff",
+      },
+      {
+        id: "hue-spectrum",
+        label: "Hue Spectrum",
+        kind: "gradient-hue",
+        bg: "#ff0000",
+        swatch:
+          "linear-gradient(90deg, red, yellow, lime, cyan, blue, magenta, red)",
+        meta: "hue ramp",
+      },
+      {
+        id: "saturation-grid",
+        label: "Saturation Grid",
+        kind: "saturation-grid",
+        bg: "#808080",
+        swatch: "linear-gradient(90deg, #fff, #f00, #0f0, #00f)",
+        meta: "hue x saturation",
+      },
+    ],
+  },
+  {
+    label: "Patterns",
+    patterns: [
+      {
+        id: "edges",
+        label: "Edge Frame",
+        kind: "edges",
+        bg: "#000000",
+        swatch:
+          "linear-gradient(#fff,#fff) 0 0/100% 2px no-repeat,linear-gradient(#fff,#fff) 0 100%/100% 2px no-repeat,linear-gradient(#fff,#fff) 0 0/2px 100% no-repeat,linear-gradient(#fff,#fff) 100% 0/2px 100% no-repeat,#000",
+        meta: "edge frame",
+      },
+      {
+        id: "checker-ansi",
+        label: "ANSI 4x4",
+        kind: "checker-ansi",
+        bg: "#000000",
+        swatch:
+          "conic-gradient(from 90deg,#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0) center/50% 50%",
+        meta: "4x4 checker",
+      },
+      {
+        id: "crosshatch",
+        label: "Crosshatch Grid",
+        kind: "crosshatch-grid",
+        bg: "#000000",
+        swatch:
+          "repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,#fff 0 1px,transparent 1px 4px),#000",
+        meta: "grid",
+      },
+      {
+        id: "lines-vertical",
+        label: "Vertical Stripes",
+        kind: "lines-vertical",
+        bg: "#000000",
+        swatch: "repeating-linear-gradient(90deg,#fff 0 2px,#000 2px 4px)",
+        meta: "1 device px per stripe",
+      },
+      {
+        id: "lines-horizontal",
+        label: "Horizontal Stripes",
+        kind: "lines-horizontal",
+        bg: "#000000",
+        swatch: "repeating-linear-gradient(180deg,#fff 0 2px,#000 2px 4px)",
+        meta: "1 device px per stripe",
+      },
+      {
+        id: "lines-diagonal",
+        label: "Diagonal Lines",
+        kind: "lines-diagonal",
+        bg: "#000000",
+        swatch: "repeating-linear-gradient(135deg,#fff 0 2px,#000 2px 5px)",
+        meta: "1 device px period",
+      },
+      {
+        id: "checker-1",
+        label: "1px Checker",
+        kind: "checker-1",
+        bg: "#000000",
+        swatch:
+          "conic-gradient(from 90deg,#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0) center/4px 4px",
+        meta: "1 device px cell",
+      },
+      {
+        id: "checker-2",
+        label: "2px Checker",
+        kind: "checker-2",
+        bg: "#000000",
+        swatch:
+          "conic-gradient(from 90deg,#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0) center/8px 8px",
+        meta: "2 device px cell",
+      },
+    ],
+  },
+  {
+    label: "Banding",
+    patterns: [
+      {
+        id: "steps-16",
+        label: "16 Steps",
+        kind: "steps-16",
+        bg: "#000000",
+        swatch:
+          "linear-gradient(90deg,#000 0 6.25%,#111 6.25% 12.5%,#222 12.5% 18.75%,#333 18.75% 25%,#444 25% 31.25%,#555 31.25% 37.5%,#666 37.5% 43.75%,#777 43.75% 50%,#888 50% 56.25%,#999 56.25% 62.5%,#aaa 62.5% 68.75%,#bbb 68.75% 75%,#ccc 75% 81.25%,#ddd 81.25% 87.5%,#eee 87.5% 93.75%,#fff 93.75% 100%)",
+        meta: "16 levels",
+      },
+      {
+        id: "steps-32",
+        label: "32 Steps",
+        kind: "steps-32",
+        bg: "#000000",
+        swatch:
+          "repeating-linear-gradient(90deg,#0a0a0a 0 3.125%,#171717 3.125% 6.25%,#242424 6.25% 9.375%,#313131 9.375% 12.5%,#3f3f3f 12.5% 15.625%,#4c4c4c 15.625% 18.75%,#595959 18.75% 21.875%,#666 21.875% 25%,#737373 25% 28.125%,#808080 28.125% 31.25%,#8d8d8d 31.25% 34.375%,#9a9a9a 34.375% 37.5%,#a7a7a7 37.5% 40.625%,#b4b4b4 40.625% 43.75%,#c1c1c1 43.75% 46.875%,#cecece 46.875% 50%)",
+        meta: "32 levels",
+      },
+      {
+        id: "steps-64",
+        label: "64 Steps",
+        kind: "steps-64",
+        bg: "#000000",
+        swatch:
+          "repeating-linear-gradient(90deg,#000 0 2px,#111 2px 4px,#222 4px 6px,#333 6px 8px,#444 8px 10px,#555 10px 12px,#666 12px 14px,#777 14px 16px)",
+        meta: "64 levels",
+      },
+    ],
+  },
+  {
+    label: "Sharpness",
+    patterns: [
+      {
+        id: "text-sharpness",
+        label: "Text Sharpness",
+        kind: "text-sharpness",
+        bg: "#ffffff",
+        swatch: "#ffffff",
+        swatchText: "T",
+        swatchTextColor: "#111111",
+        meta: "small text",
+      },
+    ],
+  },
+  {
+    label: "Shadows & Highlights",
+    patterns: [
+      {
+        id: "black-level",
+        label: "Black Level",
+        kind: "near-black",
+        bg: "#000000",
+        swatch:
+          "linear-gradient(90deg,#000 0 12%,#050505 12% 24%,#0a0a0a 24% 36%,#101010 36% 48%,#161616 48% 60%,#1c1c1c 60% 72%,#222 72% 84%,#2a2a2a 84% 100%)",
+        meta: "OKLCH L 0-14%",
+      },
+      {
+        id: "white-saturation",
+        label: "White Saturation",
+        kind: "near-white",
+        bg: "#ffffff",
+        swatch:
+          "linear-gradient(90deg,#dfdfdf 0 12%,#e5e5e5 12% 24%,#ebebeb 24% 36%,#f0f0f0 36% 48%,#f5f5f5 48% 60%,#fafafa 60% 72%,#fdfdfd 72% 84%,#fff 84% 100%)",
+        meta: "OKLCH L 86-100%",
+      },
+      {
+        id: "near-black-gradient",
+        label: "Near Black Gradient",
+        kind: "gradient-near-black",
+        bg: "#000000",
+        swatch: "linear-gradient(90deg, #000000, #202020)",
+        meta: "#000000 -> #202020",
+      },
+      {
+        id: "near-white-gradient",
+        label: "Near White Gradient",
+        kind: "gradient-near-white",
+        bg: "#ffffff",
+        swatch: "linear-gradient(90deg, #dfdfdf, #ffffff)",
+        meta: "#dfdfdf -> #ffffff",
+      },
+    ],
+  },
+  {
+    label: "Image Retention & Motion",
+    patterns: [
+      {
+        id: "burnin-wash",
+        label: "Colour Wash",
+        kind: "burnin-wash",
+        bg: "#7f1d1d",
+        swatch:
+          "linear-gradient(90deg, red, yellow, lime, cyan, blue, magenta, red)",
+        meta: "hue cycle, ~14s/rotation",
+      },
+      {
+        id: "burnin-bars",
+        label: "Sliding Bars",
+        kind: "burnin-bars",
+        bg: "#000000",
+        swatch:
+          "repeating-linear-gradient(90deg,#ef4444 0 12.5%,#f97316 12.5% 25%,#eab308 25% 37.5%,#22c55e 37.5% 50%,#3b82f6 50% 62.5%,#8b5cf6 62.5% 75%,#ec4899 75% 87.5%,#fff 87.5% 100%)",
+        meta: "8 bars sliding",
+      },
+      {
+        id: "burnin-checker",
+        label: "Checker Flip",
+        kind: "burnin-checker",
+        bg: "#000000",
+        swatch:
+          "conic-gradient(from 90deg,#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0) center/16px 16px",
+        meta: "flips at 2/sec",
+      },
+      {
+        id: "burnin-sweep",
+        label: "Gradient Sweep",
+        kind: "burnin-sweep",
+        bg: "#000000",
+        swatch: "linear-gradient(90deg, #000, #fff, #000)",
+        meta: "sweeping gradient",
+      },
+    ],
+  },
+  {
+    label: "Gamma Check",
+    patterns: [
+      {
+        id: "gamma-blend",
+        label: "Visual Gamma",
+        kind: "gamma-blend",
+        bg: "#000000",
+        swatch:
+          "conic-gradient(from 90deg,#fff 0 25%,#000 0 50%,#fff 0 75%,#000 0) center/6px 6px",
+        meta: "sRGB gamma check",
+      },
+    ],
+  },
+];
+
+const patternTips: Record<string, string> = {
+  Colors: "Look for a dot or tint that stays fixed as the solid colors change.",
+  Greys: "Use a dim room and look for tinting or uneven patches across the panel.",
+  Gradients: "Look for smooth transitions without rings, stripes, or sudden steps.",
+  Patterns: "Check that lines stay sharp, evenly spaced, and visible at every edge.",
+  Banding: "Compare adjacent steps and note where several levels merge together.",
+  Sharpness: "Inspect the text at normal distance for blur, doubling, or color fringes.",
+  "Shadows & Highlights":
+    "Use normal brightness and check that near-black or near-white steps stay distinct.",
+  "Image Retention & Motion":
+    "Watch for a fixed patch behind the moving wash, bars, checker, or sweep.",
+  "Gamma Check": "Disable adaptive display settings before comparing gamma patches.",
+};
+
+const sidebarGroups = patternGroups.map((group, groupIndex) => ({
+  title: group.label,
+  openByDefault: groupIndex === 0,
+  items: group.patterns.map((pattern, patternIndex) => ({
+    label: pattern.label,
+    visual: {
+      type: "swatch" as const,
+      style: `background: ${pattern.swatch ?? pattern.bg};`,
+      text: pattern.swatchText,
+      textColor: pattern.swatchTextColor,
+    },
+    active: groupIndex === 0 && patternIndex === 0,
+    attributes: {
+      "data-pattern-button": "",
+      "data-pattern-id": pattern.id,
+      "data-pattern-label": pattern.label,
+      "data-pattern-kind": pattern.kind,
+      "data-pattern-bg": pattern.bg,
+      "data-pattern-meta": pattern.meta,
+      "data-pattern-tip": patternTips[group.label] ?? "Inspect the full panel carefully.",
+    },
+  })),
+}));
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{ tools: "Tools", "screen-test": "Screen Test" }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Online Display Testing Tool</h1>
+        <p>
+          Use full-screen colors, grayscale fields, gradients, line and
+          checkerboard patterns, black and white level checks, moving sequences,
+          and a visual gamma pattern to inspect display uniformity, banding,
+          clipping, sharpness, image retention, and motion artifacts. Run
+          patterns individually or as an automatic full-screen sequence.
+          Everything is rendered locally in your browser, and the results are
+          visual checks rather than calibrated measurements or an automated
+          hardware grade.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="screen-test-shell"
+          fullscreenButtonId="screen-fullscreen"
+          stageVariant="tall"
+          controlsAutoHide={true}
+          actionBarLabel="Auto tour controls"
+          fullscreenStatsFloating={true}
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              attributes: { id: "screen-auto-toggle" },
+            },
+            {
+              label: "Reset",
+              tone: "danger",
+              attributes: { id: "screen-auto-reset" },
+            },
+          ]}
+          stats={[
+            {
+              label: "Browser Frame Rate",
+              value: "--",
+              valueAttributes: { "data-stat": "frame-rate" },
+            },
+          ]}
+        >
+          <div
+            id="screen-test-stage"
+            class="screen-stage bg-black"
+            data-pattern-kind="solid"
+          >
+            <div id="screen-stage-content" class="screen-stage-content"></div>
+
+            <div
+              class="screen-pattern-status absolute top-1/2 left-1/2 z-5 grid min-w-40 -translate-x-1/2 -translate-y-1/2 gap-1 rounded-xl border-2 border-violet-500/50 bg-black/50 px-3.5 py-2.5 text-center"
+            >
+              <strong
+                id="screen-pattern-label"
+                class="text-small text-slate-200 leading-tight">Black</strong
+              >
+              <span
+                id="screen-pattern-rgb"
+                class="text-xsmall text-slate-300 uppercase">#000000</span
+              >
+            </div>
+
+            <button
+              type="button"
+              id="screen-prev"
+              class="stage-btn"
+              aria-label="Previous pattern"
+            >
+              <svg
+                class="h-4 w-4 -rotate-90"
+                viewBox="0 0 24 24"
+                focusable="false"
+                aria-hidden="true"
+              >
+                <use href={`${SiteIcons}#chevron`}></use>
+              </svg>
+            </button>
+            <button
+              type="button"
+              id="screen-next"
+              class="stage-btn"
+              aria-label="Next pattern"
+            >
+              <svg
+                class="h-4 w-4 rotate-90"
+                viewBox="0 0 24 24"
+                focusable="false"
+                aria-hidden="true"
+              >
+                <use href={`${SiteIcons}#chevron`}></use>
+              </svg>
+            </button>
+            <div class="stage-option-actions">
+              <button
+                type="button"
+                id="screen-pattern-option"
+                class="stage-btn"
+                hidden
+                aria-label="Pattern option"
+              >
+                <svg
+                  class="pattern-option-icon"
+                  viewBox="0 0 24 24"
+                  focusable="false"
+                  aria-hidden="true"
+                >
+                  <use href={`${ToolIcons}#angle`}></use>
+                </svg>
+                <span id="screen-pattern-option-label" class="pattern-option-label">Option</span>
+              </button>
+            </div>
+          </div>
+
+          <p slot="dockLead" class="screen-auto-copy">
+            {patternTips.Colors}
+          </p>
+          <p
+            slot="dockSecondary"
+            class="text-xsmall m-0 leading-snug text-slate-600 dark:text-slate-300"
+          >
+            Press Start to run auto mode. It runs from Colors through Shadows
+            &amp; Highlights in fullscreen, advancing every 5 seconds.
+            Image-retention and motion checks, plus the visual gamma check, are
+            manual.
+          </p>
+        </ToolRuntime>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="lg:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Display test library and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    .screen-stage {
+      @apply relative size-full touch-manipulation;
+    }
+
+    .screen-stage-content {
+      @apply absolute inset-0 overflow-hidden;
+    }
+
+    .stage-btn {
+      @apply absolute z-5 inline-grid place-items-center border-2 border-violet-500/50 bg-black/50 text-white transition duration-200;
+    }
+
+    .screen-pattern-status {
+      @apply transition duration-200;
+    }
+
+    .stage-option-actions {
+      @apply absolute bottom-4 left-4 z-5 flex items-center gap-2;
+    }
+
+    .stage-option-actions .stage-btn {
+      @apply static;
+    }
+
+    #screen-prev,
+    #screen-next {
+      @apply top-1/2 h-12 w-12 -translate-y-1/2 rounded-full;
+    }
+
+    #screen-pattern-option {
+      @apply text-small h-10 rounded-2xl px-4;
+    }
+
+    .pattern-option-icon {
+      @apply hidden size-5;
+    }
+
+    #screen-prev {
+      @apply left-4;
+    }
+
+    #screen-next {
+      @apply right-4;
+    }
+
+    .stage-btn:hover {
+      @apply bg-accent-500/50;
+    }
+
+    :global(#screen-auto-toggle.is-running) {
+      @apply bg-linear-to-br from-yellow-400 to-yellow-600;
+    }
+
+    :global(#screen-test-shell[data-fullscreen="true"] .screen-auto-copy) {
+      @apply hidden;
+    }
+
+    :global(
+      #screen-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        :is(#screen-prev, #screen-next)
+    ) {
+      @apply pointer-events-none opacity-0;
+    }
+
+    :global(
+      #screen-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        #screen-pattern-option
+    ) {
+      @apply pointer-events-none translate-y-2 opacity-0;
+    }
+
+    @media (width < 40rem) {
+      :global(
+        #screen-test-shell[data-fullscreen="true"] #screen-pattern-option
+      ) {
+        @apply size-10 rounded-full p-0;
+      }
+
+      :global(
+        #screen-test-shell[data-fullscreen="true"] .pattern-option-icon
+      ) {
+        @apply block;
+      }
+
+      :global(
+        #screen-test-shell[data-fullscreen="true"] .pattern-option-label
+      ) {
+        @apply hidden;
+      }
+    }
+
+    :global(
+      #screen-test-shell[data-fullscreen="true"][data-controls-visible="false"]
+        .screen-pattern-status
+    ) {
+      @apply pointer-events-none -translate-x-1/2 translate-y-[-40%] opacity-0;
+    }
+
+    :global(
+      #screen-test-shell:not([data-frame-rate-relevant="true"])
+        :is(.tool-runtime-floating-stats, .tool-runtime-stats-group)
+    ) {
+      @apply hidden;
+    }
+
+    :global(.pixel-exact-canvas),
+    :global(.gamma-canvas) {
+      @apply absolute inset-0 size-full;
+      image-rendering: pixelated;
+    }
+
+    :global(.burnin-layer) {
+      @apply absolute inset-0;
+    }
+
+    :global(.burnin-layer--wash) {
+      background: linear-gradient(
+        135deg,
+        #ef4444,
+        #f97316 25%,
+        #eab308 50%,
+        #22c55e 62%,
+        #3b82f6 75%,
+        #8b5cf6 88%,
+        #ef4444
+      );
+      animation: burnin-wash-spin 14s linear infinite;
+      animation-play-state: paused;
+    }
+
+    :global(.burnin-layer--wash.is-playing) {
+      animation-play-state: running;
+    }
+
+    :global(.burnin-layer--bars) {
+      background-image: repeating-linear-gradient(
+        90deg,
+        #ef4444 0 12.5%,
+        #f97316 12.5% 25%,
+        #eab308 25% 37.5%,
+        #22c55e 37.5% 50%,
+        #3b82f6 50% 62.5%,
+        #8b5cf6 62.5% 75%,
+        #ec4899 75% 87.5%,
+        #fff 87.5% 100%
+      );
+      background-size: 320px 100%;
+      animation: burnin-bars-slide 4s linear infinite;
+      animation-play-state: paused;
+    }
+
+    :global(.burnin-layer--bars.is-playing) {
+      animation-play-state: running;
+    }
+
+    :global(.burnin-layer--sweep) {
+      background-image: linear-gradient(90deg, #000, #fff, #000);
+      background-size: 200% 100%;
+      animation: burnin-sweep-slide 6s linear infinite;
+      animation-play-state: paused;
+    }
+
+    :global(
+      :is(.burnin-layer--wash, .burnin-layer--bars, .burnin-layer--sweep)
+    ) {
+      transform: rotate(var(--motion-rotation, 0deg))
+        scale(var(--motion-cover-scale, 1));
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    :global(.burnin-layer--sweep.is-playing) {
+      animation-play-state: running;
+    }
+
+    :global(.burnin-checker-board) {
+      @apply grid grid-cols-8 grid-rows-8;
+    }
+
+    :global(.burnin-checker-board.is-inverted) {
+      filter: invert(1);
+    }
+
+    @keyframes burnin-wash-spin {
+      from {
+        filter: hue-rotate(0deg);
+      }
+      to {
+        filter: hue-rotate(360deg);
+      }
+    }
+
+    @keyframes burnin-bars-slide {
+      from {
+        background-position-x: 0;
+      }
+      to {
+        background-position-x: -320px;
+      }
+    }
+
+    @keyframes burnin-sweep-slide {
+      from {
+        background-position-x: 0%;
+      }
+      to {
+        background-position-x: -100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :global(.burnin-layer--wash),
+      :global(.burnin-layer--bars),
+      :global(.burnin-layer--sweep) {
+        animation: none !important;
+      }
+    }
+  </style>
+
+  <script>
+    import { onPageHide, observeResize } from "@/utils/phones/tools/lifecycle";
+    import { createRafScheduler } from "@/utils/site/raf";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import { getBrowserCapabilities } from "@/utils/phones/tools/capabilities";
+
+    const AUTO_TOUR_MS = 5000;
+    const CHECKER_FLIP_INTERVAL_MS = 500;
+    const FRAME_RATE_MIN_SAMPLES = 20;
+    const FRAME_RATE_MAX_SAMPLES = 120;
+    const GAMMA_CANDIDATES = [1.8, 2.0, 2.2, 2.4, 2.6] as const;
+    const RETENTION_MOTION_COPY =
+      "Use a dim room and watch for a fixed patch behind the moving pattern.";
+    const RETENTION_MOTION_REDUCED_COPY =
+      "Reduced motion is on, so step Checker Flip manually or use the solid-color checks.";
+    const GAMMA_COPY =
+      "Disable adaptive display settings before comparing gamma patches.";
+
+    const supportsOklch = getBrowserCapabilities().oklch;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    const testShell = document.getElementById("screen-test-shell");
+    const stage = document.getElementById("screen-test-stage");
+    const content = document.getElementById("screen-stage-content");
+    const label = document.getElementById("screen-pattern-label");
+    const rgbLabel = document.getElementById("screen-pattern-rgb");
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-pattern-button]"),
+    );
+    const nextButton = document.getElementById("screen-next");
+    const prevButton = document.getElementById("screen-prev");
+    const patternOptionButton = document.getElementById(
+      "screen-pattern-option",
+    );
+    const patternOptionLabel = document.getElementById(
+      "screen-pattern-option-label",
+    );
+    const autoToggleButton = document.getElementById("screen-auto-toggle");
+    const autoResetButton = document.getElementById("screen-auto-reset");
+    const fullscreenButton = document.getElementById("screen-fullscreen");
+    const autoCopy = document.querySelector<HTMLElement>(".screen-auto-copy");
+    const frameRateEls = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-stat="frame-rate"]'),
+    );
+
+    type PatternData = {
+      id: string;
+      label: string;
+      kind: string;
+      bg: string;
+      meta: string;
+      tip: string;
+    };
+
+    function readPatternData(button: HTMLButtonElement): PatternData {
+      const {
+        patternId,
+        patternLabel,
+        patternKind,
+        patternBg,
+        patternMeta,
+        patternTip,
+      } = button.dataset;
+      return {
+        id: patternId ?? "",
+        label: patternLabel ?? "",
+        kind: patternKind ?? "solid",
+        bg: patternBg ?? "#000000",
+        meta: patternMeta ?? "",
+        tip: patternTip ?? "Inspect the full panel carefully.",
+      };
+    }
+
+    const gradientAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    const bandingChannels = ["Gray", "Red", "Green", "Blue"] as const;
+    type BandingChannel = (typeof bandingChannels)[number];
+    const gradientStopsByKind: Record<string, string> = {
+      "gradient-near-black": "#000 0%, #202020 100%",
+      "gradient-near-white": "#dfdfdf 0%, #fff 100%",
+      "gradient-gray-ramp": "#000 0%, #fff 100%",
+      "gradient-red-ramp": "#000 0%, #ff0000 100%",
+      "gradient-green-ramp": "#000 0%, #00ff00 100%",
+      "gradient-blue-ramp": "#000 0%, #0000ff 100%",
+      "gradient-hue":
+        "red 0%, yellow 16.6%, lime 33.2%, cyan 49.8%, blue 66.4%, magenta 83%, red 100%",
+    };
+    const angleableGradientKinds = new Set([
+      "gradient-gray-ramp",
+      "gradient-red-ramp",
+      "gradient-green-ramp",
+      "gradient-blue-ramp",
+      "gradient-hue",
+    ]);
+    const angleableMotionKinds = new Set([
+      "burnin-wash",
+      "burnin-bars",
+      "burnin-sweep",
+    ]);
+    const angleablePatternKinds = new Set([
+      ...angleableGradientKinds,
+      ...angleableMotionKinds,
+    ]);
+    const oklchInterpolationKinds = new Set([
+      "gradient-near-black",
+      "gradient-near-white",
+      "gradient-gray-ramp",
+    ]);
+    const resizablePixelKinds = new Set([
+      "crosshatch-grid",
+      "checker-1",
+      "checker-2",
+      "lines-vertical",
+      "lines-horizontal",
+      "lines-diagonal",
+      "gamma-blend",
+    ]);
+    const burnInKinds = new Set([
+      "burnin-wash",
+      "burnin-bars",
+      "burnin-checker",
+      "burnin-sweep",
+    ]);
+    const frameRateKinds = new Set([...burnInKinds, "gamma-blend"]);
+
+    const autoTourIndices = buttons
+      .map((_, index) => index)
+      .filter((index) => {
+        const kind = readPatternData(buttons[index]).kind;
+        return !burnInKinds.has(kind) && kind !== "gamma-blend";
+      });
+
+    let activeIndex = 0;
+    let gradientAngleIndex = 2;
+    const defaultMotionAngleIndices = new Map<string, number>([
+      ["burnin-wash", 3],
+      ["burnin-bars", 2],
+      ["burnin-sweep", 2],
+    ]);
+    const motionAngleIndices = new Map(defaultMotionAngleIndices);
+    let bandingChannelIndex = 0;
+    let gammaIndex = 2;
+    let autoTimer: number | null = null;
+    let autoVisited = 0;
+    let autoPaused = false;
+    let autoAfterFullscreen: "start" | "resume" | null = null;
+    let pausedPatternStatus: { label: string; meta: string } | null = null;
+    let burnInPlaying = false;
+    let burnInPaused = false;
+    let burnInAfterFullscreen = false;
+    let checkerFlipTimer = 0;
+    let currentBurnInLayer: HTMLElement | null = null;
+    let frameRateRafId = 0;
+    let frameRateLastTs = 0;
+    let frameRateSamples: number[] = [];
+
+    const pageController = new AbortController();
+    const wakeLock = createWakeLock({ signal: pageController.signal });
+    const rafScheduler = createRafScheduler(() => {
+      const kind = stage?.dataset.patternKind || "";
+      if (resizablePixelKinds.has(kind)) {
+        renderPattern(kind);
+      } else if (angleableMotionKinds.has(kind) && currentBurnInLayer) {
+        applyMotionAngle(currentBurnInLayer, kind);
+      }
+    });
+
+    function showRuntimeControls(): void {
+      testShell?.dispatchEvent(
+        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
+      );
+    }
+
+    function syncWakeLock(): void {
+      if (burnInPlaying || autoTimer !== null) wakeLock.request();
+      else wakeLock.release();
+    }
+
+    function clearContent(): void {
+      if (!content) return;
+      content.replaceChildren();
+      content.removeAttribute("style");
+      currentBurnInLayer = null;
+    }
+
+    function formatPatternMeta(value: string): string {
+      return value.startsWith("#") ? value.toUpperCase() : value;
+    }
+
+    function getGradientAngle(): number {
+      return gradientAngles[gradientAngleIndex] ?? 90;
+    }
+
+    function getPatternAngle(kind: string): number {
+      if (!angleableMotionKinds.has(kind)) return getGradientAngle();
+      const index = motionAngleIndices.get(kind) ?? 2;
+      return gradientAngles[index] ?? 90;
+    }
+
+    function advancePatternAngle(kind: string): void {
+      if (angleableMotionKinds.has(kind)) {
+        const currentIndex = motionAngleIndices.get(kind) ?? 2;
+        motionAngleIndices.set(kind, (currentIndex + 1) % gradientAngles.length);
+        return;
+      }
+      gradientAngleIndex = (gradientAngleIndex + 1) % gradientAngles.length;
+    }
+
+    function applyMotionAngle(layer: HTMLElement, kind: string): void {
+      const angle = getPatternAngle(kind);
+      const baseAngle = kind === "burnin-wash" ? 135 : 90;
+      const rotation = ((angle - baseAngle + 540) % 360) - 180;
+      const radians = (rotation * Math.PI) / 180;
+      const rect = content?.getBoundingClientRect();
+      const width = Math.max(1, rect?.width ?? 1);
+      const height = Math.max(1, rect?.height ?? 1);
+      const absCos = Math.abs(Math.cos(radians));
+      const absSin = Math.abs(Math.sin(radians));
+      const coverScale = Math.max(
+        absCos + (height / width) * absSin,
+        absCos + (width / height) * absSin,
+      );
+
+      layer.style.setProperty("--motion-rotation", `${rotation}deg`);
+      layer.style.setProperty(
+        "--motion-cover-scale",
+        coverScale.toFixed(5),
+      );
+    }
+
+    function getBandingChannel(): BandingChannel {
+      return bandingChannels[bandingChannelIndex] ?? "Gray";
+    }
+
+    function getGammaCandidate(): number {
+      return GAMMA_CANDIDATES[gammaIndex] ?? 2.2;
+    }
+
+    function gammaPatchValue(gamma: number): number {
+      return Math.round(255 * 0.5 ** (1 / gamma));
+    }
+
+    function isBandingKind(kind: string): boolean {
+      return kind === "steps-16" || kind === "steps-32" || kind === "steps-64";
+    }
+
+    type OptionMode = "angle" | "banding" | "none";
+
+    function getOptionMode(kind: string): OptionMode {
+      if (angleablePatternKinds.has(kind)) return "angle";
+      if (isBandingKind(kind)) return "banding";
+      return "none";
+    }
+
+    function syncPatternOptionButton(kind: string): void {
+      if (!patternOptionButton) return;
+      const mode = getOptionMode(kind);
+      patternOptionButton.hidden = mode === "none";
+      if (mode === "none") return;
+
+      const meta = readPatternData(buttons[activeIndex]).meta;
+      const setLabel = (
+        text: string,
+        ariaLabel: string,
+        extra: string,
+      ): void => {
+        if (patternOptionLabel) patternOptionLabel.textContent = text;
+        patternOptionButton.setAttribute("aria-label", ariaLabel);
+        if (rgbLabel) {
+          rgbLabel.textContent = meta
+            ? `${formatPatternMeta(meta)} / ${extra}`
+            : extra;
+        }
+      };
+
+      if (mode === "angle") {
+        const angle = getPatternAngle(kind);
+        setLabel(
+          `Angle ${angle} deg`,
+          `Change gradient angle, current angle ${angle} degrees`,
+          `${angle} deg`,
+        );
+      } else if (mode === "banding") {
+        const channel = getBandingChannel();
+        setLabel(
+          channel,
+          `Change banding channel, current channel ${channel}`,
+          channel,
+        );
+      }
+    }
+
+    function updateAutoCopy(kind: string, tip: string): void {
+      if (!autoCopy) return;
+      autoCopy.textContent = burnInKinds.has(kind)
+        ? prefersReducedMotion
+          ? RETENTION_MOTION_REDUCED_COPY
+          : RETENTION_MOTION_COPY
+        : kind === "gamma-blend"
+          ? GAMMA_COPY
+          : tip;
+    }
+
+    function medianOf(values: number[]): number {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+        : (sorted[mid] ?? 0);
+    }
+
+    function updateFrameRateReadout(): void {
+      if (frameRateSamples.length < FRAME_RATE_MIN_SAMPLES) return;
+      const medianDelta = medianOf(frameRateSamples);
+      if (medianDelta <= 0) return;
+      const hz = Math.round(1000 / medianDelta);
+      frameRateEls.forEach((el) => {
+        el.textContent = `${hz} fps`;
+      });
+    }
+
+    function frameRateTick(timestamp: number): void {
+      if (frameRateLastTs !== 0) {
+        frameRateSamples.push(timestamp - frameRateLastTs);
+        if (frameRateSamples.length > FRAME_RATE_MAX_SAMPLES)
+          frameRateSamples.shift();
+        updateFrameRateReadout();
+      }
+      frameRateLastTs = timestamp;
+      frameRateRafId = requestAnimationFrame(frameRateTick);
+    }
+
+    function startFrameRateSampling(): void {
+      if (frameRateRafId !== 0) return;
+      frameRateSamples = [];
+      frameRateLastTs = 0;
+      frameRateRafId = requestAnimationFrame(frameRateTick);
+    }
+
+    function stopFrameRateSampling(): void {
+      if (frameRateRafId !== 0) {
+        cancelAnimationFrame(frameRateRafId);
+        frameRateRafId = 0;
+      }
+      frameRateLastTs = 0;
+      frameRateEls.forEach((el) => {
+        el.textContent = "--";
+      });
+    }
+
+    function setBurnInPlaying(playing: boolean): void {
+      burnInPlaying = playing;
+      currentBurnInLayer?.classList.toggle("is-playing", playing);
+
+      if (checkerFlipTimer !== 0) {
+        window.clearInterval(checkerFlipTimer);
+        checkerFlipTimer = 0;
+      }
+
+      if (playing) {
+        if (!prefersReducedMotion) startFrameRateSampling();
+        if (
+          stage?.dataset.patternKind === "burnin-checker" &&
+          !prefersReducedMotion
+        ) {
+          checkerFlipTimer = window.setInterval(() => {
+            currentBurnInLayer?.classList.toggle("is-inverted");
+          }, CHECKER_FLIP_INTERVAL_MS);
+        }
+      } else {
+        stopFrameRateSampling();
+        currentBurnInLayer?.classList.remove("is-inverted");
+      }
+      syncWakeLock();
+    }
+
+    function stopBurnInPlayback(): void {
+      if (burnInPlaying) setBurnInPlaying(false);
+      burnInPaused = false;
+      burnInAfterFullscreen = false;
+      syncPausedPatternStatus();
+      pausedPatternStatus = null;
+    }
+
+    function pauseBurnInPlayback(): void {
+      if (!burnInPaused && label && rgbLabel) {
+        pausedPatternStatus = {
+          label: label.textContent ?? "",
+          meta: rgbLabel.textContent ?? "",
+        };
+      }
+      setBurnInPlaying(false);
+      burnInPaused = true;
+      burnInAfterFullscreen = false;
+      syncPausedPatternStatus();
+      syncAutoButton();
+    }
+
+    function beginBurnInPlayback(): void {
+      burnInPaused = false;
+      burnInAfterFullscreen = false;
+      syncPausedPatternStatus();
+      pausedPatternStatus = null;
+      setBurnInPlaying(true);
+      syncAutoButton();
+      showRuntimeControls();
+    }
+
+    function startFullscreenBurnInPlayback(): void {
+      if (testShell?.dataset.fullscreen === "true") {
+        beginBurnInPlayback();
+        return;
+      }
+      burnInAfterFullscreen = true;
+      enterAutoFullscreen();
+      showRuntimeControls();
+    }
+
+    function renderBurnInWash(): HTMLElement | null {
+      if (!content) return null;
+      const layer = document.createElement("div");
+      layer.className = "burnin-layer burnin-layer--wash";
+      applyMotionAngle(layer, "burnin-wash");
+      content.append(layer);
+      return layer;
+    }
+
+    function renderBurnInBars(): HTMLElement | null {
+      if (!content) return null;
+      const layer = document.createElement("div");
+      layer.className = "burnin-layer burnin-layer--bars";
+      applyMotionAngle(layer, "burnin-bars");
+      content.append(layer);
+      return layer;
+    }
+
+    function renderBurnInSweep(): HTMLElement | null {
+      if (!content) return null;
+      const layer = document.createElement("div");
+      layer.className = "burnin-layer burnin-layer--sweep";
+      applyMotionAngle(layer, "burnin-sweep");
+      content.append(layer);
+      return layer;
+    }
+
+    function renderBurnInChecker(): HTMLElement | null {
+      if (!content) return null;
+      const board = document.createElement("div");
+      board.className = "burnin-layer burnin-checker-board";
+      for (let index = 0; index < 64; index += 1) {
+        const cell = document.createElement("div");
+        const row = Math.floor(index / 8);
+        const column = index % 8;
+        cell.style.background = (row + column) % 2 === 0 ? "#fff" : "#000";
+        board.append(cell);
+      }
+      content.append(board);
+      return board;
+    }
+
+    function createCheckerTile(
+      ctx: CanvasRenderingContext2D,
+      cellDevicePx: number,
+    ): CanvasPattern | null {
+      const tile = document.createElement("canvas");
+      tile.width = cellDevicePx * 2;
+      tile.height = cellDevicePx * 2;
+      const tileCtx = tile.getContext("2d");
+      if (!tileCtx) return null;
+      tileCtx.fillStyle = "#ffffff";
+      tileCtx.fillRect(0, 0, tile.width, tile.height);
+      tileCtx.fillStyle = "#000000";
+      tileCtx.fillRect(cellDevicePx, 0, cellDevicePx, cellDevicePx);
+      tileCtx.fillRect(0, cellDevicePx, cellDevicePx, cellDevicePx);
+      return ctx.createPattern(tile, "repeat");
+    }
+
+    function createStripeTile(
+      ctx: CanvasRenderingContext2D,
+      stripeDevicePx: number,
+      orientation: "vertical" | "horizontal",
+    ): CanvasPattern | null {
+      const tile = document.createElement("canvas");
+      const size = stripeDevicePx * 2;
+      tile.width = orientation === "vertical" ? size : 1;
+      tile.height = orientation === "vertical" ? 1 : size;
+      const tileCtx = tile.getContext("2d");
+      if (!tileCtx) return null;
+      tileCtx.fillStyle = "#ffffff";
+      tileCtx.fillRect(0, 0, tile.width, tile.height);
+      tileCtx.fillStyle = "#000000";
+      if (orientation === "vertical") {
+        tileCtx.fillRect(stripeDevicePx, 0, stripeDevicePx, 1);
+      } else {
+        tileCtx.fillRect(0, stripeDevicePx, 1, stripeDevicePx);
+      }
+      return ctx.createPattern(tile, "repeat");
+    }
+
+    function createExactCanvas(): {
+      canvas: HTMLCanvasElement;
+      ctx: CanvasRenderingContext2D;
+      width: number;
+      height: number;
+    } | null {
+      if (!content) return null;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = content.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.setAttribute("aria-hidden", "true");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = false;
+      return { canvas, ctx, width, height };
+    }
+
+    function renderPixelExactChecker(cellDevicePx: number): void {
+      const built = createExactCanvas();
+      if (!built || !content) return;
+      built.canvas.className = "pixel-exact-canvas";
+      const pattern = createCheckerTile(built.ctx, cellDevicePx);
+      if (!pattern) return;
+      built.ctx.fillStyle = pattern;
+      built.ctx.fillRect(0, 0, built.width, built.height);
+      content.append(built.canvas);
+    }
+
+    function renderPixelExactLines(
+      orientation: "vertical" | "horizontal",
+    ): void {
+      const built = createExactCanvas();
+      if (!built || !content) return;
+      built.canvas.className = "pixel-exact-canvas";
+      const pattern = createStripeTile(built.ctx, 2, orientation);
+      if (!pattern) return;
+      built.ctx.fillStyle = pattern;
+      built.ctx.fillRect(0, 0, built.width, built.height);
+      content.append(built.canvas);
+    }
+
+    function renderPixelExactDiagonalLines(): void {
+      const built = createExactCanvas();
+      if (!built || !content) return;
+      built.canvas.className = "pixel-exact-canvas";
+      const pattern = createStripeTile(built.ctx, 2, "vertical");
+      built.ctx.fillStyle = "#000000";
+      built.ctx.fillRect(0, 0, built.width, built.height);
+      if (pattern) {
+        built.ctx.save();
+        built.ctx.translate(built.width / 2, built.height / 2);
+        built.ctx.rotate(Math.PI / 4);
+        built.ctx.fillStyle = pattern;
+        const diagonal = Math.sqrt(
+          built.width * built.width + built.height * built.height,
+        );
+        built.ctx.fillRect(-diagonal / 2, -diagonal / 2, diagonal, diagonal);
+        built.ctx.restore();
+      }
+      content.append(built.canvas);
+    }
+
+    function renderGammaBlend(): void {
+      const built = createExactCanvas();
+      if (!built || !content) return;
+      built.canvas.className = "gamma-canvas";
+      const pattern = createCheckerTile(built.ctx, 1);
+      if (pattern) {
+        built.ctx.fillStyle = pattern;
+        built.ctx.fillRect(0, 0, built.width, built.height);
+      }
+      const patchValue = gammaPatchValue(getGammaCandidate());
+      const patchWidth = built.width * 0.42;
+      const patchHeight = built.height * 0.42;
+      built.ctx.fillStyle = `rgb(${patchValue}, ${patchValue}, ${patchValue})`;
+      built.ctx.fillRect(
+        (built.width - patchWidth) / 2,
+        (built.height - patchHeight) / 2,
+        patchWidth,
+        patchHeight,
+      );
+      content.append(built.canvas);
+    }
+
+    function renderCssFill(
+      className: string,
+      cssText: string,
+    ): HTMLElement | null {
+      if (!content) return null;
+      const element = document.createElement("div");
+      element.className = className;
+      element.style.cssText = cssText;
+      content.append(element);
+      return element;
+    }
+
+    function renderGradient(kind: string): boolean {
+      if (
+        !content ||
+        !Object.prototype.hasOwnProperty.call(gradientStopsByKind, kind)
+      )
+        return false;
+      const angle = angleableGradientKinds.has(kind) ? getGradientAngle() : 90;
+      const interpolation =
+        oklchInterpolationKinds.has(kind) && supportsOklch ? " in oklch" : "";
+      content.style.background = `linear-gradient(${angle}deg${interpolation}, ${gradientStopsByKind[kind]})`;
+      return true;
+    }
+
+    function renderSaturationGrid(): void {
+      if (!content) return;
+      const columns = 24;
+      const rows = 11;
+      const grid = document.createElement("div");
+      grid.className = "saturation-grid";
+      grid.style.cssText = [
+        "display: grid",
+        `grid-template-columns: repeat(${columns}, minmax(0, 1fr))`,
+        `grid-template-rows: repeat(${rows}, minmax(0, 1fr))`,
+        "gap: 1px",
+        "height: 100%",
+        "width: 100%",
+        "background: #111",
+      ].join("; ");
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          const cell = document.createElement("div");
+          const hue = Math.round((column / columns) * 360);
+          const saturation = Math.round(((rows - 1 - row) / (rows - 1)) * 100);
+          cell.setAttribute("aria-hidden", "true");
+          cell.style.background = `hsl(${hue} ${saturation}% 50%)`;
+          grid.append(cell);
+        }
+      }
+      content.append(grid);
+    }
+
+    function renderSteps(count = 16): void {
+      if (!content) return;
+      const grid = document.createElement("div");
+      const channel = getBandingChannel();
+      grid.className = "step-bars";
+      grid.style.cssText = `display: grid; grid-template-columns: repeat(${count}, minmax(0, 1fr)); height: 100%;`;
+      for (let index = 0; index < count; index += 1) {
+        const cell = document.createElement("div");
+
+        const value = Math.round((index / (count - 1)) * 255);
+        const color =
+          channel === "Gray"
+            ? `rgb(${value}, ${value}, ${value})`
+            : channel === "Red"
+              ? `rgb(${value}, 0, 0)`
+              : channel === "Green"
+                ? `rgb(0, ${value}, 0)`
+                : `rgb(0, 0, ${value})`;
+        cell.style.background = color;
+        grid.append(cell);
+      }
+      content.append(grid);
+    }
+
+    function renderNearBlocks(mode: "black" | "white"): void {
+      if (!content) return;
+      const values =
+        mode === "black"
+          ? [0, 2, 4, 6, 8, 10, 12, 14]
+          : [86, 88, 90, 92, 94, 96, 98, 100];
+      const wrap = document.createElement("div");
+      wrap.className = "near-blocks";
+      wrap.style.cssText = `display: grid; grid-template-columns: repeat(${values.length}, minmax(0, 1fr)); height: 100%; width: 100%;`;
+      values.forEach((value) => {
+        const block = document.createElement("div");
+        const label = document.createElement("span");
+        block.style.cssText = `position: relative; background: oklch(${value}% 0 0);`;
+        label.textContent = `${value}%`;
+        label.style.cssText = [
+          "position: absolute",
+          "left: 50%",
+          "top: 9px",
+          "transform: translateX(-50%)",
+          `color: ${mode === "black" ? "#fff" : "#000"}`,
+          `text-shadow: ${mode === "black" ? "0 1px 2px rgb(0 0 0 / 0.75)" : "0 1px 2px rgb(255 255 255 / 0.75)"}`,
+          "font: 700 12px/1 Arial, sans-serif",
+        ].join("; ");
+        block.append(label);
+        wrap.append(block);
+      });
+      content.append(wrap);
+    }
+
+    function renderEdgeFrame(): void {
+      if (!content) return;
+      content.style.background = "#000";
+      const frame = renderCssFill(
+        "edge-frame",
+        [
+          "position: absolute",
+          "inset: 0",
+          "border: 2px solid #fff",
+          "background: transparent",
+        ].join("; "),
+      );
+      if (!frame) return;
+      [
+        "left: 50%; top: 0; bottom: 0; width: 1px;",
+        "top: 50%; left: 0; right: 0; height: 1px;",
+        "inset: 10%; border: 1px solid rgb(255 255 255 / 0.72);",
+        "inset: 25%; border: 1px dashed rgb(255 255 255 / 0.58);",
+      ].forEach((styles) => {
+        const guide = document.createElement("div");
+        guide.style.cssText = `position: absolute; ${styles}`;
+        frame.append(guide);
+      });
+    }
+
+    function renderAnsiCheckerboard(): void {
+      if (!content) return;
+      const grid = document.createElement("div");
+      grid.className = "ansi-checker";
+      grid.style.cssText = [
+        "height: 100%",
+        "display: grid",
+        "grid-template-columns: repeat(4, minmax(0, 1fr))",
+        "grid-template-rows: repeat(4, minmax(0, 1fr))",
+        "background: #000",
+      ].join("; ");
+      for (let index = 0; index < 16; index += 1) {
+        const cell = document.createElement("div");
+        const row = Math.floor(index / 4);
+        const column = index % 4;
+        cell.style.background = (row + column) % 2 === 0 ? "#fff" : "#000";
+        grid.append(cell);
+      }
+      content.append(grid);
+    }
+
+    function renderCrosshatchGrid(): void {
+      if (!content) return;
+      const rect = content.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      const targetCellSize = 32;
+      const columns = Math.max(2, Math.round(width / targetCellSize));
+      const rows = Math.max(2, Math.round(height / targetCellSize));
+      const cellWidth = width / columns;
+      const cellHeight = height / rows;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.setAttribute("preserveAspectRatio", "none");
+      svg.setAttribute("aria-hidden", "true");
+      svg.style.cssText =
+        "display: block; width: 100%; height: 100%; background: #000; shape-rendering: crispEdges;";
+
+      const addLine = (
+        x1: number,
+        y1: number,
+        x2: number,
+        y2: number,
+      ): void => {
+        const line = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line",
+        );
+        line.setAttribute("x1", String(x1));
+        line.setAttribute("y1", String(y1));
+        line.setAttribute("x2", String(x2));
+        line.setAttribute("y2", String(y2));
+        line.setAttribute("stroke", "#fff");
+        line.setAttribute("stroke-width", "1");
+        line.setAttribute("vector-effect", "non-scaling-stroke");
+        svg.append(line);
+      };
+
+      const left = 0.5;
+      const top = 0.5;
+      const right = Math.max(0.5, width - 0.5);
+      const bottom = Math.max(0.5, height - 0.5);
+
+      for (let column = 1; column < columns; column += 1) {
+        const x = Number((column * cellWidth).toFixed(3));
+        addLine(x, top, x, bottom);
+      }
+
+      for (let row = 1; row < rows; row += 1) {
+        const y = Number((row * cellHeight).toFixed(3));
+        addLine(left, y, right, y);
+      }
+
+      const border = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "rect",
+      );
+      border.setAttribute("x", String(left));
+      border.setAttribute("y", String(top));
+      border.setAttribute("width", String(Math.max(0, width - 1)));
+      border.setAttribute("height", String(Math.max(0, height - 1)));
+      border.setAttribute("fill", "none");
+      border.setAttribute("stroke", "#fff");
+      border.setAttribute("stroke-width", "1");
+      border.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.append(border);
+
+      content.append(svg);
+    }
+
+    function renderTextSharpness(): void {
+      if (!content) return;
+      const dpr = window.devicePixelRatio || 1;
+
+      const snap = (cssPx: number): number => Math.round(cssPx * dpr) / dpr;
+      const sample =
+        "abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789";
+      const strips: {
+        background: string;
+        sizeCss: number;
+        captionColor: string;
+        lines: { color: string; text: string }[];
+      }[] = [
+        {
+          background: "#fff",
+          sizeCss: snap(12),
+          captionColor: "#9ca3af",
+          lines: [{ color: "#6b7280", text: sample }],
+        },
+        {
+          background: "#808080",
+          sizeCss: snap(16),
+          captionColor: "rgb(255 255 255 / 0.7)",
+          lines: [
+            { color: "#fff", text: sample },
+            { color: "#000", text: sample },
+          ],
+        },
+        {
+          background: "#000",
+          sizeCss: snap(20),
+          captionColor: "rgb(255 255 255 / 0.55)",
+          lines: [{ color: "#9ca3af", text: sample }],
+        },
+      ];
+      const block = document.createElement("div");
+      block.className = "text-sharpness";
+      block.style.cssText = [
+        "height: 100%",
+        "display: grid",
+        "grid-template-rows: repeat(3, minmax(0, 1fr))",
+        "font-family: Arial, Helvetica, sans-serif",
+        "font-weight: 400",
+        "letter-spacing: 0",
+      ].join("; ");
+      strips.forEach((strip) => {
+        const section = document.createElement("div");
+        section.style.cssText = [
+          "position: relative",
+          "display: grid",
+          "place-items: center",
+          "align-content: center",
+          "gap: 14px",
+          "padding: 14px 24px",
+          `background: ${strip.background}`,
+          "overflow: hidden",
+          "text-align: center",
+        ].join("; ");
+
+        const caption = document.createElement("span");
+        caption.textContent = `${Math.round(strip.sizeCss * dpr)} device px`;
+        caption.style.cssText = [
+          "position: absolute",
+          "top: 6px",
+          "right: 10px",
+          `color: ${strip.captionColor}`,
+          "font: 600 10px/1 Arial, sans-serif",
+          "letter-spacing: 0.02em",
+        ].join("; ");
+        section.append(caption);
+
+        strip.lines.forEach((line) => {
+          const text = document.createElement("p");
+          text.textContent = line.text;
+          text.style.cssText = [
+            "margin: 0",
+            "max-width: min(92%, 1024px)",
+            `color: ${line.color}`,
+            `font-size: ${strip.sizeCss}px`,
+            "line-height: 1.35",
+            "font-weight: 400",
+            "overflow-wrap: anywhere",
+          ].join("; ");
+          section.append(text);
+        });
+
+        block.append(section);
+      });
+      content.append(block);
+    }
+
+    function renderPattern(kind: string): void {
+      if (!content || !stage) return;
+      clearContent();
+      if (kind === "near-black") {
+        renderNearBlocks("black");
+      } else if (kind === "near-white") {
+        renderNearBlocks("white");
+      } else if (renderGradient(kind)) {
+      } else if (kind === "gradient-radial") {
+        content.style.background = supportsOklch
+          ? "radial-gradient(circle at center in oklch, #fff 0%, #808080 38%, #000 100%)"
+          : "radial-gradient(circle at center, #fff 0%, #808080 38%, #000 100%)";
+      } else if (kind === "gradient-radial-red") {
+        content.style.background =
+          "radial-gradient(circle at center, #ff0000 0%, #4d0000 42%, #000 100%)";
+      } else if (kind === "gradient-radial-green") {
+        content.style.background =
+          "radial-gradient(circle at center, #00ff00 0%, #004d00 42%, #000 100%)";
+      } else if (kind === "gradient-radial-blue") {
+        content.style.background =
+          "radial-gradient(circle at center, #0000ff 0%, #00004d 42%, #000 100%)";
+      } else if (kind === "saturation-grid") {
+        renderSaturationGrid();
+      } else if (kind === "steps-16") {
+        renderSteps(16);
+      } else if (kind === "steps-32") {
+        renderSteps(32);
+      } else if (kind === "steps-64") {
+        renderSteps(64);
+      } else if (kind === "edges") {
+        renderEdgeFrame();
+      } else if (kind === "checker-ansi") {
+        renderAnsiCheckerboard();
+      } else if (kind === "crosshatch-grid") {
+        renderCrosshatchGrid();
+      } else if (kind === "checker-1") {
+        renderPixelExactChecker(1);
+      } else if (kind === "checker-2") {
+        renderPixelExactChecker(2);
+      } else if (kind === "lines-vertical") {
+        renderPixelExactLines("vertical");
+      } else if (kind === "lines-horizontal") {
+        renderPixelExactLines("horizontal");
+      } else if (kind === "lines-diagonal") {
+        renderPixelExactDiagonalLines();
+      } else if (kind === "text-sharpness") {
+        renderTextSharpness();
+      } else if (kind === "gamma-blend") {
+        renderGammaBlend();
+      } else if (kind === "burnin-wash") {
+        currentBurnInLayer = renderBurnInWash();
+      } else if (kind === "burnin-bars") {
+        currentBurnInLayer = renderBurnInBars();
+      } else if (kind === "burnin-checker") {
+        currentBurnInLayer = renderBurnInChecker();
+      } else if (kind === "burnin-sweep") {
+        currentBurnInLayer = renderBurnInSweep();
+      }
+    }
+
+    function activate(
+      index: number,
+      options: { revealControls?: boolean } = {},
+    ): void {
+      if (!stage || !label || buttons.length === 0) return;
+      const { revealControls = true } = options;
+      stopBurnInPlayback();
+      activeIndex = (index + buttons.length) % buttons.length;
+      const button = buttons[activeIndex];
+      const data = readPatternData(button);
+      const activeAccordion = button.closest("details");
+      if (activeAccordion instanceof HTMLDetailsElement) {
+        activeAccordion.dispatchEvent(
+          new CustomEvent("tool-sidebar:open-accordion", { bubbles: true }),
+        );
+      }
+      buttons.forEach((item) => {
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+      stage.style.background = data.bg;
+      stage.dataset.patternKind = data.kind;
+      label.textContent = data.label;
+      if (rgbLabel)
+        rgbLabel.textContent = formatPatternMeta(data.meta || data.bg);
+      renderPattern(data.kind);
+      syncPatternOptionButton(data.kind);
+      syncAutoButton();
+      updateAutoCopy(data.kind, data.tip);
+      if (testShell) {
+        testShell.dataset.frameRateRelevant = frameRateKinds.has(data.kind)
+          ? "true"
+          : "false";
+      }
+      if (data.kind === "gamma-blend") {
+        startFrameRateSampling();
+      } else {
+        stopFrameRateSampling();
+      }
+      if (revealControls) showRuntimeControls();
+    }
+
+    function syncAutoButton(): void {
+      const kind = stage?.dataset.patternKind || "";
+      if (burnInKinds.has(kind)) {
+        const isChecker = kind === "burnin-checker";
+        const motionUnavailable = prefersReducedMotion && !isChecker;
+        autoToggleButton?.classList.toggle("is-running", burnInPlaying);
+        autoToggleButton?.setAttribute("aria-pressed", String(burnInPlaying));
+        autoToggleButton?.toggleAttribute("disabled", motionUnavailable);
+        if (autoToggleButton) {
+          autoToggleButton.textContent = motionUnavailable
+            ? "Motion off"
+            : prefersReducedMotion
+              ? "Flip"
+              : burnInPlaying
+                ? "Pause"
+                : burnInPaused
+                  ? "Resume"
+                  : "Play";
+          autoToggleButton.setAttribute(
+            "aria-label",
+            motionUnavailable
+              ? "Motion is disabled by your device settings"
+              : prefersReducedMotion
+                ? "Manually flip the checkerboard once"
+                : burnInPlaying
+                  ? "Pause image-retention or motion pattern"
+                  : burnInPaused
+                    ? "Resume image-retention or motion pattern in fullscreen"
+                    : "Play image-retention or motion pattern in fullscreen",
+          );
+        }
+        return;
+      }
+
+      if (kind === "gamma-blend") {
+        const gamma = getGammaCandidate();
+        const meta = readPatternData(buttons[activeIndex]).meta;
+        autoToggleButton?.classList.remove("is-running");
+        autoToggleButton?.setAttribute("aria-pressed", "false");
+        autoToggleButton?.toggleAttribute("disabled", false);
+        if (autoToggleButton) {
+          autoToggleButton.textContent = `Gamma ${gamma.toFixed(1)}`;
+          autoToggleButton.setAttribute(
+            "aria-label",
+            `Change gamma candidate, current value ${gamma.toFixed(1)}`,
+          );
+        }
+        if (rgbLabel) {
+          rgbLabel.textContent = meta
+            ? `${formatPatternMeta(meta)} / candidate ${gamma.toFixed(1)}`
+            : `candidate ${gamma.toFixed(1)}`;
+        }
+        return;
+      }
+
+      const isRunning = autoTimer !== null;
+      autoToggleButton?.classList.toggle("is-running", isRunning);
+      autoToggleButton?.setAttribute("aria-pressed", String(isRunning));
+      autoToggleButton?.toggleAttribute("disabled", false);
+      if (autoToggleButton)
+        autoToggleButton.textContent = isRunning
+          ? "Pause"
+          : autoPaused
+            ? "Resume"
+            : "Start";
+    }
+
+    function syncPausedPatternStatus(): void {
+      if (!label || !rgbLabel) return;
+      const showPaused =
+        (autoPaused || burnInPaused) &&
+        testShell?.dataset.fullscreen !== "true";
+      if (showPaused) {
+        label.textContent = "Paused";
+        rgbLabel.textContent = "Resume to continue";
+        return;
+      }
+      if (pausedPatternStatus) {
+        label.textContent = pausedPatternStatus.label;
+        rgbLabel.textContent = pausedPatternStatus.meta;
+      }
+    }
+
+    function clearAutoTimer(): void {
+      if (autoTimer !== null) {
+        window.clearInterval(autoTimer);
+        autoTimer = null;
+      }
+    }
+
+    function stopAutoTour(): void {
+      clearAutoTimer();
+      autoPaused = false;
+      autoAfterFullscreen = null;
+      syncPausedPatternStatus();
+      pausedPatternStatus = null;
+      syncAutoButton();
+      syncWakeLock();
+    }
+
+    function pauseAutoTour(): void {
+      clearAutoTimer();
+      if (!autoPaused && label && rgbLabel) {
+        pausedPatternStatus = {
+          label: label.textContent ?? "",
+          meta: rgbLabel.textContent ?? "",
+        };
+      }
+      autoPaused = true;
+      autoAfterFullscreen = null;
+      syncPausedPatternStatus();
+      syncAutoButton();
+      syncWakeLock();
+    }
+
+    function enterAutoFullscreen(): void {
+      if (testShell?.dataset.fullscreen !== "true") fullscreenButton?.click();
+    }
+
+    function leaveAutoFullscreen(): void {
+      if (testShell?.dataset.fullscreen === "true") fullscreenButton?.click();
+    }
+
+    function completeAutoTour(): void {
+      clearAutoTimer();
+      autoPaused = false;
+      autoAfterFullscreen = null;
+      syncPausedPatternStatus();
+      pausedPatternStatus = null;
+      syncAutoButton();
+      leaveAutoFullscreen();
+      syncWakeLock();
+    }
+
+    function beginAutoTour(resume: boolean): void {
+      if (autoTourIndices.length === 0) return;
+      clearAutoTimer();
+      autoPaused = false;
+      autoAfterFullscreen = null;
+      syncPausedPatternStatus();
+      pausedPatternStatus = null;
+      if (!resume) {
+        autoVisited = 0;
+        activate(autoTourIndices[0] ?? 0, { revealControls: false });
+      }
+      autoTimer = window.setInterval(() => {
+        autoVisited += 1;
+        if (autoVisited >= autoTourIndices.length) {
+          completeAutoTour();
+          return;
+        }
+        activate(autoTourIndices[autoVisited] ?? 0, {
+          revealControls: false,
+        });
+      }, AUTO_TOUR_MS);
+      syncWakeLock();
+      syncAutoButton();
+      showRuntimeControls();
+    }
+
+    function startFullscreenAutoTour(resume: boolean): void {
+      if (testShell?.dataset.fullscreen === "true") {
+        beginAutoTour(resume);
+        return;
+      }
+      autoAfterFullscreen = resume ? "resume" : "start";
+      enterAutoFullscreen();
+      showRuntimeControls();
+    }
+
+    buttons.forEach((button, index) => {
+      button.addEventListener("click", () => {
+        stopAutoTour();
+        activate(index);
+      });
+    });
+
+    nextButton?.addEventListener("click", () => {
+      stopAutoTour();
+      activate(activeIndex + 1);
+    });
+
+    prevButton?.addEventListener("click", () => {
+      stopAutoTour();
+      activate(activeIndex - 1);
+    });
+
+    patternOptionButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const kind = stage?.dataset.patternKind || "";
+      const mode = getOptionMode(kind);
+      if (mode === "angle") {
+        const resumeMotion = burnInPlaying && angleableMotionKinds.has(kind);
+        if (resumeMotion) setBurnInPlaying(false);
+        advancePatternAngle(kind);
+        renderPattern(kind);
+        if (resumeMotion) setBurnInPlaying(true);
+      } else if (mode === "banding") {
+        bandingChannelIndex =
+          (bandingChannelIndex + 1) % bandingChannels.length;
+        renderPattern(kind);
+      }
+      syncPatternOptionButton(kind);
+      syncPausedPatternStatus();
+      showRuntimeControls();
+    });
+
+    autoToggleButton?.addEventListener("click", () => {
+      const kind = stage?.dataset.patternKind || "";
+      if (burnInKinds.has(kind)) {
+        if (prefersReducedMotion) {
+          if (kind === "burnin-checker") {
+            currentBurnInLayer?.classList.toggle("is-inverted");
+          }
+        } else {
+          if (burnInPlaying) pauseBurnInPlayback();
+          else startFullscreenBurnInPlayback();
+        }
+        syncAutoButton();
+        showRuntimeControls();
+        return;
+      }
+      if (kind === "gamma-blend") {
+        gammaIndex = (gammaIndex + 1) % GAMMA_CANDIDATES.length;
+        renderPattern(kind);
+        syncAutoButton();
+        showRuntimeControls();
+        return;
+      }
+      if (autoTimer !== null) {
+        pauseAutoTour();
+        showRuntimeControls();
+        return;
+      }
+      startFullscreenAutoTour(autoPaused);
+    });
+
+    autoResetButton?.addEventListener("click", () => {
+      const kind = stage?.dataset.patternKind || "";
+      if (burnInKinds.has(kind)) {
+        stopBurnInPlayback();
+        currentBurnInLayer?.classList.remove("is-inverted");
+        const defaultAngleIndex = defaultMotionAngleIndices.get(kind);
+        if (defaultAngleIndex !== undefined) {
+          motionAngleIndices.set(kind, defaultAngleIndex);
+          renderPattern(kind);
+        }
+        syncPatternOptionButton(kind);
+        syncAutoButton();
+        showRuntimeControls();
+        return;
+      }
+      if (kind === "gamma-blend") {
+        gammaIndex = 2;
+        renderPattern(kind);
+        syncAutoButton();
+        showRuntimeControls();
+        return;
+      }
+      stopAutoTour();
+      activate(0);
+      showRuntimeControls();
+    });
+
+    stage?.addEventListener("click", (event) => {
+      const target = event.target as Element;
+      if (target.closest("button")) return;
+      stopAutoTour();
+      const rect = stage.getBoundingClientRect();
+      const x = (event as MouseEvent).clientX - rect.left;
+      activate(x > rect.width / 2 ? activeIndex + 1 : activeIndex - 1);
+    });
+
+    testShell?.addEventListener(
+      "tool-runtime:fullscreen-change",
+      (event) => {
+        const detail = (event as CustomEvent<{ isExpanded: boolean }>).detail;
+        if (detail.isExpanded) {
+          if (autoAfterFullscreen) {
+            beginAutoTour(autoAfterFullscreen === "resume");
+          } else if (
+            burnInAfterFullscreen &&
+            burnInKinds.has(stage?.dataset.patternKind || "")
+          ) {
+            beginBurnInPlayback();
+          }
+        } else {
+          autoAfterFullscreen = null;
+          burnInAfterFullscreen = false;
+          if (autoTimer !== null) pauseAutoTour();
+          if (burnInPlaying) pauseBurnInPlayback();
+        }
+        syncPausedPatternStatus();
+        rafScheduler.request();
+        showRuntimeControls();
+      },
+      { signal: pageController.signal },
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "hidden") {
+          stopAutoTour();
+          stopBurnInPlayback();
+        }
+      },
+      { signal: pageController.signal },
+    );
+
+    const stageResizeObserver = observeResize(content, () =>
+      rafScheduler.request(),
+    );
+
+    function cleanupDisplayPage(): void {
+      stopAutoTour();
+      stopBurnInPlayback();
+      rafScheduler.cancel();
+      stopFrameRateSampling();
+      stageResizeObserver?.disconnect();
+      pageController.abort();
+      wakeLock.release();
+    }
+
+    onPageHide(cleanupDisplayPage);
+
+    activate(0);
+  </script>
+</BaseLayout>

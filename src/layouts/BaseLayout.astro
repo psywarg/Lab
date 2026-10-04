@@ -1,0 +1,285 @@
+---
+// src/layouts/BaseLayout.astro
+
+import { Font } from "astro:assets";
+import Header from "@/components/site/Header.astro";
+import Footer from "@/components/site/Footer.astro";
+import Breadcrumb from "@/components/site/Breadcrumb.astro";
+import { jsonForScript } from "@/utils/site/json";
+import { DEFAULT_OG_IMAGE } from "@/utils/site/ogImage";
+import {
+  organizationSchema,
+  SITE_NAME,
+  TWITTER_HANDLE,
+  websiteSchema,
+} from "@/utils/site/schema";
+import "@/styles/global.css";
+
+type Accent = "site" | "explainers" | "tools";
+
+const ACCENT_ROUTES: readonly (readonly [prefix: string, accent: Accent])[] = [
+  ["/phones/explainers", "explainers"],
+  ["/phones/tools", "tools"],
+];
+
+function accentForPath(pathname: string): Accent {
+  for (const [prefix, accent] of ACCENT_ROUTES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return accent;
+  }
+  return "site";
+}
+
+interface Props {
+  title: string;
+  metaDescription?: string;
+  ogImage?: string;
+  breadcrumbLabels?: Record<string, string>;
+  showBreadcrumbVisual?: boolean;
+  maxVisibleItems?: number;
+  structuredData?: object | object[];
+  robots?: string;
+  ogType?: string;
+  accent?: Accent;
+}
+
+const {
+  title,
+  metaDescription,
+  ogImage = DEFAULT_OG_IMAGE,
+  breadcrumbLabels,
+  showBreadcrumbVisual = true,
+  maxVisibleItems = 3,
+  structuredData,
+  robots,
+  ogType = "website",
+  accent,
+} = Astro.props;
+
+function normalizePagePath(pathname: string): string {
+  const normalizedPath = pathname
+    .replace(/\.html$/, "")
+    .replace(/\/index$/, "");
+  return normalizedPath === "" ? "/" : normalizedPath;
+}
+
+const canonicalPath = normalizePagePath(Astro.url.pathname);
+const canonical = new URL(canonicalPath, Astro.site).href;
+const pageAccent = accent ?? accentForPath(canonicalPath);
+
+const fullOgImage = new URL(ogImage, Astro.site).href;
+const isHomepage = canonicalPath === "/";
+const pageStructuredData = structuredData
+  ? ([] as object[]).concat(structuredData)
+  : [];
+const structuredDataArray = [
+  organizationSchema,
+  websiteSchema,
+  ...pageStructuredData,
+];
+
+const isNoindex = robots?.includes("noindex") || false;
+const isNofollow = robots?.includes("nofollow") || false;
+const description = metaDescription?.trim();
+const robotsContent = robots ?? "index, follow";
+---
+
+<!doctype html>
+<html lang="en" class="scrollbar-gutter-stable scheme-light dark:scheme-dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,viewport-fit=cover"
+    />
+
+    <script is:inline>
+      (() => {
+        const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+
+        const getStoredTheme = () => {
+          try {
+            const theme = localStorage.getItem("theme");
+            return theme === "light" || theme === "dark" ? theme : null;
+          } catch {
+            return null;
+          }
+        };
+
+        const syncThemeToggle = (isDark) => {
+          const btn = document.querySelector("[data-theme-toggle]");
+          btn?.setAttribute("aria-pressed", String(isDark));
+        };
+
+        const applyTheme = () => {
+          const storedTheme = getStoredTheme();
+          const isDark =
+            storedTheme === "dark" ||
+            (storedTheme === null && themeMedia.matches);
+
+          document.documentElement.classList.toggle("dark", isDark);
+          syncThemeToggle(isDark);
+          return isDark;
+        };
+
+        const setThemePreference = (theme) => {
+          try {
+            if (theme === "system") {
+              localStorage.removeItem("theme");
+            } else {
+              localStorage.setItem("theme", theme);
+            }
+          } catch {
+            // Ignore localStorage access errors
+          }
+
+          return applyTheme();
+        };
+
+        if (!window.__themeControllerReady) {
+          window.__themeControllerReady = true;
+          window.applyTheme = applyTheme;
+          window.setThemePreference = setThemePreference;
+
+          const handleSystemThemeChange = () => {
+            if (getStoredTheme() === null) {
+              applyTheme();
+            }
+          };
+
+          themeMedia.addEventListener("change", handleSystemThemeChange);
+        }
+
+        applyTheme();
+      })();
+    </script>
+
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <meta name="robots" content={robotsContent} />
+    {
+      (isNoindex || isNofollow) && (
+        <meta name="googlebot" content={robotsContent} />
+      )
+    }
+    <meta name="author" content={SITE_NAME} />
+    <meta name="publisher" content={SITE_NAME} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content={fullOgImage} />
+    <meta property="og:image:alt" content={title} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content={TWITTER_HANDLE} />
+    <meta name="twitter:creator" content={TWITTER_HANDLE} />
+    <meta name="twitter:title" content={title} />
+    {description && <meta name="twitter:description" content={description} />}
+    <meta name="twitter:image" content={fullOgImage} />
+    <meta name="twitter:image:alt" content={title} />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <Font
+      cssVariable="--font-sorted"
+      preload={[{ weight: 400, style: "normal" }]}
+    />
+    <Font cssVariable="--font-sorted-logo" />
+
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/site/favicons/favicon.svg" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="96x96"
+      href="/site/favicons/favicon-96x96.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/site/favicons/apple-touch-icon.png"
+    />
+    <meta name="apple-mobile-web-app-title" content="Sorted Tech" />
+
+    <link rel="manifest" href="/site/favicons/site.webmanifest" />
+    <meta
+      name="theme-color"
+      content="#17181B"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#C9DAEB"
+      media="(prefers-color-scheme: light)"
+    />
+
+    {
+      structuredDataArray.map((data) => (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={jsonForScript(data)}
+        />
+      ))
+    }
+
+    <script
+      is:inline
+      type="text/partytown"
+      src="https://www.googletagmanager.com/gtag/js?id=G-HJ4YRNZ9LG"></script>
+    <script is:inline type="text/partytown">
+      window.dataLayer = window.dataLayer || [];
+      function gtag(...args) {
+        dataLayer.push(args);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-HJ4YRNZ9LG");
+    </script>
+  </head>
+
+  <body>
+    <a
+      href="#main-content"
+      class="bg-custom-100 text-accent-ink focus-visible:ring-accent-500 fixed top-2 left-2 z-100 -translate-y-20 rounded-xl px-4 py-2 font-semibold shadow-lg transition-transform focus:translate-y-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none dark:bg-custom-800"
+    >
+      Skip to main content
+    </a>
+    <Header />
+    <div
+      class="pointer-events-none fixed inset-x-0 top-14 z-10 h-15 bg-linear-to-b from-white/70 to-transparent sm:hidden dark:from-black/90"
+      aria-hidden="true"
+    >
+    </div>
+    <div
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-10 h-15 bg-linear-to-t from-white/70 to-transparent sm:hidden dark:from-black/90"
+      aria-hidden="true"
+    >
+    </div>
+
+    <main
+      id="main-content"
+      tabindex="-1"
+      data-accent={pageAccent}
+      class="mx-auto w-full max-w-7xl flex-1 px-2 pt-20 pb-8 sm:px-4 sm:pb-10 md:px-6 md:pt-24 md:pb-12"
+    >
+      {
+        !isHomepage && (
+          <Breadcrumb
+            customLabels={breadcrumbLabels}
+            showVisual={showBreadcrumbVisual}
+            maxVisibleItems={maxVisibleItems}
+          />
+        )
+      }
+      <slot />
+    </main>
+
+    <Footer />
+  </body>
+</html>

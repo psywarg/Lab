@@ -1,0 +1,1727 @@
+---
+// src/pages/phones/tools/speaker-test.astro
+
+export const prerender = true;
+
+import { getToolBySlug } from "@/content/phones/tools";
+import ToolReference from "@/components/phones/tools/Reference.astro";
+import ToolSidebar from "@/components/phones/tools/Sidebar.astro";
+import ToolRuntime from "@/components/phones/tools/Runtime.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+import ToolIcons from "@/assets/icons/tools-sprites.svg?url";
+
+const tool = getToolBySlug("speaker-test");
+const ogImage = tool.image.src;
+const title = "Free Online Speaker Test: Stereo, Sweep & Water Eject";
+const metaDescription =
+  "Check stereo, mono, left, and right audio with adjustable tones, noise, an 80 Hz to 8 kHz sweep, fixed presets, water eject, and an informal hearing-range check.";
+
+const referenceItems = [
+  {
+    label: "Output",
+    check:
+      "Start with a low-volume tone or pink noise before trying louder sweeps.",
+    reading:
+      "Frequency is shown in Hz, meaning sound-wave cycles per second: lower values sound deeper and higher values sound sharper. The volume percentage controls this browser signal, not the phone's system volume.",
+    good: "Sound starts cleanly, stays stable, and does not buzz or drop out unexpectedly.",
+    concern:
+      "No sound, crackling, rattling, harsh buzz, or sudden level drops during a simple signal.",
+  },
+  {
+    label: "Channels",
+    check:
+      "Switch between Stereo, Mono, Left, and Right with the same signal and volume.",
+    reading:
+      "Stereo gently pans between left and right. Mono sends the requested signal equally to both browser output channels. Left and Right request one browser channel only, though the phone may route those channels through differently placed speakers. The Left and Right percentages measure the browser audio graph before physical device routing; they do not measure sound coming from each speaker.",
+    good: "Routing changes clearly when the mode changes, Stereo moves side to side, and Mono sounds centered or evenly shared for your device layout.",
+    concern:
+      "One channel is silent, much quieter, or the Stereo or Mono setting behaves oddly compared with separate channel playback.",
+  },
+  {
+    label: "Noise",
+    check:
+      "Use pink noise first, then white or brown noise depending on whether you want a brighter or bass-heavier check.",
+    reading:
+      "White noise emphasizes the bright high end, pink noise sounds more evenly balanced by octave, and brown noise emphasizes bass. The six meter bars are spaced by octave from 60 Hz to 16 kHz, matching how hearing divides the range.",
+    good: "Noise sounds even and steady without extra clicking, fluttering, hiss spikes, or cabinet-like rattle.",
+    concern:
+      "One side rasps more than the other, or a specific noise type reveals hiss, break-up, or low-end buzzing.",
+  },
+  {
+    label: "Sweep",
+    check:
+      "Run the sweep at low volume and listen for any range that suddenly rattles or vanishes.",
+    reading:
+      "The sweep moves continuously from 80 Hz to 8 kHz. The rising pitch tells you which frequency range is playing when a buzz, dip, or dropout appears.",
+    good: "Pitch rises smoothly without sharp jumps, flutter, or obvious distortion bands.",
+    concern:
+      "A specific frequency range buzzes, clips, or disappears while the rest sounds normal.",
+  },
+  {
+    label: "Water Eject",
+    check:
+      "Use this only if the device manufacturer allows the phone to remain powered on. Disconnect all cables, never charge a wet phone, place it speaker-side down on a clean lint-free cloth, and start at low volume.",
+    reading:
+      "The tool plays a 165 Hz test tone for 45 seconds to vibrate the speaker. Its effectiveness varies by phone, and 165 Hz is not a verified resonant frequency for most phone speakers. This is not a substitute for the manufacturer's drying instructions or time for moisture to evaporate.",
+    good:
+      "If the sound becomes clearer or droplets appear, stop the tone and continue following the manufacturer's drying instructions.",
+    concern:
+      "Stop if the phone becomes hot, sounds worse, shows a liquid warning, or remains muffled after drying; arrange service if the problem persists.",
+  },
+  {
+    label: "Hearing Range",
+    check:
+      "In a quiet room, use a comfortable low level and never raise the volume to force a response. With headphones, keep the device at no more than about 60% volume.",
+    reading:
+      "The ladder runs from 20 Hz to 20 kHz, but this is an informal listening check, not a hearing test. The highest confirmed tone is limited by the phone, headphones, browser, volume, and room as well as your hearing; many phone speakers cannot reproduce the lowest or highest steps reliably.",
+    good:
+      "There is no pass frequency. A useful result is a repeatable sequence heard comfortably through the same device.",
+    concern:
+      "Persistent difficulty hearing high-pitched sounds, speech, or one ear in daily life, or persistent tinnitus, should be assessed by a hearing professional.",
+  },
+  {
+    label: "Phone Routing",
+    check:
+      "Remember many phones use the bottom speaker plus the earpiece, and some accessibility settings can collapse stereo to mono.",
+    reading:
+      "The on-screen speakers show the channel requested by the browser, not proof of which physical speaker is active. System mono audio, Bluetooth, calls, and device design can change the final route.",
+    good: "Results stay consistent with your phone's normal speaker layout and system audio settings.",
+    concern:
+      "A mono setting, Bluetooth route, call mode, or case blockage changes the result more than the browser signal itself.",
+  },
+];
+
+type SidebarItemAttributes = Record<string, string>;
+
+const signalOptions: {
+  id: string;
+  icon: string;
+  label: string;
+  note: string;
+  tip: string;
+  attributes: SidebarItemAttributes;
+}[] = [
+  {
+    id: "tone",
+    icon: "audio-tone",
+    label: "Tone",
+    note: "Single sine tone",
+    tip: "Start low, then raise the volume only if the tone stays clean.",
+    attributes: { "data-speaker-mode": "signal", "data-speaker-signal": "tone" },
+  },
+  {
+    id: "sweep",
+    icon: "audio-sweep",
+    label: "Sweep",
+    note: "80 Hz to 8 kHz",
+    tip: "Keep the volume low and listen for a range that buzzes or drops out.",
+    attributes: {
+      "data-speaker-mode": "signal",
+      "data-speaker-signal": "sweep",
+    },
+  },
+  {
+    id: "pink",
+    icon: "audio-pink-noise",
+    label: "Pink Noise",
+    note: "Natural balance check",
+    tip: "Listen for steady, even noise without rasping or sudden level changes.",
+    attributes: { "data-speaker-mode": "signal", "data-speaker-signal": "pink" },
+  },
+  {
+    id: "white",
+    icon: "audio-white-noise",
+    label: "White Noise",
+    note: "Hiss and crackle check",
+    tip: "Use a low volume and listen for extra hiss, crackle, or channel imbalance.",
+    attributes: {
+      "data-speaker-mode": "signal",
+      "data-speaker-signal": "white",
+    },
+  },
+  {
+    id: "brown",
+    icon: "audio-brown-noise",
+    label: "Brown Noise",
+    note: "Low-end stress check",
+    tip: "Use a low volume and listen for bass rattle or enclosure buzz.",
+    attributes: {
+      "data-speaker-mode": "signal",
+      "data-speaker-signal": "brown",
+    },
+  },
+];
+
+const presetOptions = [
+  {
+    icon: "audio-bass",
+    label: "60 Hz Bass",
+    note: "Rattle and buzz check",
+    tip: "Keep this bass tone low and listen for rattling or vibration.",
+    frequency: "60",
+  },
+  {
+    icon: "audio-reference",
+    label: "1 kHz Reference",
+    note: "Standard level tone",
+    tip: "Use this reference tone to compare clarity and balance between channels.",
+    frequency: "1000",
+  },
+  {
+    icon: "audio-treble",
+    label: "10 kHz Treble",
+    note: "High-end presence check",
+    tip: "Keep the volume comfortable and listen for a clean, steady high tone.",
+    frequency: "10000",
+  },
+];
+
+const sidebarGroups = [
+  {
+    title: "Select Signal",
+    openByDefault: true,
+    items: signalOptions.map((signal, index) => ({
+      label: signal.label,
+      meta: signal.note,
+      visual: {
+        type: "icon" as const,
+        spriteUrl: ToolIcons,
+        spriteId: signal.icon,
+      },
+      active: index === 0,
+      attributes: {
+        "data-speaker-item": "",
+        "data-speaker-tip": signal.tip,
+        ...signal.attributes,
+      },
+    })),
+  },
+  {
+    title: "Fixed Presets",
+    items: presetOptions.map((preset) => ({
+      label: preset.label,
+      meta: preset.note,
+      visual: {
+        type: "icon" as const,
+        spriteUrl: ToolIcons,
+        spriteId: preset.icon,
+      },
+      attributes: {
+        "data-speaker-item": "",
+        "data-speaker-mode": "signal",
+        "data-speaker-signal": "tone",
+        "data-speaker-frequency": preset.frequency,
+        "data-speaker-tip": preset.tip,
+      },
+    })),
+  },
+  {
+    title: "Speaker Care",
+    items: [
+      {
+        label: "Water Eject",
+        meta: "165 Hz clearing cycle",
+        visual: {
+          type: "icon" as const,
+          spriteUrl: ToolIcons,
+          spriteId: "audio-water-eject",
+        },
+        attributes: {
+          "data-speaker-item": "",
+          "data-speaker-mode": "water",
+          "data-speaker-tip":
+            "Place the phone speaker-side down on a dry cloth before starting.",
+        },
+      },
+    ],
+  },
+  {
+    title: "Hearing Range",
+    items: [
+      {
+        label: "Hearing Test",
+        meta: "20 Hz to 20 kHz ladder",
+        visual: {
+          type: "icon" as const,
+          spriteUrl: ToolIcons,
+          spriteId: "audio-hearing",
+        },
+        attributes: {
+          "data-speaker-item": "",
+          "data-speaker-mode": "hearing",
+          "data-speaker-tip":
+            "Use a quiet room and keep the volume at a comfortable level.",
+        },
+      },
+    ],
+  },
+];
+
+const channelOptions = [
+  { id: "stereo", label: "Stereo" },
+  { id: "mono", label: "Mono" },
+  { id: "left", label: "Left" },
+  { id: "right", label: "Right" },
+];
+
+const speakerUnitClasses =
+  "relative grid aspect-square w-36 place-items-center transition duration-300 sm:w-52 md:w-full md:max-w-72 lg:max-w-80 before:absolute before:inset-[8%] before:rounded-full before:border-4 before:border-blue-500 before:bg-radial before:from-white/25 before:to-transparent before:to-50% before:shadow-2xl before:shadow-blue-600/40 before:ring-10 before:ring-blue-300/10 before:content-['']";
+
+const speakerRingBaseClasses =
+  "absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-transform duration-200 ease-out";
+
+const speakerRingOuterClasses =
+  "h-full w-full border-4 border-blue-300/50 ring-15 ring-blue-300/15 ring-inset in-data-[playing=true]:scale-105 in-data-[playing=true]:shadow-2xl in-data-[playing=true]:shadow-blue-600/40 in-data-[playing=true]:ring-10 in-data-[playing=true]:ring-white/10";
+
+const speakerRingMidClasses =
+  "size-7/12 border border-blue-300 ring-10 ring-blue-300/10 ring-inset in-data-[playing=true]:scale-110";
+
+const speakerRingCoreClasses =
+  "size-1/4 bg-radial from-white to-blue-500/50 ring-15 ring-blue-300/15";
+
+const hearingButtonClasses =
+  "text-xsmall h-10 rounded-full border border-white/50 px-3 py-2 text-center leading-tight font-bold text-white transition duration-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:grayscale";
+
+const stageRowClasses =
+  "speaker-mode-row absolute inset-x-4 bottom-4 z-2 mx-auto max-w-sm items-center justify-center gap-2 sm:max-w-xl lg:max-w-2xl";
+
+const sliderLabelClasses =
+  "to-custom-100 dark:to-custom-700 border-accent-line from-accent-wash flex h-15 w-full flex-wrap items-center gap-x-3 self-center rounded-2xl border bg-linear-to-b px-3 py-2";
+
+const structuredData = createToolApplicationSchema({
+  name: title,
+  description: metaDescription,
+  url: `${SITE_ORIGIN}${tool.href}`,
+});
+---
+
+<BaseLayout
+  {title}
+  {metaDescription}
+  {ogImage}
+  {structuredData}
+  robots="index, follow"
+  breadcrumbLabels={{ tools: "Tools", "speaker-test": "Speaker & Audio Test" }}
+>
+  <section>
+    <div class="mb-6 grid gap-4">
+      <div>
+        <h1>Online Speaker & Audio Testing Tool</h1>
+        <p>
+          Check audio output generated directly in your browser. Diagnostics for checking
+          output clarity, channel routing, balance, distortion, dropouts, and
+          range-specific problems. It uses the Web Audio API to generate tones,
+          sweeps, white, pink, and brown noise, a 165 Hz water-eject cycle, and
+          an informal hearing-range ladder entirely in the browser. Results
+          depend on the phone's speaker layout, system routing, volume, room,
+          and listening device, so they are comparative checks rather than
+          calibrated acoustic or hearing measurements.
+        </p>
+      </div>
+    </div>
+
+    <div class="tool-page-shell">
+      <div class="tool-page-main">
+        <ToolRuntime
+          shellId="speaker-shell"
+          actionBarLabel="Speaker test actions"
+          dockPrimaryItemCount={4}
+          buttons={[
+            {
+              label: "Start",
+              tone: "success",
+              attributes: { id: "speaker-start" },
+            },
+            {
+              label: "Stop",
+              tone: "danger",
+              attributes: { id: "speaker-stop" },
+            },
+          ]}
+          secondaryButtons={channelOptions.map((channel) => ({
+            label: channel.label,
+            className: "speaker-channel-dock-button",
+            attributes: {
+              "data-speaker-channel": channel.id,
+              "data-active": "true",
+              "aria-pressed": channel.id === "stereo" ? "true" : "false",
+            },
+          }))}
+          stats={[
+            {
+              label: "Signal",
+              value: "Tone",
+              valueAttributes: { id: "speaker-stage-signal" },
+            },
+            {
+              label: "Channel",
+              value: "Stereo",
+              valueAttributes: { id: "speaker-stage-channel" },
+            },
+          ]}
+        >
+          <div
+            id="speaker-stage"
+            class="speaker-stage"
+            data-playing="false"
+            data-mode="signal"
+            data-signal="tone"
+            data-channel="stereo"
+          >
+            <div class="speaker-rig" aria-hidden="true">
+              <div class="speaker-unit-wrap speaker-unit-wrap--left">
+                <div class={speakerUnitClasses}>
+                  <div class="speaker-cone">
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingOuterClasses}`}
+                    ></span>
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingMidClasses}`}
+                    ></span>
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingCoreClasses}`}
+                    ></span>
+                  </div>
+                </div>
+                <span id="speaker-level-left" class="speaker-channel-level"
+                  >Left --</span
+                >
+              </div>
+
+              <div class="speaker-center-card">
+                <div
+                  id="speaker-meter"
+                  class="speaker-meter"
+                  data-visible="false"
+                >
+                  <span class="speaker-meter-bar"></span>
+                  <span class="speaker-meter-bar"></span>
+                  <span class="speaker-meter-bar"></span>
+                  <span class="speaker-meter-bar"></span>
+                  <span class="speaker-meter-bar"></span>
+                  <span class="speaker-meter-bar"></span>
+                </div>
+                <canvas
+                  id="speaker-waveform"
+                  class="speaker-waveform-canvas"
+                  aria-hidden="true"
+                  data-visible="false"></canvas>
+
+                <div id="speaker-water-panel" class="speaker-mode-panel">
+                  <strong
+                    id="speaker-water-timer"
+                    class="speaker-mode-panel-figure">0:45</strong
+                  >
+                  <span class="speaker-mode-panel-label"
+                    >Cycle time remaining</span
+                  >
+                </div>
+
+                <div id="speaker-hearing-panel" class="speaker-mode-panel">
+                  <strong
+                    id="speaker-hearing-frequency"
+                    class="speaker-mode-panel-figure">20 Hz</strong
+                  >
+                  <span
+                    id="speaker-hearing-result"
+                    class="speaker-mode-panel-label"
+                    >Press Start, then step up until you can't hear it</span
+                  >
+                </div>
+
+                <p id="speaker-stage-copy" class="speaker-stage-copy">
+                  Ready to play a low-volume test signal.
+                </p>
+              </div>
+
+              <div class="speaker-unit-wrap speaker-unit-wrap--right">
+                <div class={speakerUnitClasses}>
+                  <div class="speaker-cone">
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingOuterClasses}`}
+                    ></span>
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingMidClasses}`}
+                    ></span>
+                    <span
+                      class={`${speakerRingBaseClasses} ${speakerRingCoreClasses}`}
+                    ></span>
+                  </div>
+                </div>
+                <span id="speaker-level-right" class="speaker-channel-level"
+                  >Right --</span
+                >
+              </div>
+            </div>
+
+            <div id="speaker-hearing-row" class={stageRowClasses} data-active="false">
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  id="speaker-hearing-cant-hear"
+                  class={hearingButtonClasses}
+                  disabled>Can't hear it</button
+                >
+                <button
+                  type="button"
+                  id="speaker-hearing-next"
+                  class={`${hearingButtonClasses} bg-blue-500`}
+                  disabled>I hear it, next</button
+                >
+              </div>
+            </div>
+          </div>
+
+          <p
+            slot="dockLead"
+            id="speaker-dock-lead"
+          >
+            {signalOptions[0]?.tip}
+          </p>
+
+          <Fragment slot="dockPrimary">
+            <div
+              class="speaker-slider-grid grid w-full grid-cols-2 gap-2 sm:gap-3"
+            >
+              <label
+                id="speaker-run-frequency-row"
+                class={sliderLabelClasses}
+              >
+                <span
+                  class="text-xsmall shrink-0 leading-tight font-bold tracking-widest uppercase"
+                  >Frequency</span
+                >
+                <input
+                  class="speaker-range-input text-accent-ink order-3 m-0 h-4 basis-full bg-transparent p-0 accent-current"
+                  id="speaker-frequency"
+                  type="range"
+                  min="80"
+                  max="8000"
+                  step="10"
+                  value="440"
+                />
+                <strong
+                  id="speaker-frequency-label"
+                  class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
+                  >440 Hz</strong
+                >
+              </label>
+              <label class={sliderLabelClasses} for="speaker-volume">
+                <span
+                  class="text-xsmall shrink-0 leading-tight font-bold tracking-widest uppercase"
+                  >Volume</span
+                >
+                <input
+                  class="speaker-range-input text-accent-ink order-3 m-0 h-4 basis-full bg-transparent p-0 accent-current"
+                  id="speaker-volume"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="25"
+                />
+                <strong
+                  id="speaker-volume-label"
+                  class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
+                  >25%</strong
+                >
+              </label>
+            </div>
+          </Fragment>
+
+        </ToolRuntime>
+        <ToolReference
+          title="How to Use This Tool and Read the Results"
+          items={referenceItems}
+        />
+      </div>
+
+      <div class="lg:col-span-1">
+        <ToolSidebar
+          currentSlug={tool.slug}
+          groups={sidebarGroups}
+          panelLabel="Speaker check and related tools"
+        />
+      </div>
+    </div>
+  </section>
+
+  <style>
+    @reference "#app.css";
+
+    .speaker-stage {
+      @apply relative size-full text-white;
+    }
+
+    .speaker-rig {
+      @apply absolute inset-0 grid grid-cols-2 grid-rows-[auto_1fr] items-center justify-items-center gap-x-4 gap-y-5 px-4 py-5 sm:gap-x-6 sm:gap-y-8 sm:px-6 sm:py-8 md:grid-cols-[minmax(0,1.15fr)_minmax(12rem,0.7fr)_minmax(0,1.15fr)] md:grid-rows-1 md:gap-4 md:px-6 md:py-8 lg:gap-8 lg:px-10;
+    }
+
+    .speaker-stage[data-mode="hearing"] .speaker-rig {
+      @apply pb-20 sm:pb-24 md:pb-8;
+    }
+
+    .speaker-unit-wrap {
+      @apply relative grid w-full justify-items-center gap-3 transition-[opacity,transform] duration-200 ease-out md:max-w-72 lg:max-w-80;
+    }
+
+    .speaker-stage[data-channel="left"] .speaker-unit-wrap--right,
+    .speaker-stage[data-channel="right"] .speaker-unit-wrap--left {
+      @apply opacity-40;
+    }
+
+    .speaker-stage[data-channel="left"] .speaker-unit-wrap--left,
+    .speaker-stage[data-channel="right"] .speaker-unit-wrap--right {
+      @apply scale-105;
+    }
+
+    .speaker-stage[data-channel="stereo"][data-stereo-side="left"]
+      .speaker-unit-wrap--left,
+    .speaker-stage[data-channel="stereo"][data-stereo-side="right"]
+      .speaker-unit-wrap--right {
+      @apply scale-105 opacity-100;
+    }
+
+    .speaker-stage[data-channel="stereo"][data-stereo-side="left"]
+      .speaker-unit-wrap--right,
+    .speaker-stage[data-channel="stereo"][data-stereo-side="right"]
+      .speaker-unit-wrap--left {
+      @apply opacity-60;
+    }
+
+    .speaker-cone {
+      @apply relative aspect-square w-4/5 rounded-full bg-radial from-blue-300/10 to-blue-500/10 to-80% md:w-[86%];
+    }
+
+    .speaker-channel-level {
+      @apply text-xsmall min-w-24 rounded-full border border-white/50 bg-black/50 px-3 py-1.5 text-center font-bold tracking-wide whitespace-nowrap text-white/90 tabular-nums;
+    }
+
+    .speaker-center-card {
+      @apply order-first col-span-2 mx-auto grid w-full place-content-center justify-items-center justify-self-stretch rounded-4xl border border-blue-500 bg-blue-300/10 px-3.5 pt-3.5 pb-4 text-center shadow-2xl shadow-blue-600/40 md:order-none md:col-span-1 md:max-w-60 md:-translate-y-6 md:justify-self-center md:px-4 md:pt-4 lg:max-w-68 lg:translate-y-0;
+    }
+
+    .speaker-stage-copy {
+      @apply text-small m-0 w-full text-center leading-relaxed text-balance text-white;
+    }
+
+    .speaker-mode-panel {
+      @apply mb-4 hidden justify-items-center gap-1;
+    }
+
+    .speaker-mode-panel[data-active="true"] {
+      @apply grid;
+    }
+
+    .speaker-mode-panel-figure {
+      @apply text-h3 font-bold tabular-nums text-white;
+    }
+
+    .speaker-mode-panel-label {
+      @apply text-xsmall text-balance text-white/80;
+    }
+
+    .speaker-meter {
+      @apply mb-2.5 hidden h-20 items-end justify-center gap-2 max-sm:h-16 sm:mb-4;
+      --speaker-meter-height: 5rem;
+
+      @media (width < 40rem) {
+        --speaker-meter-height: 4rem;
+      }
+    }
+
+    .speaker-meter[data-visible="true"] {
+      @apply flex;
+    }
+
+    .speaker-meter-bar {
+      @apply w-4 rounded-full transition-[height] duration-100 ease-linear;
+      height: 5%;
+      background-image: linear-gradient(to top, #ffffff, #8ec5ff, #2b7fff);
+      background-size: 100% var(--speaker-meter-height);
+      background-position: bottom;
+      background-repeat: no-repeat;
+    }
+
+    .speaker-waveform-canvas {
+      @apply mb-2.5 hidden h-20 w-full rounded-4xl border-2 border-white bg-white/10 max-sm:h-16 sm:mb-4;
+    }
+
+    .speaker-waveform-canvas[data-visible="true"] {
+      @apply block;
+    }
+
+    .speaker-range-input {
+      -webkit-appearance: none;
+      appearance: none;
+      --speaker-range-track-bg: --alpha(var(--accent-500) / 50%);
+      --speaker-range-thumb-bg: var(--color-custom-700);
+
+      @variant dark {
+        --speaker-range-thumb-bg: var(--color-custom-100);
+      }
+    }
+
+    .speaker-range-input::-webkit-slider-runnable-track {
+      @apply h-1 rounded-full;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--speaker-range-track-bg);
+    }
+
+    .speaker-range-input::-webkit-slider-thumb {
+      @apply -mt-1 size-4 rounded-full border-0;
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: var(--speaker-range-thumb-bg);
+    }
+
+    .speaker-range-input::-moz-range-track {
+      @apply h-1 rounded-full;
+      background-color: var(--speaker-range-track-bg);
+    }
+
+    .speaker-range-input::-moz-range-thumb {
+      @apply size-4 rounded-full border-0;
+      background-color: var(--speaker-range-thumb-bg);
+    }
+
+    .speaker-mode-row {
+      @apply hidden;
+    }
+
+    .speaker-mode-row[data-active="true"] {
+      @apply grid;
+    }
+
+    .speaker-slider-grid:has(#speaker-run-frequency-row[hidden]) {
+      @apply grid-cols-1;
+    }
+
+    :global(
+      #speaker-shell:has(#speaker-run-frequency-row[hidden])
+        .tool-runtime-dock-head
+    ) {
+      @apply sm:col-span-4 sm:col-start-2;
+    }
+
+    :global(
+      #speaker-shell:has(#speaker-run-frequency-row[hidden])
+        .tool-runtime-dock-extra
+    ) {
+      @apply sm:order-2 sm:col-span-2 sm:col-start-6;
+    }
+
+    :global(
+      #speaker-shell .speaker-channel-dock-button[aria-pressed="true"]
+    ) {
+      @apply ring-2 ring-white shadow-md shadow-violet-600/40 brightness-110;
+    }
+
+    :global(#speaker-shell .speaker-channel-dock-button[data-active="false"]) {
+      @apply hidden;
+    }
+
+    :global(
+      #speaker-shell[data-channel="left"] [data-speaker-channel="right"]
+    ),
+    :global(
+      #speaker-shell[data-channel="right"] [data-speaker-channel="left"]
+    ) {
+      @apply opacity-50;
+    }
+  </style>
+
+  <script>
+    import {
+      onPageHide,
+      observeResize,
+      type ResizeHandle,
+    } from "@/utils/phones/tools/lifecycle";
+    import { getBrowserCapabilities } from "@/utils/phones/tools/capabilities";
+    import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      createLogBands,
+      getAudioContextClass,
+      onAudioContextStateChange,
+      promoteAudioSession,
+      rampParam,
+      type FrequencyBand,
+    } from "@/utils/phones/tools/audio";
+
+    type SpeakerMode = "signal" | "water" | "hearing";
+    type SpeakerSignal = "tone" | "sweep" | "pink" | "white" | "brown";
+    type SpeakerChannel = "stereo" | "mono" | "left" | "right";
+    type NoiseSignal = "pink" | "white" | "brown";
+
+    const WATER_FREQUENCY_HZ = 165;
+    const WATER_CYCLE_MS = 45000;
+    const HEARING_MIN_HZ = 20;
+    const HEARING_MAX_HZ = 20000;
+    const HEARING_STEP_COUNT = 20;
+    const HEARING_STEPS: number[] = Array.from(
+      { length: HEARING_STEP_COUNT },
+      (_, index) =>
+        Math.round(
+          HEARING_MIN_HZ *
+            (HEARING_MAX_HZ / HEARING_MIN_HZ) **
+              (index / (HEARING_STEP_COUNT - 1)),
+        ),
+    );
+    const METER_BAND_COUNT = 6;
+    const METER_MIN_HZ = 60;
+    const METER_MAX_HZ = 16000;
+
+    const shell = document.getElementById(
+      "speaker-shell",
+    ) as HTMLDivElement | null;
+    const stage = document.getElementById(
+      "speaker-stage",
+    ) as HTMLDivElement | null;
+    const startButton = document.getElementById("speaker-start");
+    const stopButton = document.getElementById("speaker-stop");
+    const frequencyInput = document.getElementById(
+      "speaker-frequency",
+    ) as HTMLInputElement | null;
+    const volumeInput = document.getElementById(
+      "speaker-volume",
+    ) as HTMLInputElement | null;
+    const frequencyLabel = document.getElementById("speaker-frequency-label");
+    const volumeLabel = document.getElementById("speaker-volume-label");
+    const stageSignal = document.getElementById("speaker-stage-signal");
+    const stageChannel = document.getElementById("speaker-stage-channel");
+    const stageCopy = document.getElementById("speaker-stage-copy");
+    const dockLead = document.getElementById("speaker-dock-lead");
+    const frequencyRow = document.getElementById("speaker-run-frequency-row");
+    const hearingRow = document.getElementById("speaker-hearing-row");
+    const waterPanel = document.getElementById("speaker-water-panel");
+    const hearingPanel = document.getElementById("speaker-hearing-panel");
+    const waterTimerEl = document.getElementById("speaker-water-timer");
+    const hearingFrequencyEl = document.getElementById(
+      "speaker-hearing-frequency",
+    );
+    const hearingResultEl = document.getElementById("speaker-hearing-result");
+    const hearingCantHearButton = document.getElementById(
+      "speaker-hearing-cant-hear",
+    ) as HTMLButtonElement | null;
+    const hearingNextButton = document.getElementById(
+      "speaker-hearing-next",
+    ) as HTMLButtonElement | null;
+    const levelLeftEl = document.getElementById("speaker-level-left");
+    const levelRightEl = document.getElementById("speaker-level-right");
+    const sidebarItemButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-speaker-item]"),
+    );
+    const channelButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-speaker-channel]"),
+    );
+    const meterEl = document.getElementById("speaker-meter");
+    const meterBars = Array.from(
+      document.querySelectorAll<HTMLElement>(".speaker-meter-bar"),
+    );
+    const waveformCanvas = document.getElementById(
+      "speaker-waveform",
+    ) as HTMLCanvasElement | null;
+
+    const pageController = new AbortController();
+    const { signal: abortSignal } = pageController;
+    const wakeLock = createWakeLock({ signal: abortSignal });
+
+    const stereoPannerSupported = getBrowserCapabilities().stereoPanner;
+
+    let audioContext: AudioContext | null = null;
+    let stopStateWatch: (() => void) | null = null;
+    let oscillator: OscillatorNode | null = null;
+    let noiseSource: AudioBufferSourceNode | null = null;
+    let gainNode: GainNode | null = null;
+    let pannerNode: StereoPannerNode | null = null;
+    let splitterNode: ChannelSplitterNode | null = null;
+    let mixAnalyser: AnalyserNode | null = null;
+    let analyserL: AnalyserNode | null = null;
+    let analyserR: AnalyserNode | null = null;
+    let meterFrequencyData: Uint8Array | null = null;
+    let meterTimeData: Uint8Array | null = null;
+    let levelDataL: Float32Array | null = null;
+    let levelDataR: Float32Array | null = null;
+    let meterFrame = 0;
+    let meterBands: FrequencyBand[] = [];
+    let waveformContext: CanvasRenderingContext2D | null = null;
+    let waveformWidth = 0;
+    let waveformHeight = 0;
+    let waveformStroke: string | CanvasGradient = "#ffffff";
+    let waveformResizeObserver: ResizeHandle | null = null;
+    let sweepTimeout: number | null = null;
+    let activeMode: SpeakerMode = "signal";
+    let activeSignal: SpeakerSignal = "tone";
+    let activeChannel: SpeakerChannel = "stereo";
+    let isPlaying = false;
+    let startInFlight = false;
+    let playbackOperationId = 0;
+    let stereoPanTimer: number | null = null;
+    let stereoPanSide: "left" | "right" = "left";
+    let waterTimer: number | null = null;
+    let waterRemainingMs = WATER_CYCLE_MS;
+    let hearingIndex = 0;
+    let hearingActive = false;
+    let audioSessionHandle: { stop: () => void } | null = null;
+    const noiseBuffers = new Map<NoiseSignal, AudioBuffer>();
+
+    const SIGNAL_LABELS: Record<SpeakerSignal, string> = {
+      tone: "Tone",
+      sweep: "Sweep",
+      pink: "Pink Noise",
+      white: "White Noise",
+      brown: "Brown Noise",
+    };
+
+    const CHANNEL_LABELS: Record<SpeakerChannel, string> = {
+      stereo: "Stereo",
+      mono: "Mono",
+      left: "Left",
+      right: "Right",
+    };
+
+    const CHANNEL_STATUS: Record<SpeakerChannel, string> = {
+      stereo: "stereo left-right sweep",
+      mono: "mono center",
+      left: "left channel",
+      right: "right channel",
+    };
+
+    const SIGNAL_COPY =
+      "Keep the volume low for the first tone or sweep, and raise it only if the sound stays clean.";
+    const WATER_COPY =
+      "Place the phone speaker-side down on a dry cloth before starting.";
+    const HEARING_COPY =
+      "Use a quiet room and keep the volume at a comfortable level.";
+
+    function getReadyStatus(): string {
+      if (activeMode === "water") {
+        return "Ready to run a 165 Hz water eject cycle.";
+      }
+      if (activeMode === "hearing") {
+        return "Press Start, then step up until you can't hear the tone.";
+      }
+
+      const channel = CHANNEL_LABELS[activeChannel];
+      if (activeSignal === "tone") {
+        return `Ready to play a ${frequencyInput?.value ?? "440"} Hz tone with ${channel} routing.`;
+      }
+      if (activeSignal === "sweep") {
+        return `Ready to run an 80 Hz to 8 kHz sweep with ${channel} routing.`;
+      }
+      return `Ready to play ${SIGNAL_LABELS[activeSignal].toLowerCase()} with ${channel} routing.`;
+    }
+
+    function formatClock(ms: number): string {
+      const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function setStatus(text: string): void {
+      if (stageCopy) stageCopy.textContent = text;
+    }
+
+    function needsStereoPanner(channel: SpeakerChannel): boolean {
+      return channel !== "mono";
+    }
+
+    function syncChannelButtons(): void {
+      channelButtons.forEach((button) => {
+        const channel = button.dataset.speakerChannel as
+          SpeakerChannel | undefined;
+        const disabled = Boolean(
+          channel && !stereoPannerSupported && needsStereoPanner(channel),
+        );
+        button.setAttribute(
+          "aria-pressed",
+          channel === activeChannel ? "true" : "false",
+        );
+        button.disabled = disabled;
+        button.title = disabled
+          ? "Stereo channel routing is unavailable in this browser."
+          : "";
+      });
+    }
+
+    function setActiveChannel(channel: SpeakerChannel): void {
+      activeChannel = channel;
+      if (stage) stage.dataset.channel = channel;
+      if (shell) shell.dataset.channel = channel;
+      syncChannelButtons();
+      syncLabels();
+      if (!isPlaying) setStatus(getReadyStatus());
+    }
+
+    function syncLabels(): void {
+      if (frequencyInput && frequencyLabel) {
+        frequencyLabel.textContent = `${frequencyInput.value} Hz`;
+      }
+      if (volumeInput && volumeLabel) {
+        volumeLabel.textContent = `${volumeInput.value}%`;
+      }
+      if (gainNode && volumeInput && audioContext && activeMode === "signal") {
+        rampParam(
+          gainNode.gain,
+          Number(volumeInput.value) / 100,
+          audioContext,
+          0.02,
+        );
+      }
+      if (oscillator && frequencyInput && audioContext && activeMode === "signal") {
+        rampParam(
+          oscillator.frequency,
+          Number(frequencyInput.value),
+          audioContext,
+          0.02,
+        );
+      }
+      if (frequencyRow)
+        frequencyRow.hidden = !(activeMode === "signal" && activeSignal === "tone");
+      const showWaveform =
+        activeMode === "signal" &&
+        (activeSignal === "tone" || activeSignal === "sweep");
+      const showMeter = activeMode === "signal" && !showWaveform;
+      if (meterEl) meterEl.dataset.visible = String(showMeter);
+      if (waveformCanvas) waveformCanvas.dataset.visible = String(showWaveform);
+      if (stageSignal) {
+        stageSignal.textContent =
+          activeMode === "water"
+            ? "Water eject"
+            : activeMode === "hearing"
+              ? "Hearing test"
+              : SIGNAL_LABELS[activeSignal];
+      }
+      if (stageChannel) {
+        stageChannel.textContent =
+          activeMode === "water"
+            ? "165 Hz"
+            : activeMode === "hearing"
+              ? `${HEARING_STEPS[hearingIndex]} Hz`
+              : CHANNEL_LABELS[activeChannel];
+      }
+      syncChannelButtons();
+    }
+
+    function setPlaying(active: boolean): void {
+      isPlaying = active;
+      if (active) wakeLock.request();
+      else wakeLock.release();
+      if (stage) stage.dataset.playing = String(active);
+      if (shell) shell.dataset.playing = String(active);
+      startButton?.toggleAttribute(
+        "disabled",
+        startInFlight || (active && activeMode !== "hearing"),
+      );
+    }
+
+    function setMode(mode: SpeakerMode): void {
+      activeMode = mode;
+      if (stage) stage.dataset.mode = mode;
+      channelButtons.forEach((button) => {
+        button.dataset.active = String(mode === "signal");
+      });
+      if (hearingRow) hearingRow.dataset.active = String(mode === "hearing");
+      if (waterPanel) waterPanel.dataset.active = String(mode === "water");
+      if (hearingPanel) hearingPanel.dataset.active = String(mode === "hearing");
+      if (dockLead) {
+        dockLead.textContent =
+          mode === "water" ? WATER_COPY : mode === "hearing" ? HEARING_COPY : SIGNAL_COPY;
+      }
+      syncLabels();
+      setStatus(getReadyStatus());
+    }
+
+    async function getAudioContext(): Promise<AudioContext | null> {
+      if (audioContext) return audioContext;
+      const ContextClass = getAudioContextClass();
+      if (!ContextClass) {
+        setStatus("Web Audio is unavailable in this browser.");
+        return null;
+      }
+      audioContext = new ContextClass();
+      stopStateWatch = onAudioContextStateChange(
+        audioContext,
+        handleContextState,
+      );
+      return audioContext;
+    }
+
+    function handleContextState(state: AudioContextState): void {
+      if (state === "running") {
+        if (isPlaying && meterFrame === 0) {
+          meterFrame = requestAnimationFrame(updateMeter);
+        }
+        return;
+      }
+      if (isPlaying) {
+        stopMeterLoop();
+        setStatus(
+          "Playback was interrupted by the system, likely a call. Press Stop then Start to resume.",
+        );
+      }
+    }
+
+    function createNoiseBuffer(
+      context: AudioContext,
+      type: "pink" | "white" | "brown",
+    ): AudioBuffer {
+      const length = context.sampleRate * 2;
+      const buffer = context.createBuffer(1, length, context.sampleRate);
+      const channel = buffer.getChannelData(0);
+
+      if (type === "white") {
+        for (let index = 0; index < length; index += 1) {
+          channel[index] = Math.random() * 2 - 1;
+        }
+        return buffer;
+      }
+
+      if (type === "brown") {
+        let lastOut = 0;
+        for (let index = 0; index < length; index += 1) {
+          const white = Math.random() * 2 - 1;
+          lastOut = (lastOut + 0.02 * white) / 1.02;
+          channel[index] = lastOut * 3.5;
+        }
+        return buffer;
+      }
+
+      let b0 = 0;
+      let b1 = 0;
+      let b2 = 0;
+      let b3 = 0;
+      let b4 = 0;
+      let b5 = 0;
+      let b6 = 0;
+      for (let index = 0; index < length; index += 1) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.969 * b2 + white * 0.153852;
+        b3 = 0.8665 * b3 + white * 0.3104856;
+        b4 = 0.55 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.016898;
+        channel[index] =
+          (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+      }
+      return buffer;
+    }
+
+    function getNoiseBuffer(
+      context: AudioContext,
+      type: NoiseSignal,
+    ): AudioBuffer {
+      const existing = noiseBuffers.get(type);
+      if (existing) return existing;
+      const buffer = createNoiseBuffer(context, type);
+      noiseBuffers.set(type, buffer);
+      return buffer;
+    }
+
+    function currentPanValue(): number {
+      if (activeChannel === "left") return -1;
+      if (activeChannel === "right") return 1;
+      return 0;
+    }
+
+    function clearStereoPanTimer(): void {
+      if (stereoPanTimer === null) return;
+      window.clearInterval(stereoPanTimer);
+      stereoPanTimer = null;
+    }
+
+    function setStereoPanSide(side: "left" | "right" | null): void {
+      if (!stage) return;
+      if (side) stage.dataset.stereoSide = side;
+      else stage.removeAttribute("data-stereo-side");
+    }
+
+    function stepStereoPan(): void {
+      if (!pannerNode || !audioContext || activeChannel !== "stereo") return;
+      stereoPanSide = stereoPanSide === "left" ? "right" : "left";
+      pannerNode.pan.setTargetAtTime(
+        stereoPanSide === "left" ? -1 : 1,
+        audioContext.currentTime,
+        0.18,
+      );
+      setStereoPanSide(stereoPanSide);
+    }
+
+    function applyChannelPanning(): void {
+      clearStereoPanTimer();
+      if (!pannerNode || !audioContext) {
+        setStereoPanSide(null);
+        return;
+      }
+
+      pannerNode.pan.cancelScheduledValues(audioContext.currentTime);
+      if (activeChannel === "stereo") {
+        stereoPanSide = "left";
+        pannerNode.pan.setTargetAtTime(-1, audioContext.currentTime, 0.015);
+        setStereoPanSide(stereoPanSide);
+        stereoPanTimer = window.setInterval(stepStereoPan, 1350);
+        return;
+      }
+
+      setStereoPanSide(null);
+      pannerNode.pan.setTargetAtTime(
+        currentPanValue(),
+        audioContext.currentTime,
+        0.015,
+      );
+    }
+
+    function clearSweepTimer(): void {
+      if (sweepTimeout === null) return;
+      window.clearTimeout(sweepTimeout);
+      sweepTimeout = null;
+    }
+
+    function resizeWaveformCanvas(): void {
+      if (!waveformCanvas) return;
+      const rect = waveformCanvas.getBoundingClientRect();
+      waveformWidth = Math.max(1, Math.round(rect.width));
+      waveformHeight = Math.max(1, Math.round(rect.height));
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      waveformCanvas.width = Math.round(waveformWidth * ratio);
+      waveformCanvas.height = Math.round(waveformHeight * ratio);
+      waveformContext = waveformCanvas.getContext("2d");
+      waveformContext?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (waveformContext) {
+        const gradient = waveformContext.createLinearGradient(
+          0,
+          0,
+          waveformWidth,
+          0,
+        );
+        gradient.addColorStop(0, "#ffffff");
+        gradient.addColorStop(0.5, "#93c5fd");
+        gradient.addColorStop(1, "#2563eb");
+        waveformStroke = gradient;
+      }
+    }
+
+    function drawWaveform(): void {
+      const context = waveformContext;
+      const data = meterTimeData;
+      if (!context || !mixAnalyser || !data || waveformWidth <= 0) return;
+      mixAnalyser.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
+      context.clearRect(0, 0, waveformWidth, waveformHeight);
+      context.strokeStyle = waveformStroke;
+      context.lineWidth = 2;
+      context.beginPath();
+      data.forEach((value, index) => {
+        const x = (index / (data.length - 1)) * waveformWidth;
+        const y = (value / 255) * waveformHeight;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.stroke();
+    }
+
+    function resetMeter(): void {
+      meterBars.forEach((bar) => {
+        bar.style.height = "5%";
+      });
+      if (waveformContext && waveformWidth > 0) {
+        waveformContext.clearRect(0, 0, waveformWidth, waveformHeight);
+      }
+    }
+
+    function averageBand(data: Uint8Array, band: FrequencyBand): number {
+      let sum = 0;
+      for (let bin = band.startBin; bin < band.endBin; bin += 1) {
+        sum += data[bin] ?? 0;
+      }
+      return sum / Math.max(1, band.endBin - band.startBin);
+    }
+
+    function amplitudeFromTimeDomain(data: Float32Array): number {
+      let peak = 0;
+      for (let index = 0; index < data.length; index += 1) {
+        const sample = Math.abs(data[index] ?? 0);
+        if (sample > peak) peak = sample;
+      }
+      return peak;
+    }
+
+    function updateChannelLevels(): void {
+      if (!levelLeftEl || !levelRightEl) return;
+      if (!isPlaying || !analyserL || !analyserR || !levelDataL || !levelDataR) {
+        levelLeftEl.textContent = "Left --";
+        levelRightEl.textContent = "Right --";
+        return;
+      }
+      analyserL.getFloatTimeDomainData(levelDataL as Float32Array<ArrayBuffer>);
+      analyserR.getFloatTimeDomainData(levelDataR as Float32Array<ArrayBuffer>);
+      const left = Math.round(amplitudeFromTimeDomain(levelDataL) * 100);
+      const right = Math.round(amplitudeFromTimeDomain(levelDataR) * 100);
+      levelLeftEl.textContent = `Left ${left}%`;
+      levelRightEl.textContent = `Right ${right}%`;
+    }
+
+    function updateMeter(): void {
+      updateChannelLevels();
+
+      if (!mixAnalyser || !meterFrequencyData) {
+        meterFrame = 0;
+        return;
+      }
+
+      if (
+        activeMode === "signal" &&
+        (activeSignal === "tone" || activeSignal === "sweep")
+      ) {
+        drawWaveform();
+      } else if (activeMode === "signal") {
+        mixAnalyser.getByteFrequencyData(
+          meterFrequencyData as Uint8Array<ArrayBuffer>,
+        );
+        meterBands.forEach((band, index) => {
+          const average = averageBand(
+            meterFrequencyData as Uint8Array,
+            band,
+          );
+          const level = Math.min(100, Math.round((average / 255) * 100));
+          const bar = meterBars[index];
+          if (bar) bar.style.height = `${Math.max(5, level)}%`;
+        });
+      }
+
+      meterFrame = requestAnimationFrame(updateMeter);
+    }
+
+    function stopMeterLoop(): void {
+      if (meterFrame !== 0) {
+        cancelAnimationFrame(meterFrame);
+        meterFrame = 0;
+      }
+      resetMeter();
+      updateChannelLevels();
+    }
+
+    function connectAnalysis(sourceNode: AudioNode, context: AudioContext): void {
+      mixAnalyser = context.createAnalyser();
+      mixAnalyser.fftSize = 512;
+      meterFrequencyData = new Uint8Array(mixAnalyser.frequencyBinCount);
+      meterTimeData = new Uint8Array(mixAnalyser.fftSize);
+      meterBands = createLogBands(
+        METER_BAND_COUNT,
+        METER_MIN_HZ,
+        METER_MAX_HZ,
+        context.sampleRate,
+        mixAnalyser.frequencyBinCount,
+      );
+      sourceNode.connect(mixAnalyser);
+
+      analyserL = context.createAnalyser();
+      analyserR = context.createAnalyser();
+      analyserL.fftSize = 512;
+      analyserR.fftSize = 512;
+      levelDataL = new Float32Array(analyserL.fftSize);
+      levelDataR = new Float32Array(analyserR.fftSize);
+
+      if (pannerNode) {
+        splitterNode = context.createChannelSplitter(2);
+        pannerNode.connect(splitterNode);
+        splitterNode.connect(analyserL, 0);
+        splitterNode.connect(analyserR, 1);
+      } else {
+        sourceNode.connect(analyserL);
+        sourceNode.connect(analyserR);
+      }
+    }
+
+    async function stopTone(immediate = false): Promise<void> {
+      playbackOperationId += 1;
+      clearSweepTimer();
+      clearStereoPanTimer();
+      setStereoPanSide(null);
+      audioSessionHandle?.stop();
+      audioSessionHandle = null;
+
+      if (!immediate && gainNode && audioContext) {
+        rampParam(gainNode.gain, 0, audioContext, 0.05);
+        await new Promise((resolve) => window.setTimeout(resolve, 70));
+      }
+
+      oscillator?.stop();
+      oscillator?.disconnect();
+      oscillator = null;
+      noiseSource?.stop();
+      noiseSource?.disconnect();
+      noiseSource = null;
+      gainNode?.disconnect();
+      gainNode = null;
+      pannerNode?.disconnect();
+      pannerNode = null;
+      splitterNode?.disconnect();
+      splitterNode = null;
+      mixAnalyser?.disconnect();
+      mixAnalyser = null;
+      analyserL?.disconnect();
+      analyserL = null;
+      analyserR?.disconnect();
+      analyserR = null;
+      meterFrequencyData = null;
+      meterTimeData = null;
+      levelDataL = null;
+      levelDataR = null;
+      stopMeterLoop();
+      setPlaying(false);
+      hearingActive = false;
+      syncHearingButtons();
+      if (activeMode === "water") clearWaterTimer();
+      setStatus(getReadyStatus());
+    }
+
+    async function startSignal(operationId: number): Promise<void> {
+      if (!frequencyInput || !volumeInput) return;
+      const context = await getAudioContext();
+      if (!context) return;
+      if (context.state === "suspended") {
+        try {
+          await context.resume();
+        } catch {
+          setStatus(
+            "Audio playback could not start. Tap Start again or check browser audio permissions.",
+          );
+          return;
+        }
+      }
+      if (operationId !== playbackOperationId) return;
+
+      gainNode = context.createGain();
+      gainNode.gain.value = 0;
+      pannerNode = stereoPannerSupported ? context.createStereoPanner() : null;
+
+      if (activeSignal === "tone" || activeSignal === "sweep") {
+        oscillator = context.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.value = Number(frequencyInput.value);
+      } else {
+        noiseSource = context.createBufferSource();
+        noiseSource.buffer = getNoiseBuffer(context, activeSignal);
+        noiseSource.loop = true;
+      }
+
+      const source = (oscillator ?? noiseSource) as AudioNode;
+      if (pannerNode) {
+        pannerNode.pan.value =
+          activeChannel === "stereo" ? -1 : currentPanValue();
+        source.connect(gainNode).connect(pannerNode).connect(context.destination);
+        connectAnalysis(pannerNode, context);
+      } else {
+        source.connect(gainNode).connect(context.destination);
+        connectAnalysis(gainNode, context);
+      }
+
+      if (activeSignal === "sweep" && oscillator) {
+        oscillator.frequency.setValueAtTime(80, context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(
+          8000,
+          context.currentTime + 8,
+        );
+        sweepTimeout = window.setTimeout(() => void stopTone(), 8200);
+      }
+
+      oscillator?.start();
+      noiseSource?.start();
+      applyChannelPanning();
+      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.05);
+      setPlaying(true);
+      if (meterFrame === 0) meterFrame = requestAnimationFrame(updateMeter);
+      setStatus(
+        !stereoPannerSupported
+          ? `${SIGNAL_LABELS[activeSignal]} playing in mono mode. Stereo channel routing is unavailable in this browser.`
+          : `${SIGNAL_LABELS[activeSignal]} playing in ${CHANNEL_STATUS[activeChannel]} mode.`,
+      );
+    }
+
+    function clearWaterTimer(): void {
+      if (waterTimer === null) return;
+      window.clearInterval(waterTimer);
+      waterTimer = null;
+    }
+
+    function resetWaterDisplay(): void {
+      waterRemainingMs = WATER_CYCLE_MS;
+      if (waterTimerEl) waterTimerEl.textContent = formatClock(waterRemainingMs);
+    }
+
+    async function startWater(operationId: number): Promise<void> {
+      if (!volumeInput) return;
+      const context = await getAudioContext();
+      if (!context) return;
+      if (context.state === "suspended") {
+        await context.resume().catch(() => undefined);
+      }
+      if (operationId !== playbackOperationId) return;
+
+      gainNode = context.createGain();
+      gainNode.gain.value = 0;
+      oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = WATER_FREQUENCY_HZ;
+      oscillator.connect(gainNode).connect(context.destination);
+      connectAnalysis(gainNode, context);
+      oscillator.start();
+      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.1);
+
+      setPlaying(true);
+      waterRemainingMs = WATER_CYCLE_MS;
+      if (waterTimerEl) waterTimerEl.textContent = formatClock(waterRemainingMs);
+      setStatus("Running a 165 Hz water eject cycle. Keep the phone speaker-down.");
+      clearWaterTimer();
+      waterTimer = window.setInterval(() => {
+        waterRemainingMs -= 500;
+        if (waterTimerEl) {
+          waterTimerEl.textContent = formatClock(Math.max(0, waterRemainingMs));
+        }
+        if (waterRemainingMs <= 0) {
+          clearWaterTimer();
+          void stopTone().then(() => {
+            resetWaterDisplay();
+            setStatus(
+              "Cycle complete. Check the grille for droplets on the cloth, and run another cycle if it still sounds muffled.",
+            );
+          });
+        }
+      }, 500);
+    }
+
+    function syncHearingButtons(): void {
+      if (hearingCantHearButton) hearingCantHearButton.disabled = !hearingActive;
+      if (hearingNextButton) hearingNextButton.disabled = !hearingActive;
+    }
+
+    function playHearingStep(): void {
+      if (!oscillator || !audioContext) return;
+      rampParam(
+        oscillator.frequency,
+        HEARING_STEPS[hearingIndex] ?? HEARING_MIN_HZ,
+        audioContext,
+        0.03,
+      );
+      if (hearingFrequencyEl) {
+        hearingFrequencyEl.textContent = `${HEARING_STEPS[hearingIndex]} Hz`;
+      }
+      if (hearingResultEl) {
+        hearingResultEl.textContent =
+          "Playing. Press “I hear it” to step up, or “Can't hear it” to finish.";
+      }
+      syncLabels();
+    }
+
+    async function startHearing(operationId: number): Promise<void> {
+      if (!volumeInput) return;
+      const context = await getAudioContext();
+      if (!context) return;
+      if (context.state === "suspended") {
+        await context.resume().catch(() => undefined);
+      }
+      if (operationId !== playbackOperationId) return;
+
+      gainNode = context.createGain();
+      gainNode.gain.value = 0;
+      oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = HEARING_STEPS[hearingIndex] ?? HEARING_MIN_HZ;
+      oscillator.connect(gainNode).connect(context.destination);
+      connectAnalysis(gainNode, context);
+      oscillator.start();
+      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.1);
+
+      setPlaying(true);
+      hearingActive = true;
+      syncHearingButtons();
+      playHearingStep();
+    }
+
+    function finishHearingTest(heardLastStep: boolean): void {
+      hearingActive = false;
+      syncHearingButtons();
+      void stopTone();
+      if (!hearingResultEl) return;
+      if (heardLastStep) {
+        hearingResultEl.textContent = `Result: still hearing ${HEARING_STEPS[HEARING_STEPS.length - 1]} Hz, at or beyond this test's range.`;
+      } else if (hearingIndex === 0) {
+        hearingResultEl.textContent =
+          "Result: couldn't confirm even the lowest step. Try a quieter room or a higher volume.";
+      } else {
+        const confirmed = HEARING_STEPS[hearingIndex - 1];
+        hearingResultEl.textContent = `Result: your highest confirmed tone through this device is ${confirmed} Hz.`;
+      }
+    }
+
+    function resetHearingProgress(): void {
+      hearingIndex = 0;
+      hearingActive = false;
+      syncHearingButtons();
+      if (hearingFrequencyEl) {
+        hearingFrequencyEl.textContent = `${HEARING_STEPS[0]} Hz`;
+      }
+      if (hearingResultEl) {
+        hearingResultEl.textContent =
+          "Press Start, then step up until you can't hear it.";
+      }
+    }
+
+    async function handleStart(): Promise<void> {
+      if (startInFlight) return;
+      startInFlight = true;
+      startButton?.toggleAttribute("disabled", true);
+      await stopTone(true);
+      const operationId = playbackOperationId;
+      audioSessionHandle = promoteAudioSession();
+      try {
+        if (activeMode === "water") await startWater(operationId);
+        else if (activeMode === "hearing") await startHearing(operationId);
+        else await startSignal(operationId);
+      } finally {
+        if (!isPlaying || operationId !== playbackOperationId) {
+          audioSessionHandle?.stop();
+          audioSessionHandle = null;
+        }
+        startInFlight = false;
+        setPlaying(isPlaying);
+      }
+    }
+
+    function handleSidebarItemClick(button: HTMLButtonElement): void {
+      sidebarItemButtons.forEach((item) => {
+        item.setAttribute("aria-pressed", item === button ? "true" : "false");
+      });
+
+      const mode = (button.dataset.speakerMode as SpeakerMode | undefined) ?? "signal";
+      void stopTone().then(() => {
+        if (mode === "signal") {
+          const nextSignal = button.dataset.speakerSignal as
+            SpeakerSignal | undefined;
+          if (nextSignal) {
+            activeSignal = nextSignal;
+            if (stage) stage.dataset.signal = nextSignal;
+          }
+          const nextFrequency = button.dataset.speakerFrequency;
+          if (nextFrequency && frequencyInput) {
+            frequencyInput.value = nextFrequency;
+          }
+        }
+        if (mode === "water") resetWaterDisplay();
+        if (mode === "hearing") resetHearingProgress();
+        setMode(mode);
+        const nextTip = button.dataset.speakerTip;
+        if (dockLead && nextTip) dockLead.textContent = nextTip;
+      });
+    }
+
+    sidebarItemButtons.forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => handleSidebarItemClick(button),
+        { signal: abortSignal },
+      );
+    });
+
+    channelButtons.forEach((button) => {
+      button.addEventListener(
+        "mousedown",
+        (event) => event.preventDefault(),
+        { signal: abortSignal },
+      );
+      button.addEventListener(
+        "click",
+        () => {
+          const channel = button.dataset.speakerChannel as
+            SpeakerChannel | undefined;
+          if (!channel) return;
+          if (button.disabled || (!stereoPannerSupported && needsStereoPanner(channel))) {
+            setStatus(
+              "Stereo channel routing is unavailable in this browser, so mono remains active.",
+            );
+            return;
+          }
+          setActiveChannel(channel);
+          applyChannelPanning();
+          if (isPlaying && activeMode === "signal") {
+            setStatus(
+              `${SIGNAL_LABELS[activeSignal]} playing in ${CHANNEL_STATUS[channel]} mode.`,
+            );
+          }
+        },
+        { signal: abortSignal },
+      );
+    });
+
+    frequencyInput?.addEventListener("input", syncLabels, { signal: abortSignal });
+    volumeInput?.addEventListener("input", syncLabels, { signal: abortSignal });
+    startButton?.addEventListener("click", () => void handleStart(), {
+      signal: abortSignal,
+    });
+    stopButton?.addEventListener("click", () => void stopTone(), {
+      signal: abortSignal,
+    });
+    hearingNextButton?.addEventListener(
+      "click",
+      () => {
+        if (!hearingActive) return;
+        if (hearingIndex >= HEARING_STEPS.length - 1) {
+          finishHearingTest(true);
+          return;
+        }
+        hearingIndex += 1;
+        playHearingStep();
+      },
+      { signal: abortSignal },
+    );
+    hearingCantHearButton?.addEventListener(
+      "click",
+      () => {
+        if (!hearingActive) return;
+        finishHearingTest(false);
+      },
+      { signal: abortSignal },
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.hidden && isPlaying) void stopTone(true);
+      },
+      { signal: abortSignal },
+    );
+
+    waveformResizeObserver = observeResize(
+      waveformCanvas,
+      resizeWaveformCanvas,
+    );
+
+    onPageHide(() => {
+      void stopTone(true);
+      void audioContext?.close().catch(() => undefined);
+      audioContext = null;
+      stopStateWatch?.();
+      stopStateWatch = null;
+      clearWaterTimer();
+      noiseBuffers.clear();
+      waveformResizeObserver?.disconnect();
+      waveformResizeObserver = null;
+      audioSessionHandle?.stop();
+      audioSessionHandle = null;
+      pageController.abort();
+    });
+
+    resizeWaveformCanvas();
+    setMode("signal");
+    syncChannelButtons();
+    syncHearingButtons();
+    resetWaterDisplay();
+    resetHearingProgress();
+    setPlaying(false);
+  </script>
+</BaseLayout>

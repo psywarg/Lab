@@ -1,0 +1,471 @@
+---
+// src/components/site/DiagramViewer.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+
+export interface DiagramBlock {
+  id: string;
+  label: string;
+  href?: string;
+}
+
+interface Props {
+  src: string;
+  blocks: DiagramBlock[];
+  alt?: string;
+  note?: string;
+}
+
+const { src, blocks, alt = "Block Diagram", note } = Astro.props;
+
+const viewerId = `viewer-${crypto.randomUUID().slice(0, 8)}`;
+---
+
+<diagram-viewer class="block w-fit">
+  <div class="w-60 max-w-full sm:w-80 md:w-100">
+    <button
+      type="button"
+      data-viewer-trigger={viewerId}
+      data-viewer-src={src}
+      data-viewer-alt={alt}
+      data-viewer-icons={Icons}
+      data-viewer-blocks={JSON.stringify(blocks)}
+      aria-label={`Expand diagram: ${alt}`}
+      aria-haspopup="dialog"
+      aria-controls={viewerId}
+      class="w-full cursor-zoom-in overflow-hidden transition-opacity hover:opacity-90 focus:outline-hidden"
+    >
+      <img
+        src={src}
+        alt={alt}
+        data-viewer-preview
+        loading="lazy"
+        class="block h-auto w-full rounded-lg"
+      />
+    </button>
+    {note && <p class="text-xsmall mt-2 text-center">{note}</p>}
+  </div>
+
+  <dialog
+    id={viewerId}
+    aria-label={`Expanded diagram: ${alt}`}
+    class="backdrop:bg-custom-100/80 dark:backdrop:bg-custom-900/80 relative hidden h-full max-h-none w-full max-w-none items-center justify-center overflow-hidden border-none bg-transparent p-4 opacity-0 outline-hidden transition-opacity duration-200"
+  >
+  </dialog>
+</diagram-viewer>
+
+<script>
+  import { lockScroll, unlockScroll } from "@/utils/site/scrollLock";
+
+  type DiagramBlock = { id: string; label: string; href?: string };
+
+  const ZOOM_LEVEL = 2;
+
+  function parseDiagramBlocks(raw: string | undefined): DiagramBlock[] {
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed.filter(
+        (block): block is DiagramBlock =>
+          typeof block === "object" &&
+          block !== null &&
+          typeof block.id === "string" &&
+          typeof block.label === "string" &&
+          (block.href === undefined || typeof block.href === "string"),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  class DiagramViewer extends HTMLElement {
+    #dialog: HTMLDialogElement | null = null;
+    #trigger: HTMLButtonElement | null = null;
+    #closeBtn: HTMLButtonElement | null = null;
+    #controller: AbortController | null = null;
+    #closeTimer: number | null = null;
+    #scrollLocked = false;
+    #contentLoaded = false;
+
+    #src = "";
+    #alt = "";
+    #icons = "";
+    #blocks: DiagramBlock[] = [];
+
+    #scale = 1;
+    #translateX = 0;
+    #translateY = 0;
+    #svgWrapper: HTMLDivElement | null = null;
+
+    #isPanning = false;
+    #hasPanned = false;
+    #panStartX = 0;
+    #panStartY = 0;
+    #panOriginX = 0;
+    #panOriginY = 0;
+    #lastPointerType = "";
+
+    connectedCallback() {
+      const trigger = this.querySelector<HTMLButtonElement>(
+        "[data-viewer-trigger]",
+      );
+      const dialogId = trigger?.getAttribute("data-viewer-trigger");
+      this.#dialog = dialogId
+        ? (document.getElementById(dialogId) as HTMLDialogElement)
+        : null;
+
+      if (!trigger || !this.#dialog) return;
+
+      this.#trigger = trigger;
+      this.#src = trigger.dataset.viewerSrc ?? "";
+      this.#alt = trigger.dataset.viewerAlt ?? "Block Diagram";
+      this.#icons = trigger.dataset.viewerIcons ?? "";
+      this.#blocks = parseDiagramBlocks(trigger.dataset.viewerBlocks);
+
+      this.#controller = new AbortController();
+      const { signal } = this.#controller;
+
+      this.#initPreview();
+      trigger.addEventListener("click", () => this.#open(), { signal });
+
+      this.#dialog.addEventListener(
+        "click",
+        (e) => {
+          if (e.target === this.#dialog) this.#close();
+        },
+        { signal },
+      );
+
+      this.#dialog.addEventListener("close", () => this.#onNativeClose(), {
+        signal,
+      });
+
+      this.#dialog.addEventListener(
+        "cancel",
+        (e) => {
+          e.preventDefault();
+          this.#close();
+        },
+        { signal },
+      );
+
+      this.#dialog.addEventListener(
+        "keydown",
+        (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            this.#close();
+          }
+        },
+        { signal },
+      );
+    }
+
+    disconnectedCallback() {
+      this.#controller?.abort();
+      this.#controller = null;
+      if (this.#closeTimer !== null) {
+        window.clearTimeout(this.#closeTimer);
+        this.#closeTimer = null;
+      }
+      if (this.#dialog?.open) {
+        this.#dialog.close();
+      }
+      this.#releaseScrollLock();
+    }
+
+    #acquireScrollLock() {
+      if (this.#scrollLocked) return;
+      lockScroll();
+      this.#scrollLocked = true;
+    }
+
+    #releaseScrollLock() {
+      if (!this.#scrollLocked) return;
+      unlockScroll();
+      this.#scrollLocked = false;
+    }
+
+    #open() {
+      if (!this.#dialog) return;
+      if (!this.#contentLoaded) {
+        this.#initContent();
+        this.#contentLoaded = true;
+      }
+      this.#resetZoom();
+      this.#acquireScrollLock();
+      this.#dialog.classList.remove("hidden");
+      this.#dialog.classList.add("flex");
+      this.#dialog.showModal();
+      requestAnimationFrame(() => {
+        this.#dialog?.classList.replace("opacity-0", "opacity-100");
+        this.#closeBtn?.focus();
+      });
+    }
+
+    #close() {
+      if (!this.#dialog) return;
+      if (this.#closeTimer !== null) {
+        window.clearTimeout(this.#closeTimer);
+      }
+      this.#dialog.classList.replace("opacity-100", "opacity-0");
+      this.#closeTimer = window.setTimeout(() => {
+        this.#dialog?.close();
+      }, 200);
+    }
+
+    #onNativeClose() {
+      if (this.#closeTimer !== null) {
+        window.clearTimeout(this.#closeTimer);
+        this.#closeTimer = null;
+      }
+      this.#releaseScrollLock();
+      this.#dialog?.classList.remove("opacity-100");
+      this.#dialog?.classList.add("opacity-0");
+      this.#dialog?.classList.remove("flex");
+      this.#dialog?.classList.add("hidden");
+      this.#trigger?.focus();
+    }
+
+    #applyTransform() {
+      if (!this.#svgWrapper) return;
+      this.#svgWrapper.style.transform = `translate(${this.#translateX}px, ${this.#translateY}px) scale(${this.#scale})`;
+    }
+
+    #zoomInAt(originX: number, originY: number) {
+      if (this.#scale >= ZOOM_LEVEL) return;
+      this.#translateX = -originX;
+      this.#translateY = -originY;
+      this.#scale = ZOOM_LEVEL;
+      this.#applyTransform();
+      if (this.#svgWrapper) this.#svgWrapper.style.cursor = "grab";
+    }
+
+    #resetZoom() {
+      this.#scale = 1;
+      this.#translateX = 0;
+      this.#translateY = 0;
+      this.#applyTransform();
+      if (this.#svgWrapper) this.#svgWrapper.style.cursor = "zoom-in";
+    }
+
+    #getOrigin(clientX: number, clientY: number) {
+      const rect = this.#svgWrapper!.getBoundingClientRect();
+      return {
+        x: clientX - rect.left - rect.width / 2,
+        y: clientY - rect.top - rect.height / 2,
+      };
+    }
+
+    #bindZoomPan(wrapper: HTMLDivElement) {
+      const signal = this.#controller!.signal;
+
+      wrapper.addEventListener(
+        "pointerdown",
+        (e) => {
+          this.#lastPointerType = e.pointerType;
+          if (e.pointerType !== "mouse" || this.#scale <= 1) return;
+          this.#isPanning = true;
+          this.#hasPanned = false;
+          this.#panStartX = e.clientX;
+          this.#panStartY = e.clientY;
+          this.#panOriginX = this.#translateX;
+          this.#panOriginY = this.#translateY;
+          wrapper.style.cursor = "grabbing";
+          wrapper.setPointerCapture(e.pointerId);
+        },
+        { signal },
+      );
+
+      wrapper.addEventListener(
+        "pointermove",
+        (e) => {
+          if (!this.#isPanning) return;
+          const dx = e.clientX - this.#panStartX;
+          const dy = e.clientY - this.#panStartY;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) this.#hasPanned = true;
+          this.#translateX = this.#panOriginX + dx;
+          this.#translateY = this.#panOriginY + dy;
+          this.#applyTransform();
+        },
+        { signal },
+      );
+
+      const endPan = () => {
+        if (!this.#isPanning) return;
+        this.#isPanning = false;
+        wrapper.style.cursor = this.#scale > 1 ? "grab" : "zoom-in";
+      };
+      wrapper.addEventListener("pointerup", endPan, { signal });
+      wrapper.addEventListener("pointercancel", endPan, { signal });
+
+      wrapper.addEventListener(
+        "click",
+        (e) => {
+          if (this.#lastPointerType !== "mouse") return;
+          if (this.#hasPanned) {
+            this.#hasPanned = false;
+            return;
+          }
+          if (this.#scale === 1) {
+            const { x, y } = this.#getOrigin(e.clientX, e.clientY);
+            this.#zoomInAt(x, y);
+          } else {
+            this.#resetZoom();
+          }
+        },
+        { signal },
+      );
+
+      wrapper.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          if (e.deltaY < 0 && this.#scale === 1) {
+            const { x, y } = this.#getOrigin(e.clientX, e.clientY);
+            this.#zoomInAt(x, y);
+          } else if (e.deltaY > 0 && this.#scale > 1) {
+            this.#resetZoom();
+          }
+        },
+        { passive: false, signal },
+      );
+    }
+
+    #applySvgFont(svg: SVGSVGElement) {
+      svg.style.fontFamily = "var(--font-sorted), sans-serif";
+      svg.querySelectorAll<SVGTextElement>("text").forEach((text) => {
+        text.style.fontFamily = "var(--font-sorted), sans-serif";
+      });
+    }
+
+    #parseSvg(svgText: string) {
+      const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+      const svg = doc.querySelector("svg");
+      if (!svg) return null;
+
+      const parsedError = doc.querySelector("parsererror");
+      if (parsedError) return null;
+
+      const importedSvg = document.importNode(svg, true) as SVGSVGElement;
+      this.#applySvgFont(importedSvg);
+      return importedSvg;
+    }
+
+    async #loadSvg() {
+      const res = await fetch(this.#src, { signal: this.#controller!.signal });
+      if (!res.ok) throw new Error(`Failed to load diagram: ${res.status}`);
+
+      return this.#parseSvg(await res.text());
+    }
+
+    #initPreview() {
+      const previewImage = this.querySelector<HTMLImageElement>(
+        "[data-viewer-preview]",
+      );
+      if (!previewImage || !this.#src) return;
+
+      this.#loadSvg()
+        .then((svg) => {
+          if (!svg) return;
+          svg.setAttribute("class", "block h-auto w-full rounded-lg");
+          svg.setAttribute("aria-hidden", "true");
+          svg.setAttribute("focusable", "false");
+          previewImage.replaceWith(svg);
+        })
+        .catch(() => {
+          // Use fallback image when inline SVG loading is unavailable.
+        });
+    }
+
+    #wireBlocks(svgWrapper: HTMLDivElement) {
+      this.#blocks.forEach(({ id, label, href }) => {
+        const el = svgWrapper.querySelector<SVGElement>(`#${CSS.escape(id)}`);
+        if (!el) return;
+
+        const title = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "title",
+        );
+        title.textContent = label;
+        el.insertBefore(title, el.firstChild);
+
+        el.style.transition = "filter 0.2s ease";
+        el.addEventListener("mouseenter", () => {
+          el.style.filter =
+            "drop-shadow(0 0 6px rgba(43,127,255,1)) drop-shadow(0 0 16px rgba(43,127,255,0.5))";
+        });
+        el.addEventListener("mouseleave", () => {
+          el.style.filter = "";
+        });
+
+        if (href) {
+          el.style.cursor = "pointer";
+          el.setAttribute("tabindex", "0");
+          el.setAttribute("role", "link");
+          el.setAttribute("aria-label", `Open article: ${label}`);
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            window.location.href = href;
+          });
+          el.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              window.location.href = href;
+            }
+          });
+        }
+
+        el.querySelectorAll("text").forEach((t) => {
+          t.style.cursor = "inherit";
+          t.style.userSelect = "none";
+        });
+      });
+    }
+
+    #initContent() {
+      if (!this.#dialog) return;
+
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className =
+        "btn-base bg-accent-ink px-3.5 py-2.5 text-white absolute top-4 right-4 z-10";
+      closeBtn.setAttribute("aria-label", "Close modal");
+      closeBtn.innerHTML = `<svg class="w-3 h-3" aria-hidden="true"><use href="${this.#icons}#close"></use></svg>`;
+      closeBtn.addEventListener("click", () => this.#close(), {
+        signal: this.#controller!.signal,
+      });
+      this.#closeBtn = closeBtn;
+
+      const svgWrapper = document.createElement("div");
+      svgWrapper.style.cssText =
+        "width: 90vmin; height: 90vmin; will-change: transform; transition: transform 0.1s ease-out; cursor: zoom-in; overflow: visible;";
+      this.#svgWrapper = svgWrapper;
+
+      this.#bindZoomPan(svgWrapper);
+
+      this.#loadSvg()
+        .then((svg) => {
+          if (!svg) throw new Error("Failed to parse diagram SVG.");
+          svgWrapper.replaceChildren(svg);
+          svg.style.width = "100%";
+          svg.style.height = "auto";
+          svg.setAttribute("role", "img");
+          svg.setAttribute("aria-label", this.#alt);
+          this.#wireBlocks(svgWrapper);
+        })
+        .catch(() => {
+          svgWrapper.textContent = "Failed to load diagram.";
+        });
+
+      this.#dialog.append(closeBtn, svgWrapper);
+    }
+  }
+
+  if (!customElements.get("diagram-viewer")) {
+    customElements.define("diagram-viewer", DiagramViewer);
+  }
+</script>
