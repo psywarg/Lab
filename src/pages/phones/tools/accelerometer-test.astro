@@ -828,8 +828,7 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/phones/tools/lifecycle";
     import { createRafScheduler } from "@/utils/site/raf";
     import {
-      requestMotionPermission,
-      requestOrientationPermission,
+      requestMotionAndOrientationPermission,
       getMotionPermissionState,
       describeSensorUnavailability,
       type SensorPermissionReason,
@@ -840,29 +839,15 @@ const structuredData = createToolApplicationSchema({
       onOrientationChange,
       type OrientationAngle,
     } from "@/utils/phones/tools/orientation";
-
-    type GraphSeries = {
-      values: readonly number[];
-      sampleCount: number;
-      min: number;
-      max: number;
-      baseline?: number;
-      label: string;
-    };
-    type GenericMotionSensor = EventTarget & {
-      readonly x?: number;
-      readonly y?: number;
-      readonly z?: number;
-      start(): void;
-      stop(): void;
-    };
-    type GenericMotionSensorCtor = new (options?: {
-      frequency?: number;
-    }) => GenericMotionSensor;
-    type WindowWithGenericSensors = Window & {
-      GravitySensor?: GenericMotionSensorCtor;
-      LinearAccelerationSensor?: GenericMotionSensorCtor;
-    };
+    import {
+      createMotionGraph,
+      genericSensorCtor,
+      mean as average,
+      standardDeviation,
+      startGenericSensor,
+      type GenericSensor,
+      type GraphSeries,
+    } from "@/utils/phones/tools/motion";
 
     const ORIENTATION_STALE_MS = 2500;
     const GRAVITY_LPF_ALPHA = 0.08;
@@ -999,8 +984,11 @@ const structuredData = createToolApplicationSchema({
     let lastShakeAt = 0;
     let animationFrame = 0;
     let lastSampleTime = 0;
-    let graphWidth = 0;
-    let graphHeight = 0;
+    const motionGraph = createMotionGraph(graphCanvas, graphWindowLabel, {
+      r: 142,
+      g: 81,
+      b: 255,
+    });
     let pendingTotalG: number | null = null;
     let pendingDelta = 0;
     const forceHistory: number[] = [];
@@ -1034,8 +1022,10 @@ const structuredData = createToolApplicationSchema({
     let orientationLastSampleTime = 0;
     let screenAngle: OrientationAngle = getScreenAngle();
 
-    let gravitySensor: GenericMotionSensor | null = null;
-    let linearAccelSensor: GenericMotionSensor | null = null;
+    // Raw accelerometer (gravity included) drives every reading; the linear
+    // sensor is optional and only feeds the lift and shake signals.
+    let accelSensor: GenericSensor | null = null;
+    let linearAccelSensor: GenericSensor | null = null;
     let usingGenericSensors = false;
     let latestGenericLinear: { x: number; y: number; z: number } | null = null;
     let genericSensorLastSampleTime = 0;
@@ -1105,53 +1095,8 @@ const structuredData = createToolApplicationSchema({
       });
     }
 
-    function average(values: number[]): number {
-      if (!values.length) return 0;
-      return values.reduce((sum, value) => sum + value, 0) / values.length;
-    }
-
-    function standardDeviation(values: number[]): number {
-      if (values.length < 2) return 0;
-      const mean = average(values);
-      const variance =
-        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
-        (values.length - 1);
-      return Math.sqrt(variance);
-    }
-
-    function graphLineColor(): { r: number; g: number; b: number } {
-      const fallback = { r: 142, g: 81, b: 255 };
-      if (!graphCanvas) return fallback;
-      const computed = getComputedStyle(graphCanvas).color;
-      const match = computed.match(
-        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/,
-      );
-      if (!match) return fallback;
-      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
-    }
-
-    function graphColors(): { grid: string; baseline: string; line: string } {
-      const c = graphLineColor();
-      const withAlpha = (alpha: number): string =>
-        `rgb(${c.r} ${c.g} ${c.b} / ${alpha})`;
-      return {
-        grid: withAlpha(0.1),
-        baseline: withAlpha(0.35),
-        line: withAlpha(0.9),
-      };
-    }
-
     function resizeGraph(): void {
-      if (!graphCanvas) return;
-      const rect = graphCanvas.getBoundingClientRect();
-      graphWidth = rect.width;
-      graphHeight = rect.height;
-      if (graphWidth <= 0 || graphHeight <= 0) return;
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      graphCanvas.width = Math.round(graphWidth * ratio);
-      graphCanvas.height = Math.round(graphHeight * ratio);
-      const context = graphCanvas.getContext("2d");
-      context?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      motionGraph.resize();
       drawGraph();
     }
 
@@ -1314,78 +1259,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function updateGraphLabels(series: GraphSeries): void {
-      if (graphWindowLabel) {
-        const sampleLabel =
-          series.sampleCount > 0
-            ? `Last ${series.sampleCount} sample${series.sampleCount === 1 ? "" : "s"}`
-            : "No samples yet";
-        graphWindowLabel.textContent = `${series.label} - ${sampleLabel}`;
-      }
+      motionGraph.updateLabel(series);
     }
 
     function drawGraph(series = currentGraphSeries()): void {
-      updateGraphLabels(series);
-      if (!graphCanvas || graphWidth <= 0 || graphHeight <= 0) return;
-      const context = graphCanvas.getContext("2d");
-      if (!context) return;
-
-      context.clearRect(0, 0, graphWidth, graphHeight);
-      const colors = graphColors();
-
-      context.strokeStyle = colors.grid;
-      context.lineWidth = 1;
-      for (let index = 1; index < 4; index += 1) {
-        const y = (graphHeight / 4) * index;
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(graphWidth, y);
-        context.stroke();
-      }
-
-      const values = series.values;
-      let minValue: number;
-      let maxValue: number;
-      if (series.baseline !== undefined) {
-        const deviation = Math.max(
-          series.baseline - series.min,
-          series.max - series.baseline,
-          0.001,
-        );
-        minValue = series.baseline - deviation;
-        maxValue = series.baseline + deviation;
-      } else {
-        minValue = series.min;
-        maxValue = series.max;
-      }
-      const span = Math.max(0.001, maxValue - minValue);
-
-      if (series.baseline !== undefined) {
-        const baselineY =
-          graphHeight - ((series.baseline - minValue) / span) * graphHeight;
-        context.strokeStyle = colors.baseline;
-        context.setLineDash([6, 6]);
-        context.beginPath();
-        context.moveTo(0, baselineY);
-        context.lineTo(graphWidth, baselineY);
-        context.stroke();
-        context.setLineDash([]);
-      }
-
-      if (values.length <= 1) return;
-
-      context.strokeStyle = colors.line;
-      context.lineWidth = 2.25;
-      context.lineJoin = "round";
-      context.lineCap = "round";
-      context.beginPath();
-
-      values.forEach((value, index) => {
-        const x = (index / (values.length - 1)) * graphWidth;
-        const y = graphHeight - ((value - minValue) / span) * graphHeight;
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      });
-      context.stroke();
+      motionGraph.draw(series);
     }
 
     function updateDiagnostics(delta: number): void {
@@ -1804,16 +1682,12 @@ const structuredData = createToolApplicationSchema({
     }
 
     function genericSensorSupported(): boolean {
-      const win = window as WindowWithGenericSensors;
-      return (
-        typeof win.GravitySensor === "function" &&
-        typeof win.LinearAccelerationSensor === "function"
-      );
+      return genericSensorCtor("Accelerometer") !== null;
     }
 
-    function handleGenericGravityReading(): void {
+    function handleGenericAccelReading(sensor: GenericSensor): void {
       if (
-        !gravitySensor ||
+        sensor !== accelSensor ||
         !started ||
         pausedForFullscreen ||
         sensorsPausedForVisibility
@@ -1825,9 +1699,9 @@ const structuredData = createToolApplicationSchema({
         : 0;
       genericSensorLastSampleTime = now;
       ingestSample({
-        gx: finiteNumber(gravitySensor.x),
-        gy: finiteNumber(gravitySensor.y),
-        gz: finiteNumber(gravitySensor.z),
+        gx: finiteNumber(sensor.x),
+        gy: finiteNumber(sensor.y),
+        gz: finiteNumber(sensor.z),
         lx: latestGenericLinear ? latestGenericLinear.x : null,
         ly: latestGenericLinear ? latestGenericLinear.y : null,
         lz: latestGenericLinear ? latestGenericLinear.z : null,
@@ -1835,25 +1709,25 @@ const structuredData = createToolApplicationSchema({
       });
     }
 
-    function handleGenericLinearReading(): void {
+    function handleGenericLinearReading(sensor: GenericSensor): void {
       if (
-        !linearAccelSensor ||
+        sensor !== linearAccelSensor ||
         !started ||
         pausedForFullscreen ||
         sensorsPausedForVisibility
       )
         return;
       latestGenericLinear = {
-        x: linearAccelSensor.x ?? 0,
-        y: linearAccelSensor.y ?? 0,
-        z: linearAccelSensor.z ?? 0,
+        x: sensor.x ?? 0,
+        y: sensor.y ?? 0,
+        z: sensor.z ?? 0,
       };
     }
 
     function stopGenericSensors(): void {
-      gravitySensor?.stop();
+      accelSensor?.stop();
       linearAccelSensor?.stop();
-      gravitySensor = null;
+      accelSensor = null;
       linearAccelSensor = null;
       latestGenericLinear = null;
       usingGenericSensors = false;
@@ -1861,7 +1735,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function pauseGenericSensors(): void {
-      gravitySensor?.stop();
+      accelSensor?.stop();
       linearAccelSensor?.stop();
       genericSensorLastSampleTime = 0;
     }
@@ -1884,92 +1758,48 @@ const structuredData = createToolApplicationSchema({
       sensorWatchdog.start();
     }
 
+    function dropLinearSensor(): void {
+      // ingestSample derives linear motion from the raw stream instead.
+      linearAccelSensor?.stop();
+      linearAccelSensor = null;
+      latestGenericLinear = null;
+    }
+
     function resumeGenericSensors(): void {
-      if (!usingGenericSensors || !gravitySensor || !linearAccelSensor) return;
+      if (!usingGenericSensors || !accelSensor) return;
       try {
-        gravitySensor.start();
-        linearAccelSensor.start();
+        accelSensor.start();
       } catch {
         recoverFromGenericSensorFailure();
+        return;
+      }
+      try {
+        linearAccelSensor?.start();
+      } catch {
+        dropLinearSensor();
       }
     }
 
-    function tryStartGenericSensors(): Promise<boolean> {
-      return new Promise((resolve) => {
-        const win = window as WindowWithGenericSensors;
-        if (!win.GravitySensor || !win.LinearAccelerationSensor) {
-          resolve(false);
-          return;
-        }
-        try {
-          const gravity = new win.GravitySensor({ frequency: 60 });
-          const linear = new win.LinearAccelerationSensor({ frequency: 60 });
-          let settled = false;
-          let gravityActivated = false;
-          let linearActivated = false;
-          let startupTimer = 0;
-          function settle(ok: boolean): void {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(startupTimer);
-            resolve(ok);
-          }
-          function settleWhenActivated(): void {
-            if (gravityActivated && linearActivated) settle(true);
-          }
-          function handleFailure(): void {
-            if (settled) {
-              recoverFromGenericSensorFailure();
-              return;
-            }
-            stopGenericSensors();
-            settle(false);
-          }
-          gravity.addEventListener("reading", handleGenericGravityReading, {
-            signal,
-          });
-          linear.addEventListener("reading", handleGenericLinearReading, {
-            signal,
-          });
-          gravity.addEventListener(
-            "activate",
-            () => {
-              gravityActivated = true;
-              settleWhenActivated();
-            },
-            { signal },
-          );
-          linear.addEventListener(
-            "activate",
-            () => {
-              linearActivated = true;
-              settleWhenActivated();
-            },
-            { signal },
-          );
-          gravity.addEventListener(
-            "error",
-            handleFailure,
-            { signal },
-          );
-          linear.addEventListener(
-            "error",
-            handleFailure,
-            { signal },
-          );
-          gravitySensor = gravity;
-          linearAccelSensor = linear;
-          startupTimer = window.setTimeout(() => {
-            stopGenericSensors();
-            settle(false);
-          }, 1000);
-          gravity.start();
-          linear.start();
-        } catch {
-          stopGenericSensors();
-          resolve(false);
-        }
-      });
+    async function tryStartGenericSensors(): Promise<boolean> {
+      const [accel, linear] = await Promise.all([
+        startGenericSensor("Accelerometer", {
+          signal,
+          onReading: handleGenericAccelReading,
+          onError: recoverFromGenericSensorFailure,
+        }),
+        startGenericSensor("LinearAccelerationSensor", {
+          signal,
+          onReading: handleGenericLinearReading,
+          onError: dropLinearSensor,
+        }),
+      ]);
+      if (!accel) {
+        linear?.stop();
+        return false;
+      }
+      accelSensor = accel;
+      linearAccelSensor = linear;
+      return true;
     }
 
     function animate(): void {
@@ -2003,6 +1833,9 @@ const structuredData = createToolApplicationSchema({
 
     async function startTest(): Promise<void> {
       if (started || startInFlight) return;
+      // iOS only shows the permission prompts while the click is being
+      // handled, so request both before the first await.
+      const permissionsRequest = requestMotionAndOrientationPermission();
       startInFlight = true;
       startCancelled = false;
       syncStartButton();
@@ -2025,7 +1858,8 @@ const structuredData = createToolApplicationSchema({
         return;
       }
 
-      const permission = await requestMotionPermission();
+      const permissions = await permissionsRequest;
+      const permission = permissions.motion;
       if (startCancelled) {
         startInFlight = false;
         syncStartButton();
@@ -2051,9 +1885,7 @@ const structuredData = createToolApplicationSchema({
       pausedForFullscreen = true;
       pauseGenericSensors();
 
-      const orientationResult = await requestOrientationPermission();
-      orientationPermissionGranted =
-        !startCancelled && orientationResult.granted;
+      orientationPermissionGranted = permissions.orientation.granted;
 
       startInFlight = false;
       if (startCancelled) return;
@@ -2293,6 +2125,7 @@ const structuredData = createToolApplicationSchema({
       resetTest();
       pageController.abort();
       graphResizeObserver?.disconnect();
+      motionGraph.disconnect();
       graphResizeObserver = null;
       visualResizeObserver?.disconnect();
       visualResizeObserver = null;
