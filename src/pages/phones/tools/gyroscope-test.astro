@@ -1072,12 +1072,17 @@ const structuredData = createToolApplicationSchema({
       driftState as gradeDrift,
       genericSensorCtor,
       evaluateBiasCapture,
+      finiteNumber,
       mean as average,
       restingStats,
       startGenericSensor,
       type GenericSensor,
       type GraphSeries,
     } from "@/utils/phones/tools/motion";
+    import {
+      isFullscreenActive as shellIsFullscreen,
+      showRuntimeControls as showShellControls,
+    } from "@/utils/phones/tools/runtimeShell";
 
     type GyroCheck = "level" | "twist" | "drift" | "3d";
 
@@ -1300,9 +1305,7 @@ const structuredData = createToolApplicationSchema({
     const RESTING_MIN_SAMPLES = 8;
 
     function showRuntimeControls(): void {
-      shell?.dispatchEvent(
-        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
-      );
+      showShellControls(shell);
     }
 
     let gyroscopeSensor: GenericSensor | null = null;
@@ -1327,9 +1330,6 @@ const structuredData = createToolApplicationSchema({
       return ((value + 540) % 360) - 180;
     }
 
-    function finiteNumber(value: number | null | undefined): number | null {
-      return typeof value === "number" && Number.isFinite(value) ? value : null;
-    }
 
 
     function pushLimited(
@@ -2621,7 +2621,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function isFullscreenActive(): boolean {
-      return shell?.dataset.fullscreen === "true";
+      return shellIsFullscreen(shell);
     }
 
     function syncPauseNotice(): void {

@@ -1125,12 +1125,11 @@ const structuredData = createToolApplicationSchema({
       setStoredValue,
     } from "@/utils/site/storage";
     import { onOrientationChange } from "@/utils/phones/tools/orientation";
+    import {
+      isFullscreenActive as shellIsFullscreen,
+      showRuntimeControls,
+    } from "@/utils/phones/tools/runtimeShell";
 
-    function showRuntimeControls(shell: Element | null | undefined): void {
-      shell?.dispatchEvent(
-        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
-      );
-    }
 
     type InspectColorId =
       | "black"
@@ -2118,7 +2117,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function isFullscreenActive(): boolean {
-      return testShell?.dataset.fullscreen === "true";
+      return shellIsFullscreen(testShell);
     }
 
     function syncPauseNotice(): void {

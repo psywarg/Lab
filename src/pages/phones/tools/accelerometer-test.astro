@@ -840,7 +840,12 @@ const structuredData = createToolApplicationSchema({
       type OrientationAngle,
     } from "@/utils/phones/tools/orientation";
     import {
+      isFullscreenActive as shellIsFullscreen,
+      showRuntimeControls as showShellControls,
+    } from "@/utils/phones/tools/runtimeShell";
+    import {
       createMotionGraph,
+      finiteNumber,
       genericSensorCtor,
       mean as average,
       standardDeviation,
@@ -1031,18 +1036,13 @@ const structuredData = createToolApplicationSchema({
     let genericSensorLastSampleTime = 0;
 
     function showRuntimeControls(): void {
-      shell?.dispatchEvent(
-        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
-      );
+      showShellControls(shell);
     }
 
     function format(value: number, suffix = ""): string {
       return `${value.toFixed(2)}${suffix}`;
     }
 
-    function finiteNumber(value: number | null | undefined): number | null {
-      return typeof value === "number" && Number.isFinite(value) ? value : null;
-    }
 
     function setStatus(text: string): void {
       if (runStatus) runStatus.textContent = text;
@@ -1930,7 +1930,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function isFullscreenActive(): boolean {
-      return shell?.dataset.fullscreen === "true";
+      return shellIsFullscreen(shell);
     }
 
     function syncPauseNotice(): void {

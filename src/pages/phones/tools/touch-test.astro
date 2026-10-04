@@ -658,14 +658,11 @@ const structuredData = createToolApplicationSchema({
       type InputDetails,
       type PrecisionBand,
     } from "@/utils/phones/tools/touch";
+    import {
+      isFullscreenActive as shellIsFullscreen,
+      showRuntimeControls as dispatchShowRuntimeControls,
+    } from "@/utils/phones/tools/runtimeShell";
 
-    function dispatchShowRuntimeControls(
-      shell: Element | null | undefined,
-    ): void {
-      shell?.dispatchEvent(
-        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
-      );
-    }
 
     function openSidebarAccordion(
       trigger: Element | null | undefined,
@@ -1007,7 +1004,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function isFullscreenActive(): boolean {
-      return testShell?.dataset.fullscreen === "true";
+      return shellIsFullscreen(testShell);
     }
 
     function isCoverageMode(): boolean {

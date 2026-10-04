@@ -1,5 +1,7 @@
 // src/utils/phones/tools/touch.ts
 
+import { median } from "./stats";
+
 export type GridSize = { cols: number; rows: number };
 
 /** Grid of roughly `targetPx` square cells, at least `minCells` per side. */
@@ -125,14 +127,7 @@ export function gradePrecision(distancePx: number): PrecisionBand {
   return "miss";
 }
 
-export function median(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? (sorted[mid] ?? null)
-    : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-}
+export { median } from "./stats";
 
 /**
  * Input sample rate per pointer. Reports the median rate across pointers so

@@ -1024,6 +1024,8 @@ const structuredData = createToolApplicationSchema({
     import { createRafScheduler } from "@/utils/site/raf";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
     import { getBrowserCapabilities } from "@/utils/phones/tools/capabilities";
+    import { showRuntimeControls as showShellControls } from "@/utils/phones/tools/runtimeShell";
+    import { median } from "@/utils/phones/tools/stats";
 
     const AUTO_TOUR_MS = 5000;
     const CHECKER_FLIP_INTERVAL_MS = 500;
@@ -1188,9 +1190,7 @@ const structuredData = createToolApplicationSchema({
     });
 
     function showRuntimeControls(): void {
-      testShell?.dispatchEvent(
-        new CustomEvent("tool-runtime:show-controls", { bubbles: true }),
-      );
+      showShellControls(testShell);
     }
 
     function syncWakeLock(): void {
@@ -1324,11 +1324,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function medianOf(values: number[]): number {
-      const sorted = [...values].sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      return sorted.length % 2 === 0
-        ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
-        : (sorted[mid] ?? 0);
+      return median(values) ?? 0;
     }
 
     function updateFrameRateReadout(): void {

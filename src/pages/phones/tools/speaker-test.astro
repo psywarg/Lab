@@ -750,6 +750,7 @@ const structuredData = createToolApplicationSchema({
       onAudioContextStateChange,
       promoteAudioSession,
       rampParam,
+      strokeWaveform,
       volumeDbToGain,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
@@ -1237,14 +1238,14 @@ const structuredData = createToolApplicationSchema({
       context.clearRect(0, 0, waveformWidth, waveformHeight);
       context.strokeStyle = waveformStroke;
       context.lineWidth = 2;
-      context.beginPath();
-      data.forEach((value, index) => {
-        const x = (index / (data.length - 1)) * waveformWidth;
-        const y = (value / 255) * waveformHeight;
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      });
-      context.stroke();
+      // Byte samples (0-255) drawn top to bottom, as before.
+      strokeWaveform(
+        context,
+        data.length,
+        (index) => 1 - (2 * (data[index] ?? 0)) / 255,
+        waveformWidth,
+        waveformHeight,
+      );
     }
 
     function resetMeter(): void {

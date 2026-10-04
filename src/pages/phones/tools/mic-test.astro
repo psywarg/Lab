@@ -427,6 +427,7 @@ const structuredData = createToolApplicationSchema({
       onAudioContextStateChange,
       percentile,
       rampParam,
+      strokeWaveform,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
     import {
@@ -699,15 +700,14 @@ const structuredData = createToolApplicationSchema({
       if (!context || !timeData) return;
       context.strokeStyle = waveformStroke;
       context.lineWidth = 2;
-      context.beginPath();
-      const middle = canvasHeight / 2;
-      for (let index = 0; index < timeData.length; index += 1) {
-        const x = (index / (timeData.length - 1)) * canvasWidth;
-        const y = middle - (timeData[index] ?? 0) * middle;
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      }
-      context.stroke();
+      const samples = timeData;
+      strokeWaveform(
+        context,
+        samples.length,
+        (index) => samples[index] ?? 0,
+        canvasWidth,
+        canvasHeight,
+      );
     }
 
     function drawSpectrum(): void {
