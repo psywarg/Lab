@@ -249,31 +249,6 @@ const viewAllToolsClasses =
   const TOOL_SIDEBAR_EVENT = "tool-sidebar:open-accordion";
   const TOOL_SIDEBAR_ROOT_SELECTOR = ".tool-sidebar";
   const TOOL_SIDEBAR_ACCORDION_SELECTOR = ".tool-sidebar-accordion";
-  const TOOL_SIDEBAR_ITEM_GROUP_SELECTOR = "[data-tool-sidebar-item-group]";
-  const TOOL_SIDEBAR_ITEM_SELECTOR = "[data-tool-sidebar-item]";
-
-  function initToolSidebarItemGroups(): void {
-    const groups = Array.from(
-      document.querySelectorAll<HTMLElement>(TOOL_SIDEBAR_ITEM_GROUP_SELECTOR),
-    );
-
-    groups.forEach((group) => {
-      const items = Array.from(
-        group.querySelectorAll<HTMLButtonElement>(TOOL_SIDEBAR_ITEM_SELECTOR),
-      );
-
-      items.forEach((item) => {
-        item.addEventListener("click", () => {
-          items.forEach((sibling) => {
-            sibling.setAttribute(
-              "aria-pressed",
-              sibling === item ? "true" : "false",
-            );
-          });
-        });
-      });
-    });
-  }
 
   function createExclusiveAccordionGroup(
     accordions: HTMLDetailsElement[],
@@ -387,7 +362,6 @@ const viewAllToolsClasses =
 
   function initToolSidebar(): void {
     initToolSidebarAccordions();
-    initToolSidebarItemGroups();
   }
 
   if (document.readyState === "loading") {

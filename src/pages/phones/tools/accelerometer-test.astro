@@ -1423,6 +1423,12 @@ const structuredData = createToolApplicationSchema({
         tiltHistory.length = 0;
       }
       currentCheck = checkId;
+      checkButtons.forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.accelCheck === checkId),
+        ),
+      );
       if (stage) stage.dataset.check = checkId;
       const activeCheckButton = checkButtons.find(
         (button) => button.dataset.accelCheck === checkId,

@@ -2284,6 +2284,12 @@ const structuredData = createToolApplicationSchema({
         unwrappedHeadingHistory.length = 0;
       }
       currentCheck = checkId;
+      checkButtons.forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.gyroCheck === checkId),
+        ),
+      );
       if (stage) stage.dataset.check = checkId;
       if (shell) shell.dataset.check = checkId;
       const activeCheckButton = checkButtons.find(

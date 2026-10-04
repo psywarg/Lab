@@ -25,18 +25,3 @@ export function removeStoredValue(key: string): boolean {
     return false;
   }
 }
-
-export function safeParseList<T>(
-  key: string,
-  isItem?: (value: unknown) => value is T,
-): T[] {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return isItem ? parsed.filter(isItem) : (parsed as T[]);
-  } catch {
-    return [];
-  }
-}
