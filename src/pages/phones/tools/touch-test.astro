@@ -650,12 +650,21 @@ const structuredData = createToolApplicationSchema({
     import {
       PRECISION_BAND_LABELS,
       createCoverageGrid,
+      createDriftResult,
       createPointerRateTracker,
+      createSlotAllocator,
       formatInputReadout,
       gradePrecision,
       gridSizeFor,
       median,
+      normalizePointerTimestamp as normalizeTimestamp,
+      precisionSummary as summarizePrecision,
+      recordDriftSample as recordDriftPoint,
+      resetDriftCadence,
+      startDriftTraceStroke,
+      type DriftResult,
       type InputDetails,
+      type Point,
       type PrecisionBand,
     } from "@/utils/phones/tools/touch";
     import {
@@ -676,7 +685,6 @@ const structuredData = createToolApplicationSchema({
     }
 
     type TouchMode = "swipe" | "multitouch" | "precision" | "ghost" | "drift";
-    type Point = { x: number; y: number };
     type TimedPoint = Point & { timestamp: number };
     type ColoredPoint = Point & { color: string };
     type DriftGuideId =
@@ -689,20 +697,6 @@ const structuredData = createToolApplicationSchema({
       label: string;
       controlPoints: readonly [Point, Point, Point, Point];
     };
-    type DriftResult = {
-      traceStrokes: Point[][];
-      tracePointCount: number;
-      lastPoint: Point | null;
-      lastTime: number;
-      sampleIntervals: number[];
-      sampleSteps: number[];
-      maxDeviation: number;
-      deviationSum: number;
-      deviationCount: number;
-      coveredGuideSamples: Set<number>;
-      gapCount: number;
-    };
-
     const CELL_TARGET_PX = 44;
     // Contacts wider than half a cell would light cells the finger barely grazed.
     const MAX_CONTACT_RADIUS_PX = CELL_TARGET_PX / 2;
@@ -710,16 +704,7 @@ const structuredData = createToolApplicationSchema({
     const HOLD_MOVE_TOLERANCE_PX = 12;
     const LATENCY_SAMPLE_LIMIT = 20;
     const SAMPLE_RATE_WINDOW_MS = 1000;
-    const DRIFT_TRACE_POINT_LIMIT = 720;
     const DRIFT_GUIDE_STEPS = 160;
-    const DRIFT_COVERAGE_TOLERANCE_PX = 24;
-    const DRIFT_BASELINE_SAMPLE_LIMIT = 24;
-    const DRIFT_BASELINE_WARMUP = 6;
-    const DRIFT_GAP_MIN_INTERVAL_MS = 50;
-    const DRIFT_GAP_INTERVAL_MULTIPLIER = 3;
-    const DRIFT_GAP_MAD_MULTIPLIER = 6;
-    const DRIFT_GAP_MIN_STEP_PX = 8;
-    const DRIFT_GAP_STEP_MULTIPLIER = 2;
     const GHOST_DEFAULT_DURATION_MS = 15000;
 
     const COLOR_PALETTE = [
@@ -909,8 +894,7 @@ const structuredData = createToolApplicationSchema({
     const activeTouches = new Map<number, ColoredPoint>();
     const markerElements = new Map<number, HTMLDivElement>();
     const pendingMoves = new Map<number, TimedPoint[]>();
-    const pointerSlots = new Map<number, number>();
-    const usedSlots = new Set<number>();
+    const pointerSlots = createSlotAllocator();
     let currentMode: TouchMode = "swipe";
     let stageRect: DOMRect | null = null;
     let shouldStartAfterFullscreen = false;
@@ -948,22 +932,6 @@ const structuredData = createToolApplicationSchema({
     let driftTracePathEl: SVGPathElement | null = null;
     let currentDriftGuideIndex = 0;
     const driftResults = new Map<DriftGuideId, DriftResult>();
-
-    function createDriftResult(): DriftResult {
-      return {
-        traceStrokes: [],
-        tracePointCount: 0,
-        lastPoint: null,
-        lastTime: 0,
-        sampleIntervals: [],
-        sampleSteps: [],
-        maxDeviation: 0,
-        deviationSum: 0,
-        deviationCount: 0,
-        coveredGuideSamples: new Set<number>(),
-        gapCount: 0,
-      };
-    }
 
     function currentDriftGuide(): (typeof DRIFT_GUIDES)[number] {
       return DRIFT_GUIDES[currentDriftGuideIndex] ?? DRIFT_GUIDES[0];
@@ -1038,20 +1006,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function allocatePointerSlot(pointerId: number): number {
-      const existing = pointerSlots.get(pointerId);
-      if (existing !== undefined) return existing;
-      let slot = 0;
-      while (usedSlots.has(slot)) slot += 1;
-      pointerSlots.set(pointerId, slot);
-      usedSlots.add(slot);
-      return slot;
+      return pointerSlots.allocate(pointerId);
     }
 
     function releasePointerSlot(pointerId: number): void {
-      const slot = pointerSlots.get(pointerId);
-      if (slot === undefined) return;
-      pointerSlots.delete(pointerId);
-      usedSlots.delete(slot);
+      pointerSlots.release(pointerId);
     }
 
     function slotColor(slot: number): string {
@@ -1104,21 +1063,8 @@ const structuredData = createToolApplicationSchema({
       )}%`;
     }
 
-    function precisionBandCount(band: PrecisionBand): number {
-      return precisionBands.filter((value) => value === band).length;
-    }
-
     function precisionSummary(): string {
-      const offsets = precisionOffsets.filter(
-        (value): value is number => value !== null,
-      );
-      const counts = (["centre", "on-target", "near", "miss"] as const)
-        .map((band) => `${precisionBandCount(band)} ${PRECISION_BAND_LABELS[band]}`)
-        .join(", ");
-      if (offsets.length === 0) return counts;
-      const mean =
-        offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
-      return `${counts}, average offset ${Math.round(mean)} px`;
+      return summarizePrecision(precisionBands, precisionOffsets);
     }
 
     function primaryLabel(): string {
@@ -1569,56 +1515,11 @@ const structuredData = createToolApplicationSchema({
       syncDriftGuideOption();
     }
 
-    function resetDriftCadence(result: DriftResult): void {
-      result.sampleIntervals.length = 0;
-      result.sampleSteps.length = 0;
-    }
-
-    function startDriftTraceStroke(result: DriftResult): void {
-      const lastStroke = result.traceStrokes[result.traceStrokes.length - 1];
-      if (lastStroke?.length === 0) return;
-      result.traceStrokes.push([]);
-    }
-
     function beginDriftInputStroke(result: DriftResult): void {
       startDriftTraceStroke(result);
       result.lastPoint = null;
       result.lastTime = 0;
       resetDriftCadence(result);
-    }
-
-    function appendDriftTracePoint(result: DriftResult, point: Point): void {
-      const rect = stageRect ?? refreshStageRect();
-      if (!rect || rect.width === 0 || rect.height === 0) return;
-      let stroke = result.traceStrokes[result.traceStrokes.length - 1];
-      if (!stroke) {
-        stroke = [];
-        result.traceStrokes.push(stroke);
-      }
-      stroke.push({
-        x: clamp01(point.x / rect.width),
-        y: clamp01(point.y / rect.height),
-      });
-      result.tracePointCount += 1;
-
-      while (result.tracePointCount > DRIFT_TRACE_POINT_LIMIT) {
-        while (
-          result.traceStrokes.length > 1 &&
-          result.traceStrokes[0]?.length === 0
-        ) {
-          result.traceStrokes.shift();
-        }
-        const oldestStroke = result.traceStrokes[0];
-        if (!oldestStroke || oldestStroke.length === 0) {
-          result.tracePointCount = 0;
-          break;
-        }
-        oldestStroke.shift();
-        result.tracePointCount -= 1;
-        if (oldestStroke.length === 0 && result.traceStrokes.length > 1) {
-          result.traceStrokes.shift();
-        }
-      }
     }
 
     function renderDriftTrace(): void {
@@ -1640,117 +1541,22 @@ const structuredData = createToolApplicationSchema({
       driftTracePathEl.setAttribute("d", pathData);
     }
 
-    function nearestGuideDistance(point: Point): number {
-      let nearest = Infinity;
-      for (let index = 1; index < driftGuideSamples.length; index += 1) {
-        const start = driftGuideSamples[index - 1];
-        const end = driftGuideSamples[index];
-        if (!start || !end) continue;
-        const segmentX = end.x - start.x;
-        const segmentY = end.y - start.y;
-        const lengthSquared = segmentX ** 2 + segmentY ** 2;
-        const projection =
-          lengthSquared === 0
-            ? 0
-            : Math.max(
-                0,
-                Math.min(
-                  1,
-                  ((point.x - start.x) * segmentX +
-                    (point.y - start.y) * segmentY) /
-                    lengthSquared,
-                ),
-              );
-        const nearestX = start.x + projection * segmentX;
-        const nearestY = start.y + projection * segmentY;
-        const distance = Math.hypot(point.x - nearestX, point.y - nearestY);
-        if (distance < nearest) nearest = distance;
-      }
-      return nearest;
-    }
-
-    function recordDriftCoverage(result: DriftResult, point: Point): void {
-      driftGuideSamples.forEach((guidePoint, index) => {
-        if (
-          Math.hypot(point.x - guidePoint.x, point.y - guidePoint.y) <=
-          DRIFT_COVERAGE_TOLERANCE_PX
-        ) {
-          result.coveredGuideSamples.add(index);
-        }
-      });
-    }
-
     function recordDriftSample(point: Point, timestamp: number): void {
       if (driftGuideSamples.length < 2) buildDriftGuide();
-      const distance = nearestGuideDistance(point);
-      if (!Number.isFinite(distance)) return;
-      const result = currentDriftResult();
-      result.maxDeviation = Math.max(result.maxDeviation, distance);
-      result.deviationSum += distance;
-      result.deviationCount += 1;
-      recordDriftCoverage(result, point);
-
-      if (result.lastPoint) {
-        const jump = Math.hypot(
-          point.x - result.lastPoint.x,
-          point.y - result.lastPoint.y,
-        );
-        const elapsed = timestamp - result.lastTime;
-        if (elapsed <= 0) {
-          appendDriftTracePoint(result, point);
-          return;
-        }
-
-        const baselineInterval = median(result.sampleIntervals);
-        const baselineStep = median(result.sampleSteps);
-        const hasBaseline =
-          result.sampleIntervals.length >= DRIFT_BASELINE_WARMUP &&
-          result.sampleSteps.length >= DRIFT_BASELINE_WARMUP &&
-          baselineInterval !== null &&
-          baselineStep !== null;
-        const intervalMad =
-          baselineInterval === null
-            ? 0
-            : (median(
-                result.sampleIntervals.map((sample) =>
-                  Math.abs(sample - baselineInterval),
-                ),
-              ) ?? 0);
-        const gapInterval = Math.max(
-          DRIFT_GAP_MIN_INTERVAL_MS,
-          (baselineInterval ?? 0) * DRIFT_GAP_INTERVAL_MULTIPLIER,
-          (baselineInterval ?? 0) + intervalMad * DRIFT_GAP_MAD_MULTIPLIER,
-        );
-        const gapStep = Math.max(
-          DRIFT_GAP_MIN_STEP_PX,
-          (baselineStep ?? 0) * DRIFT_GAP_STEP_MULTIPLIER,
-        );
-        const isSuspectedGap =
-          hasBaseline && elapsed >= gapInterval && jump >= gapStep;
-        const isStationaryPause =
-          hasBaseline && elapsed >= gapInterval && jump < gapStep;
-
-        if (isSuspectedGap) {
-          result.gapCount += 1;
-          startDriftTraceStroke(result);
-        } else if (isStationaryPause) {
-          resetDriftCadence(result);
-        } else {
-          result.sampleIntervals.push(elapsed);
-          if (result.sampleIntervals.length > DRIFT_BASELINE_SAMPLE_LIMIT) {
-            result.sampleIntervals.shift();
-          }
-          if (jump > 0) {
-            result.sampleSteps.push(jump);
-            if (result.sampleSteps.length > DRIFT_BASELINE_SAMPLE_LIMIT) {
-              result.sampleSteps.shift();
-            }
-          }
-        }
-      }
-      result.lastPoint = point;
-      result.lastTime = timestamp;
-      appendDriftTracePoint(result, point);
+      recordDriftPoint(
+        currentDriftResult(),
+        point,
+        timestamp,
+        driftGuideSamples,
+        (stagePoint) => {
+          const rect = stageRect ?? refreshStageRect();
+          if (!rect || rect.width === 0 || rect.height === 0) return null;
+          return {
+            x: clamp01(stagePoint.x / rect.width),
+            y: clamp01(stagePoint.y / rect.height),
+          };
+        },
+      );
     }
 
     function advanceDriftGuide(): void {
@@ -1782,7 +1588,6 @@ const structuredData = createToolApplicationSchema({
         cancelHold();
         activeTouches.clear();
         pointerSlots.clear();
-        usedSlots.clear();
         renderMarkers();
         updateStats();
       }
@@ -1837,7 +1642,6 @@ const structuredData = createToolApplicationSchema({
       activeTouches.clear();
       pendingMoves.clear();
       pointerSlots.clear();
-      usedSlots.clear();
       rafScheduler.cancel();
       maxTouches = 0;
       coverage.clear();
@@ -1958,9 +1762,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function normalizePointerTimestamp(timestamp: number): number {
-      return timestamp > performance.timeOrigin
-        ? timestamp - performance.timeOrigin
-        : timestamp;
+      return normalizeTimestamp(timestamp, performance.timeOrigin);
     }
 
     function recordSampleTiming(pointerId: number, timestamp: number): void {
