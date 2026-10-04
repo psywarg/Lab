@@ -406,7 +406,7 @@ const patternGroups: PatternGroup[] = [
         label: "Vertical Stripes",
         kind: "lines-vertical",
         bg: "#000000",
-        swatch: "repeating-linear-gradient(90deg,#fff 0 2px,#000 2px 4px)",
+        swatch: "repeating-linear-gradient(90deg,#fff 0 1px,#000 1px 2px)",
         meta: "1 device px per stripe",
       },
       {
@@ -414,7 +414,7 @@ const patternGroups: PatternGroup[] = [
         label: "Horizontal Stripes",
         kind: "lines-horizontal",
         bg: "#000000",
-        swatch: "repeating-linear-gradient(180deg,#fff 0 2px,#000 2px 4px)",
+        swatch: "repeating-linear-gradient(180deg,#fff 0 1px,#000 1px 2px)",
         meta: "1 device px per stripe",
       },
       {
@@ -422,8 +422,8 @@ const patternGroups: PatternGroup[] = [
         label: "Diagonal Lines",
         kind: "lines-diagonal",
         bg: "#000000",
-        swatch: "repeating-linear-gradient(135deg,#fff 0 2px,#000 2px 5px)",
-        meta: "1 device px period",
+        swatch: "repeating-linear-gradient(135deg,#fff 0 1px,#000 1px 4px)",
+        meta: "1 device px lines, 4 px apart",
       },
       {
         id: "checker-1",
@@ -664,6 +664,7 @@ const structuredData = createToolApplicationSchema({
           fullscreenButtonId="screen-fullscreen"
           stageVariant="tall"
           controlsAutoHide={true}
+          controlsRevealTap={true}
           actionBarLabel="Auto tour controls"
           fullscreenStatsFloating={true}
           buttons={[
@@ -923,7 +924,22 @@ const structuredData = createToolApplicationSchema({
       animation-play-state: running;
     }
 
-    :global(.burnin-layer--bars) {
+    /* Bars and Sweep move an oversized inner strip with transform, which the
+       compositor can animate without repainting the stage every frame. The
+       outer layer keeps the angle rotation and cover scale. */
+    :global(.burnin-strip) {
+      @apply absolute inset-y-0;
+      will-change: transform;
+      animation-play-state: paused;
+    }
+
+    :global(.burnin-layer.is-playing .burnin-strip) {
+      animation-play-state: running;
+    }
+
+    :global(.burnin-layer--bars .burnin-strip) {
+      left: 0;
+      width: calc(100% + 320px);
       background-image: repeating-linear-gradient(
         90deg,
         #ef4444 0 12.5%,
@@ -936,19 +952,18 @@ const structuredData = createToolApplicationSchema({
         #fff 87.5% 100%
       );
       background-size: 320px 100%;
-      animation: burnin-bars-slide 4s linear infinite;
-      animation-play-state: paused;
+      animation: burnin-bars-slide 4s linear infinite paused;
     }
 
-    :global(.burnin-layer--bars.is-playing) {
-      animation-play-state: running;
-    }
-
-    :global(.burnin-layer--sweep) {
+    /* One gradient period is twice the stage width; the strip spans three
+       stage widths starting one period to the left, and moves one full period
+       per loop so the cycle is seamless. */
+    :global(.burnin-layer--sweep .burnin-strip) {
+      left: -200%;
+      width: 300%;
       background-image: linear-gradient(90deg, #000, #fff, #000);
-      background-size: 200% 100%;
-      animation: burnin-sweep-slide 6s linear infinite;
-      animation-play-state: paused;
+      background-size: calc(200% / 3) 100%;
+      animation: burnin-sweep-slide 12s linear infinite paused;
     }
 
     :global(
@@ -960,9 +975,6 @@ const structuredData = createToolApplicationSchema({
       will-change: transform;
     }
 
-    :global(.burnin-layer--sweep.is-playing) {
-      animation-play-state: running;
-    }
 
     :global(.burnin-checker-board) {
       @apply grid grid-cols-8 grid-rows-8;
@@ -983,26 +995,25 @@ const structuredData = createToolApplicationSchema({
 
     @keyframes burnin-bars-slide {
       from {
-        background-position-x: 0;
+        transform: translateX(0);
       }
       to {
-        background-position-x: -320px;
+        transform: translateX(-320px);
       }
     }
 
     @keyframes burnin-sweep-slide {
       from {
-        background-position-x: 0%;
+        transform: translateX(0);
       }
       to {
-        background-position-x: -100%;
+        transform: translateX(calc(200% / 3));
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
       :global(.burnin-layer--wash),
-      :global(.burnin-layer--bars),
-      :global(.burnin-layer--sweep) {
+      :global(.burnin-strip) {
         animation: none !important;
       }
     }
@@ -1436,22 +1447,26 @@ const structuredData = createToolApplicationSchema({
       return layer;
     }
 
-    function renderBurnInBars(): HTMLElement | null {
+    function renderMovingStripLayer(
+      kind: "burnin-bars" | "burnin-sweep",
+    ): HTMLElement | null {
       if (!content) return null;
       const layer = document.createElement("div");
-      layer.className = "burnin-layer burnin-layer--bars";
-      applyMotionAngle(layer, "burnin-bars");
+      layer.className = `burnin-layer burnin-layer--${kind.slice("burnin-".length)}`;
+      const strip = document.createElement("div");
+      strip.className = "burnin-strip";
+      layer.append(strip);
+      applyMotionAngle(layer, kind);
       content.append(layer);
       return layer;
     }
 
+    function renderBurnInBars(): HTMLElement | null {
+      return renderMovingStripLayer("burnin-bars");
+    }
+
     function renderBurnInSweep(): HTMLElement | null {
-      if (!content) return null;
-      const layer = document.createElement("div");
-      layer.className = "burnin-layer burnin-layer--sweep";
-      applyMotionAngle(layer, "burnin-sweep");
-      content.append(layer);
-      return layer;
+      return renderMovingStripLayer("burnin-sweep");
     }
 
     function renderBurnInChecker(): HTMLElement | null {
@@ -1546,31 +1561,40 @@ const structuredData = createToolApplicationSchema({
       const built = createExactCanvas();
       if (!built || !content) return;
       built.canvas.className = "pixel-exact-canvas";
-      const pattern = createStripeTile(built.ctx, 2, orientation);
+      const pattern = createStripeTile(built.ctx, 1, orientation);
       if (!pattern) return;
       built.ctx.fillStyle = pattern;
       built.ctx.fillRect(0, 0, built.width, built.height);
       content.append(built.canvas);
     }
 
+    // 1-device-pixel diagonal lines, 4 px apart, drawn pixel by pixel on a
+    // 4x4 tile so no rotation or anti-aliasing blurs them.
+    function createDiagonalTile(
+      ctx: CanvasRenderingContext2D,
+      period: number,
+    ): CanvasPattern | null {
+      const tile = document.createElement("canvas");
+      tile.width = period;
+      tile.height = period;
+      const tileCtx = tile.getContext("2d");
+      if (!tileCtx) return null;
+      tileCtx.fillStyle = "#000000";
+      tileCtx.fillRect(0, 0, period, period);
+      tileCtx.fillStyle = "#ffffff";
+      for (let index = 0; index < period; index += 1) {
+        tileCtx.fillRect(period - 1 - index, index, 1, 1);
+      }
+      return ctx.createPattern(tile, "repeat");
+    }
+
     function renderPixelExactDiagonalLines(): void {
       const built = createExactCanvas();
       if (!built || !content) return;
       built.canvas.className = "pixel-exact-canvas";
-      const pattern = createStripeTile(built.ctx, 2, "vertical");
-      built.ctx.fillStyle = "#000000";
+      const pattern = createDiagonalTile(built.ctx, 4);
+      built.ctx.fillStyle = pattern ?? "#000000";
       built.ctx.fillRect(0, 0, built.width, built.height);
-      if (pattern) {
-        built.ctx.save();
-        built.ctx.translate(built.width / 2, built.height / 2);
-        built.ctx.rotate(Math.PI / 4);
-        built.ctx.fillStyle = pattern;
-        const diagonal = Math.sqrt(
-          built.width * built.width + built.height * built.height,
-        );
-        built.ctx.fillRect(-diagonal / 2, -diagonal / 2, diagonal, diagonal);
-        built.ctx.restore();
-      }
       content.append(built.canvas);
     }
 

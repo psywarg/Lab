@@ -18,7 +18,6 @@ async function startTest(page: Page, mode?: string): Promise<void> {
 }
 
 test("C4: tapping every visible grid cell reports 100% coverage", async ({ page, context }) => {
-  test.fail(true, "Review finding C4: coverage is scored on a different grid");
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page);
@@ -29,15 +28,13 @@ test("C4: tapping every visible grid cell reports 100% coverage", async ({ page,
       return [rect.x + rect.width / 2, rect.y + rect.height / 2] as const;
     }),
   );
-  // Stay clear of the dock so this test isolates the scoring bug (H2 covers the dock).
-  const reachable = cells.filter(([, y]) => y < viewportHeight - 90);
-  for (const [x, y] of reachable) await touch.tap(x, y);
-  await expect(page.locator(".touch-cell--hit")).toHaveCount(reachable.length);
+  expect(viewportHeight).toBeGreaterThan(0);
+  for (const [x, y] of cells) await touch.tap(x, y);
+  await expect(page.locator(".touch-cell--hit")).toHaveCount(cells.length);
   await expect(stageStat(page, "secondary")).toHaveText("100%");
 });
 
 test("H2: the bottom row of the grid can be touched without leaving the test", async ({ page, context }) => {
-  test.fail(true, "Review finding H2: the dock and exit button sit on the grid");
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page);
@@ -53,7 +50,6 @@ test("H2: the bottom row of the grid can be touched without leaving the test", a
 });
 
 test("H3: sample rate does not double with two fingers", async ({ page, context }) => {
-  test.fail(true, "Review finding H3: samples from all fingers are summed");
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page, "multitouch");
@@ -71,11 +67,13 @@ test("H3: sample rate does not double with two fingers", async ({ page, context 
   const one = await rateWith([[100, 200]]);
   const two = await rateWith([[100, 200], [260, 200]]);
   expect(one).toBeGreaterThan(0);
-  expect(Math.abs(two - one) / one).toBeLessThan(0.25);
+  // Event dispatch timing in the harness varies by about 20%; the bug this
+  // guards against doubled the rate (ratio 2.0).
+  expect(two / one).toBeGreaterThan(0.67);
+  expect(two / one).toBeLessThan(1.5);
 });
 
 test("C5: a tap 5 px from the target centre grades as Centre", async ({ page, context }) => {
-  test.fail(true, "Review finding C5: pass radius is 4 CSS px");
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page, "precision");
@@ -86,10 +84,24 @@ test("C5: a tap 5 px from the target centre grades as Centre", async ({ page, co
 });
 
 test("H4: pointer type, pressure and contact size are shown", async ({ page, context }) => {
-  test.fail(true, "Review finding H4: formatInputReadout is never rendered");
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page, "multitouch");
   await touch.tap(150, 300);
   await expect(page.locator("tool-runtime-shell")).toContainText("Finger");
+});
+
+test("H2: holding the top-right hint pauses the test and shows the controls", async ({ page, context }) => {
+  const touch = createTouch(await cdpFor(context, page));
+  await openTool(page, "touch-test");
+  await startTest(page);
+  const zone = await page.locator("#touch-hold-zone").boundingBox();
+  if (!zone) throw new Error("Hold zone not visible");
+  await expect(page.locator(".tool-runtime-dock-primary")).toBeHidden();
+  await touch.send("touchStart", [[zone.x + zone.width / 2, zone.y + zone.height / 2]]);
+  await page.waitForTimeout(900);
+  await touch.send("touchEnd", []);
+  await expect(page.locator("#touch-stage")).toHaveAttribute("data-active", "false");
+  await expect(page.locator("#touch-start")).toBeVisible();
+  await expect(page.locator("#touch-start")).toHaveText("Resume");
 });

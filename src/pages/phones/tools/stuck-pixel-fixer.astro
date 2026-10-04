@@ -196,9 +196,12 @@ const structuredData = createToolApplicationSchema({
         <p>
           Check a fixed screen point against different background colors to
           identify stuck, hot, or dead pixels and attempting recovery when a
-          pixel appears stuck. Its flashing patterns follow WCAG 2.2 Level A
-          limits in movable-spot mode and Level AAA limits in full-screen mode,
-          while reduced-motion preferences lower the fastest available settings.
+          pixel appears stuck. Color cycles change at most 3 times per second in
+          full-screen mode and for spots larger than 140 px; spots of 140 px or
+          smaller may cycle up to 10 times per second, and Static Noise
+          refreshes at up to 30 frames per second. Reduced-motion preferences
+          lower the fastest settings. These limits reduce risk but are not a
+          substitute for a professional flash analysis.
           The Diagnose option compares each marked area across multiple test
           colors, classifies the likely issue, and prepares a targeted repair
           sequence using locally rendered Static Noise or RGB, CMY, and B/W
@@ -1119,7 +1122,6 @@ const structuredData = createToolApplicationSchema({
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
     import {
       getStoredValue,
-      removeStoredValue,
       setStoredValue,
     } from "@/utils/site/storage";
     import { onOrientationChange } from "@/utils/phones/tools/orientation";
@@ -1399,7 +1401,7 @@ const structuredData = createToolApplicationSchema({
     const spotIsolationBackground = "#000000";
     const SPEED_RAW_MAX = 500;
     const CONSENT_STORAGE_KEY = "phones-tools:stuck-pixel-consent";
-    const RUN_STORAGE_KEY = "phones-tools:stuck-pixel-run";
+
     const NOISE_FALLBACK_WIDTH = 400;
     const NOISE_FALLBACK_HEIGHT = 250;
 
@@ -1410,7 +1412,13 @@ const structuredData = createToolApplicationSchema({
     const NOISE_MIN_DELAY_MS = 33;
     const NOISE_REDUCED_MOTION_MIN_DELAY_MS = 66;
     const NOISE_MAX_DELAY_MS = 100;
-    const SPOT_SMALL_DIAMETER_PX = 295;
+    // Spots up to this diameter may cycle faster than 3 changes per second.
+    // WCAG 2.3.1 allows faster flashing only below 0.006 sr (25% of a 10°
+    // field). At 30 cm that is about a 23 mm square, or a circle about 26 mm
+    // across: ~165 CSS px on a phone (~6.3 CSS px/mm) and ~141 CSS px on a
+    // tablet at 35 cm (~4.6 CSS px/mm). This is an estimate from assumed
+    // viewing distances, not a flash-analyser measurement.
+    const SPOT_SMALL_DIAMETER_PX = 140;
     const SPOT_CYCLE_MIN_DELAY_MS = 100;
 
     const prefersReducedMotion = window.matchMedia(
@@ -2350,21 +2358,6 @@ const structuredData = createToolApplicationSchema({
       }
     }
 
-    function persistRun(): void {
-
-      setStoredValue(
-        RUN_STORAGE_KEY,
-        JSON.stringify({
-          endsAt,
-          patternId: selectedPatternId,
-          pattern: patternLibrary[selectedPatternId],
-        }),
-      );
-    }
-
-    function clearPersistedRun(): void {
-      removeStoredValue(RUN_STORAGE_KEY);
-    }
 
     function updateCountdown(): void {
       if (!countdownLabel) return;
@@ -2461,14 +2454,12 @@ const structuredData = createToolApplicationSchema({
       countdownTimer = setInterval(updateCountdown, 250);
       updateCountdown();
       wakeLock.request();
-      persistRun();
     }
 
     function pauseFlashing(): void {
       if (!stage || stage.dataset.running !== "true") return;
       pausedRunRemainingMs = Math.max(0, endsAt - Date.now());
       clearRunTimers();
-      clearPersistedRun();
       stage.dataset.running = "false";
       runPaused = pausedRunRemainingMs > 0;
       updateStatus("Paused", currentRunDetail());
@@ -2491,7 +2482,6 @@ const structuredData = createToolApplicationSchema({
       countdownTimer = setInterval(updateCountdown, 250);
       updateCountdown();
       wakeLock.request();
-      persistRun();
     }
 
     function resetSpotToCenter(): void {
@@ -2506,7 +2496,6 @@ const structuredData = createToolApplicationSchema({
 
     function resetFlashing(resetReady = true): void {
       clearRunTimers();
-      clearPersistedRun();
       runPaused = false;
       pausedRunRemainingMs = 0;
       if (stage) {
@@ -2555,7 +2544,6 @@ const structuredData = createToolApplicationSchema({
 
     function advanceAutoQueue(): void {
       clearRunTimers();
-      clearPersistedRun();
       runPaused = false;
       pausedRunRemainingMs = 0;
       if (stage) stage.dataset.running = "false";
@@ -3427,76 +3415,6 @@ const structuredData = createToolApplicationSchema({
       }
     }
 
-    function isChannelMask(value: unknown): value is ChannelMask {
-      if (typeof value !== "object" || value === null) return false;
-      const mask = value as Record<string, unknown>;
-      return (
-        typeof mask.r === "boolean" &&
-        typeof mask.g === "boolean" &&
-        typeof mask.b === "boolean"
-      );
-    }
-
-    function isPatternDefinition(value: unknown): value is PatternDefinition {
-      if (typeof value !== "object" || value === null) return false;
-      const candidate = value as Record<string, unknown>;
-      if (typeof candidate.label !== "string") return false;
-      if (typeof candidate.note !== "string") return false;
-      if (
-        !Array.isArray(candidate.colors) ||
-        !candidate.colors.every((color) => typeof color === "string")
-      ) {
-        return false;
-      }
-      if (
-        candidate.isNoise !== undefined &&
-        typeof candidate.isNoise !== "boolean"
-      ) {
-        return false;
-      }
-      if (
-        candidate.channelMask !== undefined &&
-        !isChannelMask(candidate.channelMask)
-      ) {
-        return false;
-      }
-      return true;
-    }
-
-    function restorePersistedRun(): void {
-      if (workflowMode !== "manual") {
-        clearPersistedRun();
-        return;
-      }
-      const raw = getStoredValue(RUN_STORAGE_KEY);
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw) as {
-          endsAt?: unknown;
-          patternId?: unknown;
-          pattern?: unknown;
-        };
-        if (
-          typeof parsed.endsAt !== "number" ||
-          typeof parsed.patternId !== "string" ||
-          !isPatternDefinition(parsed.pattern)
-        ) {
-          clearPersistedRun();
-          return;
-        }
-        const remaining = parsed.endsAt - Date.now();
-        if (remaining <= 1000) {
-          clearPersistedRun();
-          return;
-        }
-        patternLibrary[parsed.patternId] = parsed.pattern;
-        selectedPatternId = parsed.patternId;
-        requestRunStart(remaining);
-      } catch {
-        clearPersistedRun();
-      }
-    }
-
     function cleanupPixelPage(): void {
       clearRunTimers();
       stopStepCountdown();
@@ -3524,7 +3442,6 @@ const structuredData = createToolApplicationSchema({
     resetFlashing();
     syncWorkflowUI();
     restoreConsent();
-    restorePersistedRun();
     if (!hasAcknowledgedWarning() && warningPanel) {
       isolateStageModal(warningPanel);
       focusModal(warningPanel, warningAck);

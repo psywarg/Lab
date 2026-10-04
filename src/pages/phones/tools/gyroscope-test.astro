@@ -31,7 +31,7 @@ const referenceItems = [
   {
     label: "Zero-rate",
     check:
-      "After starting, place the phone flat and completely still, press Capture zero-rate, and keep it still for the three-second capture.",
+      "After starting, place the phone flat and completely still, press Zero rate, and keep it still for the three-second capture.",
     reading:
       "The tool averages the resting X, Y, and Z rotation rates and subtracts that offset from this page's readings. It does not recalibrate or repair the phone's gyroscope.",
     good:
@@ -177,7 +177,7 @@ const structuredData = createToolApplicationSchema({
               attributes: { id: "gyro-start" },
             },
             {
-              label: "Capture zero-rate",
+              label: "Zero rate",
               attributes: { id: "gyro-capture-bias", disabled: "true" },
             },
             {
@@ -600,8 +600,8 @@ const structuredData = createToolApplicationSchema({
               <span id="evidence-source" class="sensor-panel-unit">--</span>
             </div>
             <p class="text-xsmall m-0 text-slate-700 dark:text-slate-300">
-              A browser cannot recalibrate gyroscope hardware. "Capture
-              zero-rate" measures the resting offset while the phone is held
+              A browser cannot recalibrate gyroscope hardware. "Zero rate"
+              measures the resting offset while the phone is held
               still and subtracts it for this page only -- it does not touch the
               device.
             </p>
@@ -1472,8 +1472,8 @@ const structuredData = createToolApplicationSchema({
           biasCaptureState === "capturing";
         captureBiasButton.textContent =
           biasCaptureState === "capturing"
-            ? `Hold still... ${biasCaptureCountdown}`
-            : "Capture zero-rate";
+            ? `Hold ${biasCaptureCountdown}s`
+            : "Zero rate";
       }
     }
 
@@ -2129,7 +2129,7 @@ const structuredData = createToolApplicationSchema({
         stageInfo.textContent =
           Math.abs(rateZ) > 12
             ? "Twist response is active. The signed Z-rate needle should follow the marked + CCW or - CW direction."
-            : "Keep the phone flat and still before twisting. Use “Capture zero-rate” first if the resting rate looks offset.";
+            : "Keep the phone flat and still before twisting. Use “Zero rate” first if the resting rate looks offset.";
         return;
       }
 
@@ -2142,7 +2142,7 @@ const structuredData = createToolApplicationSchema({
       stageInfo.textContent =
         idleRate < 1.5 && spinMagnitude < 3
           ? "Resting spin looks calm and settled close to zero."
-          : "Hold the phone flat and still for a few seconds, then use “Capture zero-rate” to remove the resting offset.";
+          : "Hold the phone flat and still for a few seconds, then use “Zero rate” to remove the resting offset.";
     }
 
     function render3dStage(): void {
