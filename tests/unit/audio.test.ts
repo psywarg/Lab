@@ -7,7 +7,10 @@ import {
   computeRmsDbfs,
   createLogBands,
   detectClipping,
+  formatVolumeLabel,
   percentile,
+  VOLUME_MIN_DB,
+  volumeDbToGain,
 } from "@/utils/phones/tools/audio";
 
 describe("amplitudeToDbfs", () => {
@@ -70,5 +73,23 @@ describe("averageBandLevel", () => {
     const data = Uint8Array.from([255, 255, 0, 0]);
     expect(averageBandLevel(data, { startBin: 0, endBin: 2 })).toBe(1);
     expect(averageBandLevel(data, { startBin: 0, endBin: 4 })).toBe(0.5);
+  });
+});
+
+describe("volume in dB", () => {
+  it("maps dB to amplitude, with the bottom of the range silent", () => {
+    expect(volumeDbToGain(0)).toBe(1);
+    expect(volumeDbToGain(-6)).toBeCloseTo(0.501, 3);
+    expect(volumeDbToGain(-12)).toBeCloseTo(0.251, 3);
+    expect(volumeDbToGain(VOLUME_MIN_DB)).toBe(0);
+    expect(volumeDbToGain(Number.NaN)).toBe(0);
+    expect(volumeDbToGain(6)).toBe(1);
+  });
+
+  it("labels the level in dB and amplitude percent", () => {
+    expect(formatVolumeLabel(-12)).toBe("-12 dB · 25%");
+    expect(formatVolumeLabel(0)).toBe("0 dB · 100%");
+    expect(formatVolumeLabel(-50)).toBe("-50 dB · <1%");
+    expect(formatVolumeLabel(VOLUME_MIN_DB)).toBe("Off");
   });
 });

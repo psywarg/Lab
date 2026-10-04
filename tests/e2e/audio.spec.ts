@@ -30,7 +30,6 @@ test.describe("speaker test", () => {
   });
 
   test("H5: changing volume does not interrupt the sweep", async ({ page }) => {
-    test.fail(true, "Review finding H5: volume input resets the sweep to the tone frequency");
     await page.evaluate(() => document.querySelector<HTMLButtonElement>("[data-speaker-signal='sweep']")?.click());
     await page.waitForTimeout(200);
     await page.locator("#speaker-start").click();
@@ -47,8 +46,28 @@ test.describe("speaker test", () => {
     expect(after).not.toBe(440);
   });
 
+  test("H5: the frequency slider still retunes the steady tone", async ({ page }) => {
+    await page.locator("#speaker-start").click();
+    await expect(page.locator("#speaker-stage")).toHaveAttribute("data-playing", "true");
+    await page.evaluate(() => {
+      const input = document.getElementById("speaker-frequency") as HTMLInputElement;
+      input.value = "1000";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await expect.poll(() => lastFrequency(page)).toBeCloseTo(1000, 0);
+  });
+
+  test("M7: the volume slider is in dB", async ({ page }) => {
+    await expect(page.locator("#speaker-volume-label")).toHaveText("-12 dB · 25%");
+    await page.evaluate(() => {
+      const input = document.getElementById("speaker-volume") as HTMLInputElement;
+      input.value = "-60";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await expect(page.locator("#speaker-volume-label")).toHaveText("Off");
+  });
+
   test("M5: mono is as loud per side as a single channel", async ({ page }) => {
-    test.fail(true, "Review finding M5: equal-power panner drops mono by 3 dB");
     const level = async (channel: string) => {
       await page.evaluate((id) => document.querySelector<HTMLButtonElement>(`[data-speaker-channel='${id}']`)?.click(), channel);
       await page.waitForTimeout(600);
@@ -88,7 +107,6 @@ test.describe("mic test", () => {
   });
 
   test("H6: browser voice processing is off by default", async ({ page }) => {
-    test.fail(true, "Review finding H6: getUserMedia({ audio: true }) keeps AGC/NS/EC on");
     const settings = await page.evaluate(() => {
       const stream = (window as unknown as { __stream: MediaStream }).__stream;
       const s = stream.getAudioTracks()[0]?.getSettings();
@@ -98,7 +116,6 @@ test.describe("mic test", () => {
   });
 
   test("H7: the UI resets when the microphone track ends", async ({ page }) => {
-    test.fail(true, "Review finding H7: track 'ended' is not handled");
     await page.evaluate(() => {
       const stream = (window as unknown as { __stream: MediaStream }).__stream;
       const track = stream.getAudioTracks()[0];
@@ -106,5 +123,59 @@ test.describe("mic test", () => {
       track?.dispatchEvent(new Event("ended"));
     });
     await expect(page.locator("#mic-start")).toHaveText("Start");
+  });
+});
+
+test.describe("mic test controls", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const devices = navigator.mediaDevices;
+      const original = devices.getUserMedia.bind(devices);
+      devices.getUserMedia = async (constraints) => {
+        const stream = await original(constraints);
+        Object.assign(window, { __stream: stream });
+        return stream;
+      };
+    });
+  });
+
+  test("H6: call processing restarts the stream with processing on", async ({ page }) => {
+    await openTool(page, "mic-test");
+    await page.locator("#mic-start").click();
+    await expect(page.locator("#mic-start")).toHaveText("Stop");
+    await page.locator("#mic-processing").check();
+    await expect(page.locator("#mic-start")).toHaveText("Stop");
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const stream = (window as unknown as { __stream: MediaStream }).__stream;
+          const s = stream.getAudioTracks()[0]?.getSettings();
+          return stream.active ? [s?.echoCancellation, s?.noiseSuppression, s?.autoGainControl] : null;
+        }),
+      )
+      .toEqual([true, true, true]);
+  });
+
+  test("H7: the input picker lists microphones after permission", async ({ page }) => {
+    await openTool(page, "mic-test");
+    await page.locator("#mic-start").click();
+    await expect(page.locator("#mic-start")).toHaveText("Stop");
+    await expect.poll(() => page.locator("#mic-device option").count()).toBeGreaterThan(1);
+    await expect(page.locator("#mic-device option").first()).toHaveText("System default");
+  });
+
+  test("M8: the level meter runs on the AudioWorklet", async ({ page }) => {
+    // Blank the analyser's samples so only the worklet can move the meter.
+    await page.addInitScript(() => {
+      AnalyserNode.prototype.getFloatTimeDomainData = function (array: Float32Array) {
+        array.fill(0);
+      };
+    });
+    await openTool(page, "mic-test");
+    await page.locator("#mic-start").click();
+    await expect(page.locator("#mic-start")).toHaveText("Stop");
+    // Chromium's fake microphone beeps about once a second; Peak holds the
+    // highest level seen.
+    await expect(page.locator("#mic-stat-peak")).toHaveText(/dBFS/, { timeout: 5000 });
   });
 });
