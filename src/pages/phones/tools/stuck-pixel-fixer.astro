@@ -1126,43 +1126,32 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/site/storage";
     import { onOrientationChange } from "@/utils/phones/tools/orientation";
     import {
+      DEEP_DIAGNOSIS_COLORS,
+      QUICK_DIAGNOSIS_COLORS,
+      SPEED_RAW_MAX,
+      autoMarkDurationSeconds as markDurationSeconds,
+      buildAutoRepairQueue as buildRepairQueue,
+      classificationShortLabel,
+      classifyObservations,
+      clusterTaps,
+      createXorshift32,
+      defaultDelayMs as defaultFlashDelayMs,
+      delayFromSpeed,
+      diagnosisDescription as describeDiagnosis,
+      formatTime,
+      observationsForColors,
+      pointerMatchRadius,
+      speedRange,
+      type AutoRepairItem,
+      type DiagnosisColor,
+      type DiagnosisMark,
+      type StepTap,
+    } from "@/utils/phones/tools/stuckPixel";
+    import {
       isFullscreenActive as shellIsFullscreen,
       showRuntimeControls,
     } from "@/utils/phones/tools/runtimeShell";
 
-
-    type InspectColorId =
-      | "black"
-      | "white"
-      | "red"
-      | "green"
-      | "blue"
-      | "cyan"
-      | "magenta"
-      | "yellow"
-      | "midGrey"
-      | "darkGrey";
-
-    type Channel = "red" | "green" | "blue";
-    type DefectClassification =
-      | "stuck-on"
-      | "stuck-off"
-      | "hot"
-      | "dead"
-      | "persistent-mark"
-      | "uneven-patch"
-      | "unclear";
-    type DefectObservation = {
-      color: InspectColorId;
-      visible: boolean;
-    };
-    type ClassificationConfidence = "strong" | "likely" | "unclear";
-    type ClassificationResult = {
-      classification: DefectClassification;
-      channels: Channel[];
-      confidence: ClassificationConfidence;
-      matchScore: number;
-    };
 
     const testShell = document.getElementById(
       "pixel-test-shell",
@@ -1398,27 +1387,12 @@ const structuredData = createToolApplicationSchema({
     );
 
     const spotIsolationBackground = "#000000";
-    const SPEED_RAW_MAX = 500;
     const CONSENT_STORAGE_KEY = "phones-tools:stuck-pixel-consent";
 
     const NOISE_FALLBACK_WIDTH = 400;
     const NOISE_FALLBACK_HEIGHT = 250;
 
     const NOISE_TILE_SIZE = 128;
-
-    const CYCLE_MIN_DELAY_MS = 334;
-    const CYCLE_MAX_DELAY_MS = 1000;
-    const NOISE_MIN_DELAY_MS = 33;
-    const NOISE_REDUCED_MOTION_MIN_DELAY_MS = 66;
-    const NOISE_MAX_DELAY_MS = 100;
-    // Spots up to this diameter may cycle faster than 3 changes per second.
-    // WCAG 2.3.1 allows faster flashing only below 0.006 sr (25% of a 10°
-    // field). At 30 cm that is about a 23 mm square, or a circle about 26 mm
-    // across: ~165 CSS px on a phone (~6.3 CSS px/mm) and ~141 CSS px on a
-    // tablet at 35 cm (~4.6 CSS px/mm). This is an estimate from assumed
-    // viewing distances, not a flash-analyser measurement.
-    const SPOT_SMALL_DIAMETER_PX = 140;
-    const SPOT_CYCLE_MIN_DELAY_MS = 100;
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -1476,59 +1450,8 @@ const structuredData = createToolApplicationSchema({
       },
     };
 
-    function channelList(channels: Channel[]): string {
-      if (channels.length === 0) return "";
-      if (channels.length === 1) return channels[0] ?? "";
-      return `${channels.slice(0, -1).join(", ")} and ${channels.at(-1)}`;
-    }
-
-    function classificationShortLabel(mark: DiagnosisMark): string {
-      const channels = channelList(mark.channels);
-      switch (mark.classification) {
-        case "stuck-on":
-          return `Bright ${channels} subpixel${mark.channels.length === 1 ? "" : "s"}`;
-        case "stuck-off":
-          return `Dark ${channels} subpixel${mark.channels.length === 1 ? "" : "s"}`;
-        case "hot":
-          return "Hot pixel";
-        case "dead":
-          return "Dead pixel";
-        case "persistent-mark":
-          return "Surface or panel mark";
-        case "uneven-patch":
-          return "Uneven panel patch";
-        default:
-          return "Unclear pattern";
-      }
-    }
-
-    function autoPatternIdsForMark(_mark: DiagnosisMark): string[] {
-      return ["static"];
-    }
-
     function diagnosisDescription(mark: DiagnosisMark): string {
-      const confidence = mark.confidence === "strong" ? "Strong" : "Likely";
-      const match = `${mark.matchScore}/10 color responses matched`;
-      const patterns = autoPatternIdsForMark(mark)
-        .map((patternId) => patternLibrary[patternId]?.label ?? patternId)
-        .join(", then ");
-
-      switch (mark.classification) {
-        case "stuck-on":
-          return `${confidence} bright ${channelList(mark.channels)} subpixel fault. ${match}. Auto will run ${patterns}.`;
-        case "stuck-off":
-          return `${confidence} dark ${channelList(mark.channels)} subpixel fault. ${match}. Auto will run ${patterns}.`;
-        case "hot":
-          return `${confidence} hot pixel with all three subpixels staying on. ${match}. Auto will run ${patterns}.`;
-        case "dead":
-          return `${confidence} dead pixel with all three subpixels staying off. ${match}. Software repair is unlikely to help, so Auto only makes one Static Noise attempt.`;
-        case "persistent-mark":
-          return `${confidence} surface or panel mark rather than a pixel response. ${match}. Clean the screen and diagnose again. Auto only makes one Static Noise attempt.`;
-        case "uneven-patch":
-          return `${confidence} uneven panel patch visible mainly on grey. ${match}. This is unlikely to respond to pixel cycling, so Auto only makes one Static Noise attempt.`;
-        default:
-          return `The marked responses did not match one defect pattern closely enough. Auto will run Static Noise once. Diagnose again if the same point remains visible.`;
-      }
+      return describeDiagnosis(mark, (id) => patternLibrary[id]?.label ?? id);
     }
 
     let colorIndex = 0;
@@ -1552,35 +1475,10 @@ const structuredData = createToolApplicationSchema({
     let noiseTileCanvas: HTMLCanvasElement | null = null;
     let noiseTileCtx: CanvasRenderingContext2D | null = null;
     let noiseTileImageData: ImageData | null = null;
-    let noiseRngState = 0x2f6e2b1d;
+    const xorshift32 = createXorshift32();
 
-    type StepTap = {
-      x: number;
-      y: number;
-      colorId: InspectColorId;
-      matchRadiusPx: number;
-    };
-    type DiagnosisMark = {
-      x: number;
-      y: number;
-      observations: DefectObservation[];
-      classification: DefectClassification;
-      channels: Channel[];
-      confidence: ClassificationConfidence;
-      matchScore: number;
-    };
     type WorkflowMode = "auto" | "manual";
     type ManualColorGroup = "rgb" | "cmy" | "contrast";
-    type AutoRepairItem = {
-      durationSeconds: number;
-      label: string;
-      markIndex: number;
-      phaseIndex: number;
-      phaseCount: number;
-      patternId: string;
-      result: DiagnosisMark;
-    };
-
     const STEP_VIEW_SECONDS = 10;
 
     let diagnosisActive = false;
@@ -1600,152 +1498,7 @@ const structuredData = createToolApplicationSchema({
     const manualColorGroups = new Set<ManualColorGroup>();
     let stepCountdownTimer: ReturnType<typeof setInterval> | null = null;
     let stepCountdownRemaining = 0;
-    type DiagnosisColor = { id: InspectColorId; label: string; hex: string };
-
-    const QUICK_DIAGNOSIS_COLORS: DiagnosisColor[] = [
-      { id: "black", label: "Black", hex: "#000000" },
-      { id: "white", label: "White", hex: "#ffffff" },
-      { id: "red", label: "Red", hex: "#ff0000" },
-      { id: "green", label: "Green", hex: "#00ff00" },
-      { id: "blue", label: "Blue", hex: "#0000ff" },
-    ];
-
-    const DEEP_DIAGNOSIS_COLORS: DiagnosisColor[] = [
-      { id: "cyan", label: "Cyan", hex: "#00ffff" },
-      { id: "magenta", label: "Magenta", hex: "#ff00ff" },
-      { id: "yellow", label: "Yellow", hex: "#ffff00" },
-      { id: "midGrey", label: "Mid grey", hex: "#808080" },
-      { id: "darkGrey", label: "Dark grey", hex: "#101010" },
-    ];
-
     const DIAGNOSIS_COLORS: DiagnosisColor[] = [...QUICK_DIAGNOSIS_COLORS];
-
-    const ALL_DIAGNOSIS_COLORS: InspectColorId[] = [
-      ...QUICK_DIAGNOSIS_COLORS,
-      ...DEEP_DIAGNOSIS_COLORS,
-    ].map((color) => color.id);
-
-    const TEST_COLOR_LEVELS: Record<
-      InspectColorId,
-      Record<Channel, number>
-    > = {
-      black: { red: 0, green: 0, blue: 0 },
-      white: { red: 1, green: 1, blue: 1 },
-      red: { red: 1, green: 0, blue: 0 },
-      green: { red: 0, green: 1, blue: 0 },
-      blue: { red: 0, green: 0, blue: 1 },
-      cyan: { red: 0, green: 1, blue: 1 },
-      magenta: { red: 1, green: 0, blue: 1 },
-      yellow: { red: 1, green: 1, blue: 0 },
-      midGrey: { red: 0.5, green: 0.5, blue: 0.5 },
-      darkGrey: { red: 0.063, green: 0.063, blue: 0.063 },
-    };
-
-    type DefectHypothesis = {
-      classification: DefectClassification;
-      channels: Channel[];
-      pattern: Record<InspectColorId, boolean>;
-    };
-
-    const CHANNELS: Channel[] = ["red", "green", "blue"];
-    const CHANNEL_GROUPS: Channel[][] = [
-      ["red"],
-      ["green"],
-      ["blue"],
-      ["red", "green"],
-      ["red", "blue"],
-      ["green", "blue"],
-      ["red", "green", "blue"],
-    ];
-
-    function visibilityPattern(
-      channels: Channel[],
-      stuckOn: boolean,
-    ): Record<InspectColorId, boolean> {
-      return Object.fromEntries(
-        ALL_DIAGNOSIS_COLORS.map((color) => {
-          const visible = channels.some((channel) =>
-            stuckOn
-              ? TEST_COLOR_LEVELS[color][channel] < 1
-              : TEST_COLOR_LEVELS[color][channel] > 0,
-          );
-          return [color, visible];
-        }),
-      ) as Record<InspectColorId, boolean>;
-    }
-
-    const DEFECT_HYPOTHESES: DefectHypothesis[] = [
-      ...CHANNEL_GROUPS.map((channels) => ({
-        classification:
-          channels.length === CHANNELS.length ? "hot" as const : "stuck-on" as const,
-        channels,
-        pattern: visibilityPattern(channels, true),
-      })),
-      ...CHANNEL_GROUPS.map((channels) => ({
-        classification:
-          channels.length === CHANNELS.length ? "dead" as const : "stuck-off" as const,
-        channels,
-        pattern: visibilityPattern(channels, false),
-      })),
-      {
-        classification: "persistent-mark",
-        channels: [],
-        pattern: Object.fromEntries(
-          ALL_DIAGNOSIS_COLORS.map((color) => [color, true]),
-        ) as Record<InspectColorId, boolean>,
-      },
-      {
-        classification: "uneven-patch",
-        channels: [],
-        pattern: Object.fromEntries(
-          ALL_DIAGNOSIS_COLORS.map((color) => [
-            color,
-            color === "midGrey" || color === "darkGrey",
-          ]),
-        ) as Record<InspectColorId, boolean>,
-      },
-    ];
-
-    function classifyObservations(
-      observations: DefectObservation[],
-    ): ClassificationResult {
-      const byColor = new Map(
-        observations.map((observation) => [
-          observation.color,
-          observation.visible,
-        ]),
-      );
-      const scored = DEFECT_HYPOTHESES.map((hypothesis) => ({
-        hypothesis,
-        score: ALL_DIAGNOSIS_COLORS.reduce(
-          (score, color) =>
-            score +
-            (Boolean(byColor.get(color)) === hypothesis.pattern[color]
-              ? 1
-              : 0),
-          0,
-        ),
-      })).sort((left, right) => right.score - left.score);
-      const best = scored[0];
-      const runnerUp = scored[1];
-      const margin = (best?.score ?? 0) - (runnerUp?.score ?? 0);
-
-      if (!best || best.score < 7 || (best.score < 9 && margin === 0)) {
-        return {
-          classification: "unclear",
-          channels: [],
-          confidence: "unclear",
-          matchScore: best?.score ?? 0,
-        };
-      }
-
-      return {
-        classification: best.hypothesis.classification,
-        channels: [...best.hypothesis.channels],
-        confidence: best.score >= 9 && margin >= 1 ? "strong" : "likely",
-        matchScore: best.score,
-      };
-    }
 
     const pageController = new AbortController();
     const wakeLock = createWakeLock({
@@ -1754,16 +1507,6 @@ const structuredData = createToolApplicationSchema({
         if (wakeLockNote) wakeLockNote.hidden = false;
       },
     });
-
-    function formatTime(seconds: number): string {
-      const mins = Math.floor(seconds / 60)
-        .toString()
-        .padStart(2, "0");
-      const secs = Math.max(0, seconds % 60)
-        .toString()
-        .padStart(2, "0");
-      return `${mins}:${secs}`;
-    }
 
     function currentPattern(): PatternDefinition {
       return patternLibrary[selectedPatternId] ?? patternLibrary.rgb;
@@ -1933,9 +1676,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function autoMarkDurationSeconds(markIndex: number): number {
-      return autoRepairQueue
-        .filter((item) => item.markIndex === markIndex)
-        .reduce((total, item) => total + item.durationSeconds, 0);
+      return markDurationSeconds(autoRepairQueue, markIndex);
     }
 
     function previewAutoRepairItem(index: number): void {
@@ -2010,13 +1751,6 @@ const structuredData = createToolApplicationSchema({
       autoQueueRunning = false;
       workflowMode = nextMode;
       syncWorkflowUI();
-    }
-
-    function xorshift32(): number {
-      noiseRngState ^= noiseRngState << 13;
-      noiseRngState ^= noiseRngState >>> 17;
-      noiseRngState ^= noiseRngState << 5;
-      return noiseRngState >>> 0;
     }
 
     function renderNoiseTile(mask: ChannelMask): void {
@@ -2254,33 +1988,20 @@ const structuredData = createToolApplicationSchema({
     }
 
     function activeSpeedRange(): { min: number; max: number } {
-      if (currentPattern().isNoise) {
-        return {
-          min: prefersReducedMotion
-            ? NOISE_REDUCED_MOTION_MIN_DELAY_MS
-            : NOISE_MIN_DELAY_MS,
-          max: NOISE_MAX_DELAY_MS,
-        };
-      }
-      const isSmallSpot =
-        modeInput?.value === "spot" &&
-        effectiveSpotDiameter() <= SPOT_SMALL_DIAMETER_PX;
-      const cycleMin = isSmallSpot ? SPOT_CYCLE_MIN_DELAY_MS : CYCLE_MIN_DELAY_MS;
-      return {
-        min: prefersReducedMotion ? CYCLE_MAX_DELAY_MS : cycleMin,
-        max: CYCLE_MAX_DELAY_MS,
-      };
+      return speedRange({
+        isNoise: Boolean(currentPattern().isNoise),
+        reducedMotion: prefersReducedMotion,
+        spotDiameter: modeInput?.value === "spot" ? effectiveSpotDiameter() : null,
+      });
     }
 
     function delayFromSpeedInput(): number {
       if (!speedInput) return defaultDelayMs();
-      const { min, max } = activeSpeedRange();
-      const fraction = Number(speedInput.value) / SPEED_RAW_MAX;
-      return Math.round(max - fraction * (max - min));
+      return delayFromSpeed(Number(speedInput.value), activeSpeedRange());
     }
 
     function defaultDelayMs(): number {
-      return currentPattern().isNoise ? NOISE_MAX_DELAY_MS : CYCLE_MAX_DELAY_MS;
+      return defaultFlashDelayMs(Boolean(currentPattern().isNoise));
     }
 
     function syncSpeed(): void {
@@ -2636,88 +2357,6 @@ const structuredData = createToolApplicationSchema({
       });
     }
 
-    function pointerMatchRadius(event: PointerEvent): number {
-      const contactRadius = Math.max(event.width, event.height) / 2;
-      const minimum = event.pointerType === "touch" ? 24 : event.pointerType === "pen" ? 12 : 10;
-      const maximum = event.pointerType === "touch" ? 44 : event.pointerType === "pen" ? 24 : 16;
-      const positioningAllowance = event.pointerType === "touch" ? 14 : event.pointerType === "pen" ? 8 : 6;
-      return Math.min(
-        maximum,
-        Math.max(minimum, contactRadius + positioningAllowance),
-      );
-    }
-
-    function clusterTaps(
-      taps: StepTap[],
-      width: number,
-      height: number,
-    ): {
-      x: number;
-      y: number;
-      colors: Set<InspectColorId>;
-    }[] {
-      const clusters: {
-        x: number;
-        y: number;
-        count: number;
-        markRadiusPx: number;
-        colors: Set<InspectColorId>;
-      }[] = [];
-
-      taps.forEach((tap) => {
-        let nearestIndex = -1;
-        let nearestDistancePx = Number.POSITIVE_INFINITY;
-        clusters.forEach((cluster, clusterIndex) => {
-          const distancePx = Math.hypot(
-            (cluster.x - tap.x) * width,
-            (cluster.y - tap.y) * height,
-          );
-          const matchDistancePx = Math.min(
-            56,
-            cluster.markRadiusPx + tap.matchRadiusPx,
-          );
-          if (
-            distancePx <= matchDistancePx &&
-            distancePx < nearestDistancePx
-          ) {
-            nearestIndex = clusterIndex;
-            nearestDistancePx = distancePx;
-          }
-        });
-
-        const cluster = clusters[nearestIndex];
-        if (!cluster) {
-          clusters.push({
-            x: tap.x,
-            y: tap.y,
-            count: 1,
-            markRadiusPx: tap.matchRadiusPx,
-            colors: new Set([tap.colorId]),
-          });
-          return;
-        }
-        cluster.x = (cluster.x * cluster.count + tap.x) / (cluster.count + 1);
-        cluster.y = (cluster.y * cluster.count + tap.y) / (cluster.count + 1);
-        cluster.count += 1;
-        cluster.markRadiusPx = Math.max(
-          cluster.markRadiusPx,
-          tap.matchRadiusPx,
-        );
-        cluster.colors.add(tap.colorId);
-      });
-
-      return clusters.map(({ x, y, colors }) => ({ x, y, colors }));
-    }
-
-    function observationsForColors(
-      colors: Set<InspectColorId>,
-    ): DefectObservation[] {
-      return ALL_DIAGNOSIS_COLORS.map((color) => ({
-        color,
-        visible: colors.has(color),
-      }));
-    }
-
     function clearDiagnosisMarkers(): void {
       if (autoMarkHighlightTimer) {
         clearTimeout(autoMarkHighlightTimer);
@@ -3045,25 +2684,10 @@ const structuredData = createToolApplicationSchema({
     }
 
     function buildAutoRepairQueue(): void {
-      const defaultDurationSeconds = Number(timerInput?.value ?? 300);
-      autoRepairQueue = diagnosedMarks.flatMap((result, markIndex) => {
-        const patternIds = autoPatternIdsForMark(result);
-        const baseDuration = Math.floor(
-          defaultDurationSeconds / patternIds.length,
-        );
-        return patternIds.map((patternId, phaseIndex) => ({
-          durationSeconds:
-            phaseIndex === patternIds.length - 1
-              ? defaultDurationSeconds - baseDuration * phaseIndex
-              : baseDuration,
-          label: `Mark ${markIndex + 1}`,
-          markIndex,
-          phaseIndex,
-          phaseCount: patternIds.length,
-          patternId,
-          result,
-        }));
-      });
+      autoRepairQueue = buildRepairQueue(
+        diagnosedMarks,
+        Number(timerInput?.value ?? 300),
+      );
       autoQueueIndex = 0;
       autoQueueRunning = false;
       autoQueueComplete = false;
