@@ -1,0 +1,70 @@
+import { expect, test, type Page } from "@playwright/test";
+
+/** Blocks external requests and records the ones aimed at Google. */
+async function recordGoogle(page: Page): Promise<string[]> {
+  const google: string[] = [];
+  await page.route("**/*", (route) => {
+    const url = route.request().url();
+    if (url.startsWith("http://127.0.0.1")) return route.continue();
+    if (/google(tagmanager|-analytics)?\./.test(url)) google.push(url);
+    return route.abort();
+  });
+  return google;
+}
+
+const banner = (page: Page) => page.locator("#consent-banner");
+
+test("H9: nothing is requested from Google before a choice", async ({ page }) => {
+  const google = await recordGoogle(page);
+  await page.goto("/");
+  await expect(banner(page)).toBeVisible();
+  await page.waitForTimeout(1500);
+  expect(google).toEqual([]);
+});
+
+test("H9: Reject keeps Google off across a reload", async ({ page }) => {
+  const google = await recordGoogle(page);
+  await page.goto("/");
+  await banner(page).getByRole("button", { name: "Reject" }).click();
+  await expect(banner(page)).toBeHidden();
+  await page.reload();
+  await page.waitForTimeout(1000);
+  await expect(banner(page)).toBeHidden();
+  expect(google).toEqual([]);
+});
+
+test("H9: Accept loads gtag with real `arguments` commands, and again on the next page", async ({ page }) => {
+  const google = await recordGoogle(page);
+  await page.goto("/");
+  await banner(page).getByRole("button", { name: "Accept" }).click();
+  await expect(banner(page)).toBeHidden();
+  await expect.poll(() => google.some((url) => url.includes("gtag/js?id=G-HJ4YRNZ9LG"))).toBe(true);
+  const queued = await page.evaluate(() =>
+    ((window as unknown as { dataLayer: unknown[] }).dataLayer ?? []).map((entry) => [
+      Object.prototype.toString.call(entry),
+      (entry as ArrayLike<unknown>)[0],
+      (entry as ArrayLike<unknown>)[1],
+    ]),
+  );
+  expect(queued.slice(0, 4)).toEqual([
+    ["[object Arguments]", "consent", "default"],
+    ["[object Arguments]", "consent", "update"],
+    ["[object Arguments]", "js", expect.anything()],
+    ["[object Arguments]", "config", "G-HJ4YRNZ9LG"],
+  ]);
+  google.length = 0;
+  await page.goto("/about");
+  await expect.poll(() => google.some((url) => url.includes("gtag/js"))).toBe(true);
+  await expect(banner(page)).toBeHidden();
+});
+
+test("H9: Cookie settings reopens the banner and can withdraw consent", async ({ page }) => {
+  await recordGoogle(page);
+  await page.goto("/");
+  await banner(page).getByRole("button", { name: "Accept" }).click();
+  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await expect(banner(page)).toBeVisible();
+  await expect(banner(page).getByRole("button", { name: "Accept" })).toBeFocused();
+  await banner(page).getByRole("button", { name: "Reject" }).click();
+  expect(await page.evaluate(() => localStorage.getItem("consent:analytics"))).toBe("denied");
+});

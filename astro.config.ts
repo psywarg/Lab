@@ -1,5 +1,5 @@
 import mdx from "@astrojs/mdx";
-import partytown from "@astrojs/partytown";
+
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
@@ -93,7 +93,7 @@ export default defineConfig({
   },
   integrations: [
     mdx(),
-    partytown(),
+
     sitemap({
       namespaces: {
         news: false,

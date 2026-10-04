@@ -6,6 +6,7 @@ import { Font } from "astro:assets";
 import Header from "@/components/site/Header.astro";
 import Footer from "@/components/site/Footer.astro";
 import Breadcrumb from "@/components/site/Breadcrumb.astro";
+import ConsentBanner from "@/components/site/ConsentBanner.astro";
 import { jsonForScript } from "@/utils/site/json";
 import { getOgImage } from "@/utils/site/ogImage";
 import {
@@ -231,19 +232,6 @@ const robotsContent = robots ?? "index, follow";
         />
       ))
     }
-
-    <script
-      is:inline
-      type="text/partytown"
-      src="https://www.googletagmanager.com/gtag/js?id=G-HJ4YRNZ9LG"></script>
-    <script is:inline type="text/partytown">
-      window.dataLayer = window.dataLayer || [];
-      function gtag(...args) {
-        dataLayer.push(args);
-      }
-      gtag("js", new Date());
-      gtag("config", "G-HJ4YRNZ9LG");
-    </script>
   </head>
 
   <body>
@@ -284,5 +272,6 @@ const robotsContent = robots ?? "index, follow";
     </main>
 
     <Footer />
+    <ConsentBanner />
   </body>
 </html>
