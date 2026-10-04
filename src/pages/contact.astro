@@ -205,6 +205,13 @@ const structuredData = [
           />
         </div>
         <div id="contact-turnstile" data-sitekey={turnstileSiteKey}></div>
+        <noscript>
+          <p class="text-body m-0 rounded-xl border p-4 font-medium">
+            Sending this form needs JavaScript, because it uses Cloudflare
+            Turnstile to block spam. Please enable JavaScript and reload the
+            page.
+          </p>
+        </noscript>
         <button
           type="submit"
           class="btn-base bg-accent-500 hover:bg-accent-600 w-full rounded-2xl p-2 text-white disabled:pointer-events-none disabled:opacity-50"
