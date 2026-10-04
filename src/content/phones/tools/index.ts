@@ -1,12 +1,12 @@
 // src/content/phones/tools/index.ts
 
-import accelerometerImage from "@/assets/images/phones/tools/accelerometer-test.avif";
-import gyroscopeImage from "@/assets/images/phones/tools/gyroscope-test.avif";
-import micImage from "@/assets/images/phones/tools/mic-test.avif";
-import screenImage from "@/assets/images/phones/tools/screen-test.avif";
-import speakerImage from "@/assets/images/phones/tools/speaker-test.avif";
-import stuckPixelHelperImage from "@/assets/images/phones/tools/stuck-pixel-fixer.avif";
-import touchImage from "@/assets/images/phones/tools/touch-test.avif";
+import accelerometerImage from "@/assets/images/phones/tools/accelerometer-test.png";
+import gyroscopeImage from "@/assets/images/phones/tools/gyroscope-test.png";
+import micImage from "@/assets/images/phones/tools/mic-test.png";
+import screenImage from "@/assets/images/phones/tools/screen-test.png";
+import speakerImage from "@/assets/images/phones/tools/speaker-test.png";
+import stuckPixelHelperImage from "@/assets/images/phones/tools/stuck-pixel-fixer.png";
+import touchImage from "@/assets/images/phones/tools/touch-test.png";
 import type { ImageMetadata } from "astro";
 
 export type ToolIndexItem = {
