@@ -10,20 +10,20 @@ test.describe("fullscreen fallback without the Fullscreen API", () => {
   });
 
   test("C1: expanded shell covers the viewport and the exit button is reachable", async ({ page }) => {
-    test.fail(true, "Review finding C1: .is-expanded stays in page flow");
     await openTool(page, "screen-test");
     await page.evaluate(() => window.scrollTo(0, 250));
     await page.locator("#screen-fullscreen").click();
     const shell = page.locator("tool-runtime-shell");
     await expect(shell).toHaveClass(/is-expanded/);
     const viewport = page.viewportSize();
-    expect(await shell.boundingBox()).toMatchObject({ x: 0, y: 0, width: viewport?.width, height: viewport?.height });
+    await expect
+      .poll(() => shell.boundingBox())
+      .toMatchObject({ x: 0, y: 0, width: viewport?.width, height: viewport?.height });
     await expect(page.locator("#screen-fullscreen")).toBeInViewport();
   });
 });
 
-test("H1: in fullscreen nothing covers the exit button", async ({ page }, testInfo) => {
-  test.fail(testInfo.project.name !== "desktop", "Review finding H1: Reset overlaps the exit button on phones");
+test("H1: in fullscreen nothing covers the exit button", async ({ page }) => {
   await openTool(page, "gyroscope-test");
   await page.locator("#gyro-fullscreen").click();
   await expect(page.locator("tool-runtime-shell")).toHaveAttribute("data-fullscreen", "true");

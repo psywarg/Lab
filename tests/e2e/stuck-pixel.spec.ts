@@ -70,9 +70,14 @@ test("full-screen colour cycling stays at or below 3 changes per second", async 
 });
 
 test("H11: a 160 px spot is limited to 3 changes per second", async ({ page }) => {
-  test.fail(true, "Review finding H11: every spot up to 200 px may flash at 10/s");
   await prepareManual(page);
   const rate = await runAtMaxSpeed(page, "spot", 160);
   expect(rate).toBeGreaterThan(0);
   expect(rate).toBeLessThanOrEqual(3.1);
+});
+
+test("H11: a 140 px spot keeps the fast grade", async ({ page }) => {
+  await prepareManual(page);
+  const rate = await runAtMaxSpeed(page, "spot", 140);
+  expect(rate).toBeGreaterThan(3.1);
 });

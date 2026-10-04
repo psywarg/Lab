@@ -26,6 +26,7 @@ interface Props {
   actionBarLabel?: string;
   buttons?: ToolRuntimeButton[];
   controlsAutoHide?: boolean;
+  controlsRevealTap?: boolean;
   dockPrimaryItemCount?: number;
   dockSecondaryItemCount?: number;
   fullscreenButtonMuted?: boolean;
@@ -47,6 +48,7 @@ const {
   actionBarLabel,
   buttons = [],
   controlsAutoHide = false,
+  controlsRevealTap = false,
   dockPrimaryItemCount = 4,
   dockSecondaryItemCount = 4,
   fullscreenButtonMuted = false,
@@ -120,6 +122,7 @@ const buttonToneClasses = {
 <tool-runtime-shell
   id={shellId}
   data-controls-auto-hide={controlsAutoHide ? "true" : undefined}
+  data-controls-reveal-tap={controlsRevealTap ? "true" : undefined}
   data-fullscreen-button-muted={fullscreenButtonMuted ? "true" : undefined}
   data-fullscreen-screen-touch={fullscreenScreenTouch === "none"
     ? "none"
@@ -267,8 +270,6 @@ const buttonToneClasses = {
                   class:list={[
                     "tool-runtime-button-group",
                     dockCountClass("tool-runtime-button-group", buttons.length),
-                    buttons.length % 2 === 1 &&
-                      "tool-runtime-button-group--odd",
                   ]}
                 >
                   {buttons.map((button) => (
@@ -304,8 +305,6 @@ const buttonToneClasses = {
                       "tool-runtime-button-group",
                       secondaryButtons.length,
                     ),
-                    secondaryButtons.length % 2 === 1 &&
-                      "tool-runtime-button-group--odd",
                   ]}
                 >
                   {secondaryButtons.map((button) => (
@@ -506,6 +505,7 @@ const buttonToneClasses = {
     #lastToggleAt = 0;
     #pointerToggleAt = 0;
     #controlsAutoHide = false;
+    #swallowNextClick = false;
     #fullscreenButton: HTMLButtonElement | null = null;
 
     connectedCallback(): void {
@@ -551,6 +551,19 @@ const buttonToneClasses = {
       this.addEventListener("tool-runtime:show-controls", this.#showControls, {
         signal,
       });
+
+      // With hidden auto-hide controls, the first tap only reveals them and
+      // is not passed on to the tool (so it can't change state by accident).
+      if (this.dataset.controlsRevealTap === "true") {
+        this.addEventListener("pointerdown", this.#handleRevealPointerDown, {
+          capture: true,
+          signal,
+        });
+        this.addEventListener("click", this.#handleRevealClick, {
+          capture: true,
+          signal,
+        });
+      }
 
       document.addEventListener(
         "fullscreenchange",
@@ -622,6 +635,21 @@ const buttonToneClasses = {
         this.#setControlsVisible(false);
         this.#hideTimer = 0;
       }, 2200);
+    };
+
+    #handleRevealPointerDown = (): void => {
+      this.#swallowNextClick =
+        this.#controlsAutoHide &&
+        this.#isExpandedView() &&
+        this.dataset.controlsVisible === "false";
+      if (this.#swallowNextClick) this.#showControls();
+    };
+
+    #handleRevealClick = (event: Event): void => {
+      if (!this.#swallowNextClick) return;
+      this.#swallowNextClick = false;
+      event.preventDefault();
+      event.stopPropagation();
     };
 
     #acquireScrollLock = (): void => {
@@ -746,6 +774,14 @@ const buttonToneClasses = {
     &.is-expanded {
       @apply block h-svh w-dvw p-0;
     }
+
+    /* Fallback when the Fullscreen API is unavailable (e.g. iPhone Safari):
+       pin the shell over the page, above the header (z-40) and the sidebar
+       toggle (z-50). The base rule's self-start would otherwise shrink a
+       fixed box to its content height, so stretch it explicitly. */
+    &.is-expanded {
+      @apply fixed inset-0 z-60 h-auto w-auto self-stretch justify-self-stretch;
+    }
   }
 
   .tool-runtime-screen {
@@ -756,7 +792,7 @@ const buttonToneClasses = {
     }
 
     :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
-      @apply h-svh w-dvw rounded-none border-0 shadow-none;
+      @apply h-full w-full rounded-none border-0 shadow-none;
     }
 
     :is(
@@ -803,12 +839,21 @@ const buttonToneClasses = {
       bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     }
 
+    /* Keep the dock clear of the exit-fullscreen button: 1rem offset +
+       2.5rem button + 0.75rem gap. */
+    :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded):has(
+        .tool-runtime-fullscr-btn
+      )
+      & {
+      right: calc(4.25rem + env(safe-area-inset-right, 0px));
+    }
+
     :is(
         .tool-runtime:fullscreen,
         .tool-runtime.is-expanded
       )[data-controls-auto-hide="true"][data-controls-visible="false"]
       & {
-      @apply pointer-events-none -translate-x-1/2 translate-y-2 opacity-0;
+      @apply pointer-events-none translate-y-2 opacity-0;
     }
   }
 
@@ -872,7 +917,7 @@ const buttonToneClasses = {
     @apply grid w-full max-w-full grid-cols-2 gap-2 sm:gap-3;
 
     :is(.tool-runtime:fullscreen, .tool-runtime.is-expanded) & {
-      @apply w-max max-w-full gap-2;
+      @apply w-full gap-2;
     }
   }
 
@@ -888,17 +933,15 @@ const buttonToneClasses = {
     @apply sm:grid-cols-2;
   }
 
+  /* Three buttons always share one row so they keep the same shape. */
   .tool-runtime-button-group--count-3 {
-    @apply sm:grid-cols-3;
+    @apply grid-cols-3;
   }
 
   .tool-runtime-button-group--count-4 {
     @apply sm:grid-cols-4;
   }
 
-  .tool-runtime-button-group--odd > .tool-runtime-button:last-child {
-    @apply col-span-2 sm:col-span-1;
-  }
 
   .tool-runtime-stats-group,
   .tool-runtime-secondary-stats {

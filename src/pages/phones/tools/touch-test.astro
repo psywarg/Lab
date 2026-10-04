@@ -24,7 +24,7 @@ const referenceItems = [
     label: "Dead Zones",
     check: "Drag slowly until every cell in the visible grid fills once.",
     reading:
-      "A filled cell means the browser received at least one touch or pointer event there. Coverage is scored on a fixed grid independent of screen rotation, so turning the phone mid-test never changes the percentage on its own.",
+      "A filled cell means the browser received at least one touch or pointer event there, including cells under the edge of your fingertip. Coverage is the share of visible cells filled, so 100% means every cell responded. If you rotate the phone, the grid is rebuilt and filled cells carry over by position, so the percentage can shift slightly.",
     good: "The full surface responds continuously, including corners and the very edges.",
     concern:
       "Cells stay blank, lines break, or one strip of the screen stops responding.",
@@ -42,12 +42,12 @@ const referenceItems = [
   {
     label: "Precision",
     check:
-      "Tap the single highlighted target and aim for the center dot before it advances to the next one.",
+      "Tap each highlighted target once, aiming for the center dot. It advances after every tap.",
     reading:
-      "Targets are presented one at a time, in order. Done counts targets that have been resolved, either by hitting the center or by reaching three missed attempts. Last shows whether the most recent tap was centered, missed, or failed.",
-    good: "Targets complete without repeated retries, and the touch lands close to the middle.",
+      "Each tap is graded by its distance from the target center: Centre is within 8 px, On target within the 24 px target radius, Near miss within 48 px, and Miss beyond that. Fingers naturally land a few millimetres off, so occasional On target grades are normal. The report shows how many taps fell in each band and the average offset.",
+    good: "Most taps grade Centre or On target, with a similar offset everywhere on the screen.",
     concern:
-      "The same target needs several tries, taps land visibly off-center, or some positions are much harder to clear than others.",
+      "Taps in one area of the screen are consistently Near miss or Miss while others land on target.",
   },
   {
     label: "Ghost Touch",
@@ -101,7 +101,7 @@ const touchModes = [
     icon: "touch-precision",
     label: "Precision",
     meta: "Tap 16 targets in order",
-    tip: "Aim for each center dot and avoid correcting the tap after contact.",
+    tip: "Tap each target once, aiming for the center dot. Each tap is graded by distance.",
   },
   {
     id: "ghost",
@@ -238,6 +238,11 @@ const structuredData = createToolApplicationSchema({
               value: "-- Hz",
               valueAttributes: { "data-stat": "rate" },
             },
+            {
+              label: "Input",
+              value: "--",
+              valueAttributes: { "data-stat": "input" },
+            },
           ]}
           stageStats={[
             {
@@ -267,6 +272,11 @@ const structuredData = createToolApplicationSchema({
               label: "Sample rate",
               value: "-- Hz",
               valueAttributes: { "data-stat": "rate" },
+            },
+            {
+              label: "Input",
+              value: "--",
+              valueAttributes: { "data-stat": "input" },
             },
           ]}
         >
@@ -389,6 +399,9 @@ const structuredData = createToolApplicationSchema({
               class={`${stageLayerClasses} z-4`}
               aria-hidden="true"
             >
+            </div>
+            <div id="touch-hold-zone" class="touch-hold-zone" aria-hidden="true">
+              Hold to pause
             </div>
           </div>
 
@@ -514,23 +527,23 @@ const structuredData = createToolApplicationSchema({
       @apply scale-105 border-blue-500 bg-blue-300/20 shadow-xl shadow-blue-600/40 ring-5 ring-blue-300/20;
     }
 
-    :global(.precision-target.precision-target--complete) {
+    :global(.precision-target.precision-target--centre) {
       @apply border-green-600 bg-green-400 shadow-xl shadow-green-600/40 ring-5 ring-green-400/10 ring-inset;
     }
 
-    :global(.precision-target.precision-target--complete .precision-target-center) {
+    :global(.precision-target.precision-target--centre .precision-target-center) {
       @apply bg-green-700 shadow-none;
     }
 
-    :global(.precision-target.precision-target--attempt-one) {
+    :global(.precision-target.precision-target--on-target) {
       @apply border-yellow-500 bg-yellow-300 shadow-xl ring-5 shadow-yellow-600/40 ring-yellow-400/10 ring-inset;
     }
 
-    :global(.precision-target.precision-target--attempt-two) {
+    :global(.precision-target.precision-target--near) {
       @apply border-orange-600 bg-orange-400 shadow-xl ring-5 shadow-orange-600/40 ring-orange-500/10 ring-inset;
     }
 
-    :global(.precision-target.precision-target--failed) {
+    :global(.precision-target.precision-target--miss) {
       @apply border-red-700 bg-red-500 shadow-xl ring-5 shadow-red-700/40 ring-red-500/10 ring-inset;
     }
 
@@ -538,19 +551,19 @@ const structuredData = createToolApplicationSchema({
       @apply absolute z-3 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500/40 bg-white shadow-xl ring-5 shadow-blue-600/40 ring-blue-300/10;
     }
 
-    :global(.precision-impact.precision-impact--pass) {
+    :global(.precision-impact.precision-impact--centre) {
       @apply border-green-700 bg-green-400 shadow-green-600/40 ring-green-400/10;
     }
 
-    :global(.precision-impact.precision-impact--miss-one) {
+    :global(.precision-impact.precision-impact--on-target) {
       @apply border-yellow-600 bg-yellow-300 shadow-yellow-600/40 ring-yellow-400/10;
     }
 
-    :global(.precision-impact.precision-impact--miss-two) {
+    :global(.precision-impact.precision-impact--near) {
       @apply border-orange-700 bg-orange-400 shadow-orange-600/40 ring-orange-500/10;
     }
 
-    :global(.precision-impact.precision-impact--miss-three) {
+    :global(.precision-impact.precision-impact--miss) {
       @apply border-red-700 bg-red-500 shadow-red-700/40 ring-red-500/10;
     }
 
@@ -583,6 +596,45 @@ const structuredData = createToolApplicationSchema({
       @apply pointer-events-auto z-20 translate-x-0 translate-y-0 opacity-100;
     }
 
+    /* While a test runs in fullscreen, no controls sit on top of the test
+       area: the dock and exit button are removed, and pausing is a
+       press-and-hold on the hint at the top right (touches there still
+       count). */
+    :global(
+      #touch-test-shell[data-fullscreen="true"]:has(
+          #touch-stage[data-active="true"]
+        )
+        :is(.tool-runtime-dock-primary, .tool-runtime-fullscr-btn)
+    ) {
+      @apply hidden;
+    }
+
+    .touch-hold-zone {
+      @apply text-2xsmall pointer-events-none absolute z-5 hidden rounded-full border border-white/30 bg-black/40 px-3 py-1.5 font-bold tracking-wide whitespace-nowrap text-white/80 uppercase;
+      top: calc(1rem + env(safe-area-inset-top, 0px));
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+    }
+
+    :global(
+      #touch-test-shell[data-fullscreen="true"]
+        #touch-stage[data-active="true"]
+        .touch-hold-zone
+    ) {
+      @apply block;
+    }
+
+    .touch-hold-zone[data-holding="true"] {
+      @apply border-white bg-orange-500/70 text-white;
+    }
+
+    /* Room for the Input readout; still clears the hold hint at 360 px. */
+    :global(
+      :is(#touch-test-shell:fullscreen, #touch-test-shell.is-expanded)
+        .tool-runtime-stage-stats--fullscreen-only
+    ) {
+      @apply w-52;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       :global(.touch-cell),
       :global(.precision-target) {
@@ -595,6 +647,17 @@ const structuredData = createToolApplicationSchema({
     import { onPageHide, observeResize } from "@/utils/phones/tools/lifecycle";
     import { createRafScheduler } from "@/utils/site/raf";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
+    import {
+      PRECISION_BAND_LABELS,
+      createCoverageGrid,
+      createPointerRateTracker,
+      formatInputReadout,
+      gradePrecision,
+      gridSizeFor,
+      median,
+      type InputDetails,
+      type PrecisionBand,
+    } from "@/utils/phones/tools/touch";
 
     function dispatchShowRuntimeControls(
       shell: Element | null | undefined,
@@ -619,7 +682,6 @@ const structuredData = createToolApplicationSchema({
     type Point = { x: number; y: number };
     type TimedPoint = Point & { timestamp: number };
     type ColoredPoint = Point & { color: string };
-    type PrecisionResult = "pending" | "passed" | "failed";
     type DriftGuideId =
       | "horizontal"
       | "vertical"
@@ -644,10 +706,11 @@ const structuredData = createToolApplicationSchema({
       gapCount: number;
     };
 
-    const SCORE_COLS = 32;
-    const SCORE_ROWS = 32;
-    const SCORE_BUCKET_TOTAL = SCORE_COLS * SCORE_ROWS;
     const CELL_TARGET_PX = 44;
+    // Contacts wider than half a cell would light cells the finger barely grazed.
+    const MAX_CONTACT_RADIUS_PX = CELL_TARGET_PX / 2;
+    const HOLD_TO_PAUSE_MS = 700;
+    const HOLD_MOVE_TOLERANCE_PX = 12;
     const LATENCY_SAMPLE_LIMIT = 20;
     const SAMPLE_RATE_WINDOW_MS = 1000;
     const DRIFT_TRACE_POINT_LIMIT = 720;
@@ -776,6 +839,7 @@ const structuredData = createToolApplicationSchema({
     const markersLayer = document.getElementById(
       "touch-markers",
     ) as HTMLDivElement | null;
+    const holdZone = document.getElementById("touch-hold-zone");
     const fullscreenNotice = document.getElementById(
       "touch-fullscreen-notice",
     ) as HTMLDivElement | null;
@@ -819,6 +883,9 @@ const structuredData = createToolApplicationSchema({
       rate: Array.from(
         document.querySelectorAll<HTMLElement>("[data-stat='rate']"),
       ),
+      input: Array.from(
+        document.querySelectorAll<HTMLElement>("[data-stat='input']"),
+      ),
     };
     const statLabelTargets = {
       primary: Array.from(
@@ -851,30 +918,26 @@ const structuredData = createToolApplicationSchema({
     let stageRect: DOMRect | null = null;
     let shouldStartAfterFullscreen = false;
     let pausedForFullscreen = false;
-    let lastPointerType: PointerEvent["pointerType"] | null = null;
-    let lastPressure: number | null = null;
-    let lastContactWidth: number | null = null;
-    let lastContactHeight: number | null = null;
+    let lastInput: InputDetails | null = null;
     let mouseDetected = false;
+    const contactRadii = new Map<number, number>();
+    let holdTimer = 0;
+    let holdPointer: { id: number; x: number; y: number } | null = null;
 
-    const visitedScoreBuckets = new Set<string>();
-    const cellElements = new Map<string, HTMLDivElement>();
-    let gridCols = 0;
-    let gridRows = 0;
+    // Coverage is scored on exactly the cells drawn in the overlay.
+    const coverage = createCoverageGrid({ cols: 0, rows: 0 });
+    let cellElements: HTMLDivElement[] = [];
     let maxTouches = 0;
 
     const precisionTargets: HTMLDivElement[] = [];
-    const precisionAttempts = Array<number>(PRECISION_POINTS.length).fill(0);
-    const precisionResults = Array<PrecisionResult>(PRECISION_POINTS.length).fill(
-      "pending",
+    const precisionBands = Array<PrecisionBand | null>(
+      PRECISION_POINTS.length,
+    ).fill(null);
+    const precisionOffsets = Array<number | null>(PRECISION_POINTS.length).fill(
+      null,
     );
     let currentPrecisionIndex = 0;
-    let precisionLastResult:
-      | "center"
-      | "miss-one"
-      | "miss-two"
-      | "failed"
-      | null = null;
+    let precisionLast: { band: PrecisionBand; distance: number } | null = null;
 
     type GhostPhase = "idle" | "priming" | "watching";
     let ghostPhase: GhostPhase = "idle";
@@ -934,7 +997,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     const latencySamples: number[] = [];
-    let sampleTimestamps: number[] = [];
+    const rateTracker = createPointerRateTracker(SAMPLE_RATE_WINDOW_MS);
 
     const pageController = new AbortController();
     const wakeLock = createWakeLock({ signal: pageController.signal });
@@ -971,17 +1034,6 @@ const structuredData = createToolApplicationSchema({
       return Math.min(1, Math.max(0, value));
     }
 
-    function median(values: readonly number[]): number | null {
-      if (values.length === 0) return null;
-      const sorted = [...values].sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      const middle = sorted[mid];
-      const before = sorted[mid - 1];
-      if (middle === undefined) return null;
-      return sorted.length % 2 === 1 || before === undefined
-        ? middle
-        : (before + middle) / 2;
-    }
 
     function refreshStageRect(): DOMRect | null {
       stageRect = stage?.getBoundingClientRect() ?? null;
@@ -1046,8 +1098,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function coverageLabel(): string {
-      if (visitedScoreBuckets.size === 0) return "0%";
-      return `${Math.round((visitedScoreBuckets.size / SCORE_BUCKET_TOTAL) * 100)}%`;
+      return `${coverage.percent()}%`;
     }
 
     function driftCoverageLabel(result: DriftResult): string {
@@ -1056,8 +1107,21 @@ const structuredData = createToolApplicationSchema({
       )}%`;
     }
 
-    function precisionResultCount(result: PrecisionResult): number {
-      return precisionResults.filter((value) => value === result).length;
+    function precisionBandCount(band: PrecisionBand): number {
+      return precisionBands.filter((value) => value === band).length;
+    }
+
+    function precisionSummary(): string {
+      const offsets = precisionOffsets.filter(
+        (value): value is number => value !== null,
+      );
+      const counts = (["centre", "on-target", "near", "miss"] as const)
+        .map((band) => `${precisionBandCount(band)} ${PRECISION_BAND_LABELS[band]}`)
+        .join(", ");
+      if (offsets.length === 0) return counts;
+      const mean =
+        offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+      return `${counts}, average offset ${Math.round(mean)} px`;
     }
 
     function primaryLabel(): string {
@@ -1110,11 +1174,9 @@ const structuredData = createToolApplicationSchema({
         case "swipe":
           return coverageLabel();
         case "precision":
-          if (precisionLastResult === "center") return "Center";
-          if (precisionLastResult === "miss-one") return "Miss 1/3";
-          if (precisionLastResult === "miss-two") return "Miss 2/3";
-          if (precisionLastResult === "failed") return "Failed";
-          return "--";
+          return precisionLast
+            ? `${PRECISION_BAND_LABELS[precisionLast.band]} ${Math.round(precisionLast.distance)}px`
+            : "--";
         case "ghost":
           return String(ghostPhantomCount);
         case "drift": {
@@ -1126,15 +1188,6 @@ const structuredData = createToolApplicationSchema({
       }
     }
 
-    function currentSampleRate(): number | null {
-      if (sampleTimestamps.length < 2) return null;
-      const first = sampleTimestamps[0];
-      const last = sampleTimestamps[sampleTimestamps.length - 1];
-      if (first === undefined || last === undefined) return null;
-      const span = last - first;
-      if (span <= 0) return null;
-      return Math.round(((sampleTimestamps.length - 1) / span) * 1000);
-    }
 
     function updateStatus(): void {
       if (!stage) return;
@@ -1143,7 +1196,7 @@ const structuredData = createToolApplicationSchema({
       if (isCoverageMode()) {
         progress = `Progress ${coverageLabel()}.`;
       } else if (isPrecisionMode()) {
-        progress = `Completed ${currentPrecisionIndex} of ${PRECISION_POINTS.length}. ${precisionResultCount("passed")} passed and ${precisionResultCount("failed")} failed.`;
+        progress = `Completed ${currentPrecisionIndex} of ${PRECISION_POINTS.length}. ${precisionSummary()}.`;
       } else if (isGhostMode()) {
         progress = `${formatGhostTimeLeft()} remaining. ${ghostPhantomCount} phantom touches.`;
       } else if (isDriftMode()) {
@@ -1168,8 +1221,9 @@ const structuredData = createToolApplicationSchema({
       setStat("primary", primaryValue());
       setStatLabel("secondary", secondaryLabel());
       setStat("secondary", secondaryValue());
-      const rate = currentSampleRate();
+      const rate = rateTracker.rate();
       setStat("rate", rate === null ? "-- Hz" : `${rate} Hz`);
+      setStat("input", formatInputReadout(lastInput));
       const latencyMedian = median(latencySamples);
       setStat(
         "latency",
@@ -1179,51 +1233,34 @@ const structuredData = createToolApplicationSchema({
       updateReportSummary();
     }
 
-    function scoreBucketKey(normX: number, normY: number): string {
-      const col = Math.min(
-        SCORE_COLS - 1,
-        Math.max(0, Math.floor(normX * SCORE_COLS)),
+    function contactRadius(event: PointerEvent): number {
+      return Math.min(
+        MAX_CONTACT_RADIUS_PX,
+        Math.max(0, Math.max(event.width, event.height) / 2),
       );
-      const row = Math.min(
-        SCORE_ROWS - 1,
-        Math.max(0, Math.floor(normY * SCORE_ROWS)),
-      );
-      return `${col}:${row}`;
     }
 
-    function visualCellKey(normX: number, normY: number): string | null {
-      if (gridCols === 0 || gridRows === 0) return null;
-      const col = Math.min(
-        gridCols - 1,
-        Math.max(0, Math.floor(normX * gridCols)),
-      );
-      const row = Math.min(
-        gridRows - 1,
-        Math.max(0, Math.floor(normY * gridRows)),
-      );
-      return `${col}:${row}`;
-    }
-
-    function markPoint(point: Point): void {
+    function markContact(point: Point, radius: number): void {
       const rect = stageRect ?? refreshStageRect();
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      const normX = clamp01(point.x / rect.width);
-      const normY = clamp01(point.y / rect.height);
-      visitedScoreBuckets.add(scoreBucketKey(normX, normY));
-      const visualKey = visualCellKey(normX, normY);
-      if (visualKey)
-        cellElements.get(visualKey)?.classList.add("touch-cell--hit");
+      if (coverage.size.cols === 0) return;
+      coverage
+        .mark(point.x, point.y, radius, rect.width, rect.height)
+        .forEach((key) => cellElements[key]?.classList.add("touch-cell--hit"));
     }
 
-    function markSegment(from: Point, to: Point): void {
+    function markSegment(from: Point, to: Point, radius: number): void {
       const distance = Math.hypot(to.x - from.x, to.y - from.y);
       const steps = Math.max(1, Math.ceil(distance / 6));
       for (let index = 0; index <= steps; index += 1) {
         const t = index / steps;
-        markPoint({
-          x: from.x + (to.x - from.x) * t,
-          y: from.y + (to.y - from.y) * t,
-        });
+        markContact(
+          {
+            x: from.x + (to.x - from.x) * t,
+            y: from.y + (to.y - from.y) * t,
+          },
+          radius,
+        );
       }
     }
 
@@ -1231,7 +1268,7 @@ const structuredData = createToolApplicationSchema({
       if (!stage || !overlay) return;
       overlay.hidden = !isCoverageMode();
       overlay.replaceChildren();
-      cellElements.clear();
+      cellElements = [];
 
       if (!isCoverageMode()) {
         overlay.style.gridTemplateColumns = "";
@@ -1241,22 +1278,18 @@ const structuredData = createToolApplicationSchema({
 
       const rect = refreshStageRect();
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      gridCols = Math.max(6, Math.round(rect.width / CELL_TARGET_PX));
-      gridRows = Math.max(6, Math.round(rect.height / CELL_TARGET_PX));
-      overlay.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
-      overlay.style.gridTemplateRows = `repeat(${gridRows}, minmax(0, 1fr))`;
+      const size = gridSizeFor(rect.width, rect.height, CELL_TARGET_PX);
+      coverage.resize(size);
+      overlay.style.gridTemplateColumns = `repeat(${size.cols}, minmax(0, 1fr))`;
+      overlay.style.gridTemplateRows = `repeat(${size.rows}, minmax(0, 1fr))`;
 
-      for (let row = 0; row < gridRows; row += 1) {
-        for (let col = 0; col < gridCols; col += 1) {
+      for (let row = 0; row < size.rows; row += 1) {
+        for (let col = 0; col < size.cols; col += 1) {
           const cell = document.createElement("div");
           cell.className = "touch-cell";
-          const normX = (col + 0.5) / gridCols;
-          const normY = (row + 0.5) / gridRows;
-          if (visitedScoreBuckets.has(scoreBucketKey(normX, normY))) {
-            cell.classList.add("touch-cell--hit");
-          }
+          if (coverage.isHit(col, row)) cell.classList.add("touch-cell--hit");
           overlay.append(cell);
-          cellElements.set(`${col}:${row}`, cell);
+          cellElements.push(cell);
         }
       }
     }
@@ -1282,35 +1315,14 @@ const structuredData = createToolApplicationSchema({
     function syncPrecisionTarget(index: number): void {
       const target = precisionTargets[index];
       if (!target) return;
-      const isPrecision = isPrecisionMode();
-      const result = precisionResults[index] ?? "pending";
-      const attempts = precisionAttempts[index] ?? 0;
-      target.classList.toggle(
-        "precision-target--complete",
-        result === "passed",
-      );
+      const band = precisionBands[index] ?? null;
       target.classList.toggle(
         "precision-target--current",
-        isPrecision && index === currentPrecisionIndex && result === "pending",
+        isPrecisionMode() && index === currentPrecisionIndex && band === null,
       );
-      target.classList.toggle(
-        "precision-target--attempt-one",
-        isPrecision &&
-          index === currentPrecisionIndex &&
-          result === "pending" &&
-          attempts === 1,
-      );
-      target.classList.toggle(
-        "precision-target--attempt-two",
-        isPrecision &&
-          index === currentPrecisionIndex &&
-          result === "pending" &&
-          attempts === 2,
-      );
-      target.classList.toggle(
-        "precision-target--failed",
-        result === "failed",
-      );
+      (["centre", "on-target", "near", "miss"] as const).forEach((name) => {
+        target.classList.toggle(`precision-target--${name}`, band === name);
+      });
     }
 
     function syncAllPrecisionTargets(): void {
@@ -1324,41 +1336,21 @@ const structuredData = createToolApplicationSchema({
       const target = PRECISION_POINTS[currentPrecisionIndex];
       if (!target) return;
 
-      const targetX = rect.width * target.x;
-      const targetY = rect.height * target.y;
-      const distance = Math.hypot(point.x - targetX, point.y - targetY);
-      const targetElement = precisionTargets[currentPrecisionIndex];
-      const centerBounds = targetElement
-        ?.querySelector<HTMLElement>(".precision-target-center")
-        ?.getBoundingClientRect();
-      const centerRadius = (centerBounds?.width ?? 8) / 2;
-      let impactClass = "precision-impact--pass";
+      // One graded tap per target: distance from the target centre, in CSS px.
+      const distance = Math.hypot(
+        point.x - rect.width * target.x,
+        point.y - rect.height * target.y,
+      );
+      const band = gradePrecision(distance);
       const completedIndex = currentPrecisionIndex;
-
-      if (distance <= centerRadius) {
-        precisionLastResult = "center";
-        precisionResults[completedIndex] = "passed";
-        currentPrecisionIndex += 1;
-      } else {
-        const attempts = (precisionAttempts[completedIndex] ?? 0) + 1;
-        precisionAttempts[completedIndex] = attempts;
-        if (attempts >= 3) {
-          precisionLastResult = "failed";
-          precisionResults[completedIndex] = "failed";
-          impactClass = "precision-impact--miss-three";
-          currentPrecisionIndex += 1;
-        } else if (attempts === 2) {
-          precisionLastResult = "miss-two";
-          impactClass = "precision-impact--miss-two";
-        } else {
-          precisionLastResult = "miss-one";
-          impactClass = "precision-impact--miss-one";
-        }
-      }
+      precisionBands[completedIndex] = band;
+      precisionOffsets[completedIndex] = distance;
+      precisionLast = { band, distance };
+      currentPrecisionIndex += 1;
 
       if (precisionLayer) {
         const impact = document.createElement("div");
-        impact.className = `precision-impact ${impactClass}`;
+        impact.className = `precision-impact precision-impact--${band}`;
         impact.style.left = `${point.x}px`;
         impact.style.top = `${point.y}px`;
         precisionLayer.append(impact);
@@ -1790,6 +1782,7 @@ const structuredData = createToolApplicationSchema({
         syncFullscreenNotice();
       }
       if (!active) {
+        cancelHold();
         activeTouches.clear();
         pointerSlots.clear();
         usedSlots.clear();
@@ -1850,13 +1843,15 @@ const structuredData = createToolApplicationSchema({
       usedSlots.clear();
       rafScheduler.cancel();
       maxTouches = 0;
-      visitedScoreBuckets.clear();
+      coverage.clear();
       currentPrecisionIndex = 0;
-      precisionAttempts.fill(0);
-      precisionResults.fill("pending");
-      precisionLastResult = null;
+      precisionBands.fill(null);
+      precisionOffsets.fill(null);
+      precisionLast = null;
       latencySamples.length = 0;
-      sampleTimestamps = [];
+      rateTracker.clear();
+      contactRadii.clear();
+      cancelHold();
       resetGhostState();
       resetDriftTrace();
       renderMarkers();
@@ -1971,24 +1966,18 @@ const structuredData = createToolApplicationSchema({
         : timestamp;
     }
 
-    function recordSampleTiming(timestamp: number): void {
-      const normalizedTimestamp = normalizePointerTimestamp(timestamp);
-      sampleTimestamps.push(normalizedTimestamp);
-      const cutoff = normalizedTimestamp - SAMPLE_RATE_WINDOW_MS;
-      while (
-        sampleTimestamps.length > 0 &&
-        (sampleTimestamps[0] ?? 0) < cutoff
-      ) {
-        sampleTimestamps.shift();
-      }
+    function recordSampleTiming(pointerId: number, timestamp: number): void {
+      rateTracker.record(pointerId, normalizePointerTimestamp(timestamp));
     }
 
     function recordInputMetrics(event: PointerEvent): void {
       const wasMouse = mouseDetected;
-      lastPointerType = event.pointerType;
-      lastPressure = event.pressure;
-      lastContactWidth = event.width;
-      lastContactHeight = event.height;
+      lastInput = {
+        pointerType: event.pointerType,
+        pressure: event.pressure,
+        width: event.width,
+        height: event.height,
+      };
       mouseDetected = event.pointerType === "mouse";
       if (mouseDetected && !wasMouse && mouseNotice) mouseNotice.hidden = false;
     }
@@ -2007,43 +1996,82 @@ const structuredData = createToolApplicationSchema({
       });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- wired into the stats in Phase 1 (review finding H4).
-    function formatInputReadout(): string {
-      if (!lastPointerType) return "--";
-      const typeLabel =
-        lastPointerType === "touch"
-          ? "Finger"
-          : lastPointerType === "pen"
-            ? "Stylus"
-            : "Mouse";
-      const parts = [typeLabel];
-
-      if (
-        lastPointerType !== "mouse" &&
-        lastPressure !== null &&
-        lastPressure !== 0.5 &&
-        lastPressure > 0
-      ) {
-        parts.push(`${Math.round(lastPressure * 100)}%`);
-      }
-      if (
-        lastContactWidth &&
-        lastContactHeight &&
-        (lastContactWidth > 1 || lastContactHeight > 1)
-      ) {
-        parts.push(
-          `${Math.round(lastContactWidth)}×${Math.round(lastContactHeight)}px`,
-        );
-      }
-      return parts.join(" · ");
-    }
-
     function updateReportSummary(): void {
       if (!reportSummary) return;
       const driftGuideLabel = isDriftMode()
         ? ` (${currentDriftGuide().label})`
         : "";
-      reportSummary.textContent = `${MODE_META[currentMode].label}${driftGuideLabel}: ${primaryLabel()} ${primaryValue()}, ${secondaryLabel()} ${secondaryValue()}.`;
+      const precisionDetail = isPrecisionMode()
+        ? ` ${precisionSummary()}.`
+        : "";
+      reportSummary.textContent = `${MODE_META[currentMode].label}${driftGuideLabel}: ${primaryLabel()} ${primaryValue()}, ${secondaryLabel()} ${secondaryValue()}.${precisionDetail}`;
+    }
+
+    // Press-and-hold on the "Hold to pause" hint pauses a running
+    // fullscreen test. The touch still counts for the test underneath.
+    function isInHoldZone(clientX: number, clientY: number): boolean {
+      if (!holdZone || !isFullscreenActive() || !isTestActive()) return false;
+      const rect = holdZone.getBoundingClientRect();
+      if (rect.width === 0) return false;
+      const pad = 8;
+      return (
+        clientX >= rect.left - pad &&
+        clientX <= rect.right + pad &&
+        clientY >= rect.top - pad &&
+        clientY <= rect.bottom + pad
+      );
+    }
+
+    function cancelHold(): void {
+      if (holdTimer !== 0) {
+        window.clearTimeout(holdTimer);
+        holdTimer = 0;
+      }
+      holdPointer = null;
+      if (holdZone) holdZone.dataset.holding = "false";
+    }
+
+    function beginHold(event: PointerEvent): void {
+      cancelHold();
+      if (!isInHoldZone(event.clientX, event.clientY)) return;
+      holdPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      if (holdZone) holdZone.dataset.holding = "true";
+      holdTimer = window.setTimeout(() => {
+        holdTimer = 0;
+        cancelHold();
+        pauseActiveTest();
+      }, HOLD_TO_PAUSE_MS);
+    }
+
+    function trackHold(event: PointerEvent): void {
+      if (!holdPointer || event.pointerId !== holdPointer.id) return;
+      const moved = Math.hypot(
+        event.clientX - holdPointer.x,
+        event.clientY - holdPointer.y,
+      );
+      if (moved > HOLD_MOVE_TOLERANCE_PX) cancelHold();
+    }
+
+    function pauseActiveTest(): boolean {
+      if (isGhostMode() && ghostPhase !== "idle") {
+        clearGhostTimer();
+        ghostPhase = "idle";
+        pausedForFullscreen = true;
+        setTestActive(false);
+        resetGhostState();
+        syncFullscreenNotice();
+        showRuntimeControls();
+        return true;
+      }
+      if (isTestActive()) {
+        shouldStartAfterFullscreen = false;
+        pausedForFullscreen = true;
+        setTestActive(false);
+        syncFullscreenNotice();
+        showRuntimeControls();
+        return true;
+      }
+      return false;
     }
 
     function flushPointerMoves(): void {
@@ -2051,8 +2079,9 @@ const structuredData = createToolApplicationSchema({
         const previous = activeTouches.get(pointerId);
         if (!previous || points.length === 0) return;
         let cursor: Point = previous;
+        const radius = contactRadii.get(pointerId) ?? 0;
         for (const point of points) {
-          if (currentMode === "swipe") markSegment(cursor, point);
+          if (currentMode === "swipe") markSegment(cursor, point, radius);
           if (currentMode === "drift")
             recordDriftSample(point, point.timestamp);
           cursor = point;
@@ -2076,6 +2105,7 @@ const structuredData = createToolApplicationSchema({
       (event) => {
         if (!isTestActive()) return;
         recordInputMetrics(event);
+        beginHold(event);
         const point = pointFromClient(event.clientX, event.clientY);
         if (!point) return;
         const rect = stageRect;
@@ -2092,7 +2122,8 @@ const structuredData = createToolApplicationSchema({
         event.preventDefault();
         stage.setPointerCapture(event.pointerId);
         recordLatencySample(event.timeStamp);
-        recordSampleTiming(event.timeStamp);
+        recordSampleTiming(event.pointerId, event.timeStamp);
+        contactRadii.set(event.pointerId, contactRadius(event));
         const slot = allocatePointerSlot(event.pointerId);
         activeTouches.set(event.pointerId, {
           ...point,
@@ -2100,7 +2131,7 @@ const structuredData = createToolApplicationSchema({
         });
 
         if (currentMode === "swipe") {
-          markPoint(point);
+          markContact(point, contactRadius(event));
         } else if (currentMode === "precision") {
           handlePrecisionTap(point);
         } else if (currentMode === "drift") {
@@ -2118,6 +2149,7 @@ const structuredData = createToolApplicationSchema({
     stage?.addEventListener(
       "pointermove",
       (event) => {
+        trackHold(event);
         if (!isTestActive() || isGhostMode()) return;
         if (!activeTouches.has(event.pointerId)) return;
         event.preventDefault();
@@ -2132,9 +2164,10 @@ const structuredData = createToolApplicationSchema({
             ...point,
             timestamp: normalizePointerTimestamp(sample.timeStamp),
           });
-          recordSampleTiming(sample.timeStamp);
+          recordSampleTiming(event.pointerId, sample.timeStamp);
         }
         if (points.length > 0) pendingMoves.set(event.pointerId, points);
+        contactRadii.set(event.pointerId, contactRadius(event));
         recordInputMetrics(event);
         rafScheduler.request();
       },
@@ -2142,12 +2175,14 @@ const structuredData = createToolApplicationSchema({
     );
 
     function removeTouch(event: PointerEvent): void {
+      if (holdPointer?.id === event.pointerId) cancelHold();
       const pending = pendingMoves.get(event.pointerId);
       const previous = activeTouches.get(event.pointerId);
+      const radius = contactRadii.get(event.pointerId) ?? 0;
       if (pending && previous) {
         let cursor: Point = previous;
         for (const point of pending) {
-          if (currentMode === "swipe") markSegment(cursor, point);
+          if (currentMode === "swipe") markSegment(cursor, point, radius);
           if (currentMode === "drift")
             recordDriftSample(point, point.timestamp);
           cursor = point;
@@ -2156,6 +2191,7 @@ const structuredData = createToolApplicationSchema({
       if (currentMode === "drift") renderDriftTrace();
       pendingMoves.delete(event.pointerId);
       activeTouches.delete(event.pointerId);
+      contactRadii.delete(event.pointerId);
       releasePointerSlot(event.pointerId);
       renderMarkers();
       updateStats();
@@ -2218,24 +2254,7 @@ const structuredData = createToolApplicationSchema({
     startButton?.addEventListener(
       "click",
       () => {
-        if (isGhostMode() && ghostPhase !== "idle") {
-          clearGhostTimer();
-          ghostPhase = "idle";
-          pausedForFullscreen = true;
-          setTestActive(false);
-          resetGhostState();
-          syncFullscreenNotice();
-          showRuntimeControls();
-          return;
-        }
-        if (isTestActive()) {
-          shouldStartAfterFullscreen = false;
-          pausedForFullscreen = true;
-          setTestActive(false);
-          syncFullscreenNotice();
-          showRuntimeControls();
-          return;
-        }
+        if (pauseActiveTest()) return;
         startFullscreenTest();
       },
       { signal: pageController.signal },
