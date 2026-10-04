@@ -37,7 +37,7 @@ const referenceItems = [
     good:
       "The capture completes, resting rates move closer to zero, and the offset is reported as captured.",
     concern:
-      "The capture is rejected, or a large resting rate returns immediately while the phone remains still.",
+      "The capture reports a high offset (5.5 deg/s or more), or a large resting rate returns immediately while the phone remains still. A rejected capture means the phone moved; hold it still and try again.",
   },
   {
     label: "Twist",
@@ -54,7 +54,7 @@ const referenceItems = [
     check:
       "After capturing zero-rate, hold the phone flat and still, then watch whether the resting-spin dot stays near the center target.",
     reading:
-      "The square maps corrected X and Y rotation rate to the moving dot. The Drift score combines X, Y, and Z axes after a small quiet-band filter.",
+      "The square maps corrected X and Y rotation rate to the moving dot. The Drift score is the average resting rotation across X, Y, and Z over the last 48 samples, taken from the unfiltered readings minus any captured offset. Resting noise shows how much those readings scatter around that average.",
     good: "The dot stays inside the center ring and the Drift score settles close to zero after movement stops.",
     concern:
       "The dot sits away from center or the Drift score keeps reporting rotation while the phone rests.",
@@ -91,7 +91,7 @@ const gyroChecks = [
     icon: "gyro-drift",
     label: "Drift",
     meta: "Zero-rate stability",
-    hint: "Keep the phone flat and still: X/Y should keep the dot near center, Z-rate should stay near zero, and the Drift score should settle after the quiet-band filter.",
+    hint: "Keep the phone flat and still: X/Y should keep the dot near center, Z-rate should stay near zero, and the Drift score should settle near zero.",
   },
   {
     id: "3d",
@@ -605,7 +605,7 @@ const structuredData = createToolApplicationSchema({
               still and subtracts it for this page only -- it does not touch the
               device.
             </p>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
               <div class="gyro-diag-card">
                 <div class="gyro-diag-row">
                   <span class="gyro-diag-label">Axes present</span>
@@ -625,13 +625,22 @@ const structuredData = createToolApplicationSchema({
               <div class="gyro-diag-card">
                 <div class="gyro-diag-row">
                   <span class="gyro-diag-label">Zero-rate offset</span>
-                  <strong id="noise-score" class="gyro-diag-value">--</strong>
+                  <strong id="bias-score" class="gyro-diag-value">--</strong>
                 </div>
-                <small id="noise-state" class="gyro-diag-state"
+                <small id="bias-state" class="gyro-diag-state"
                   >Not captured -- hold still and capture</small
                 >
               </div>
               <div class="gyro-diag-card">
+                <div class="gyro-diag-row">
+                  <span class="gyro-diag-label">Resting noise</span>
+                  <strong id="noise-score" class="gyro-diag-value">--</strong>
+                </div>
+                <small id="noise-state" class="gyro-diag-state"
+                  >Waiting for rate</small
+                >
+              </div>
+              <div class="gyro-diag-card col-span-2 sm:col-span-1">
                 <div class="gyro-diag-row">
                   <span class="gyro-diag-label">Peak spin recorded</span>
                   <strong id="evidence-peak" class="gyro-diag-value"
@@ -1046,8 +1055,7 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/phones/tools/lifecycle";
     import { createRafScheduler } from "@/utils/site/raf";
     import {
-      requestMotionPermission,
-      requestOrientationPermission,
+      requestMotionAndOrientationPermission,
       getMotionPermissionState,
       describeSensorUnavailability,
       type SensorPermissionReason,
@@ -1058,17 +1066,20 @@ const structuredData = createToolApplicationSchema({
       remapDeviceAxes,
       type OrientationAngle,
     } from "@/utils/phones/tools/orientation";
+    import {
+      BIAS_CAPTURE,
+      createMotionGraph,
+      driftState as gradeDrift,
+      genericSensorCtor,
+      evaluateBiasCapture,
+      mean as average,
+      restingStats,
+      startGenericSensor,
+      type GenericSensor,
+      type GraphSeries,
+    } from "@/utils/phones/tools/motion";
 
     type GyroCheck = "level" | "twist" | "drift" | "3d";
-
-    type GraphSeries = {
-      values: readonly number[];
-      sampleCount: number;
-      min: number;
-      max: number;
-      baseline?: number;
-      label: string;
-    };
 
     type FrameMetrics = {
       recentRotationData: boolean;
@@ -1078,23 +1089,12 @@ const structuredData = createToolApplicationSchema({
       displayDriftY: number;
       displayDriftZ: number;
       spinMagnitude: number;
-      idleRate: number;
+      restingNoise: number;
       restingBias: number;
       driftScore: number;
       driftState: "waiting" | "calm" | "minor" | "high";
     };
 
-    type GenericGyroscope = EventTarget & {
-      readonly x?: number;
-      readonly y?: number;
-      readonly z?: number;
-      start(): void;
-      stop(): void;
-    };
-    type GenericGyroscopeCtor = new (options?: {
-      frequency?: number;
-    }) => GenericGyroscope;
-    type WindowWithGyroscope = Window & { Gyroscope?: GenericGyroscopeCtor };
     const RAD_TO_DEG = 180 / Math.PI;
 
     const checkHints = {
@@ -1168,6 +1168,8 @@ const structuredData = createToolApplicationSchema({
     const yRateBar = document.getElementById("y-rate-bar");
     const zRateBar = document.getElementById("z-rate-bar");
 
+    const biasScoreLabel = document.getElementById("bias-score");
+    const biasStateLabel = document.getElementById("bias-state");
     const noiseScoreLabel = document.getElementById("noise-score");
     const noiseStateLabel = document.getElementById("noise-state");
     const headingDriftLabel = document.getElementById("heading-drift");
@@ -1255,14 +1257,21 @@ const structuredData = createToolApplicationSchema({
     let alphaLastSampleTime = 0;
     let betaLastSampleTime = 0;
     let gammaLastSampleTime = 0;
-    let graphWidth = 0;
-    let graphHeight = 0;
+    const motionGraph = createMotionGraph(graphCanvas, graphWindowLabel, {
+      r: 51,
+      g: 65,
+      b: 85,
+    });
     const spinHistory: number[] = [];
     const tiltHistory: number[] = [];
     const twistRateHistory: number[] = [];
-    const rateXHistory: number[] = [];
-    const rateYHistory: number[] = [];
-    const rateZHistory: number[] = [];
+
+    // Raw rates minus any captured offset: no smoothing and no deadbands, so
+    // drift is measured on what the sensor reports. Deadbands are for the
+    // animation only.
+    const residualXHistory: number[] = [];
+    const residualYHistory: number[] = [];
+    const residualZHistory: number[] = [];
     const headingHistory: number[] = [];
     const unwrappedHeadingHistory: number[] = [];
     const orientationIntervals: number[] = [];
@@ -1285,10 +1294,10 @@ const structuredData = createToolApplicationSchema({
     const captureRawX: number[] = [];
     const captureRawY: number[] = [];
     const captureRawZ: number[] = [];
+    let lastCaptureHighOffset = false;
+    let lastCaptureRejectReason: "too-few-samples" | "moved" = "moved";
     const BIAS_CAPTURE_SECONDS = 3;
-    const BIAS_CAPTURE_MIN_SAMPLES = 20;
-    const BIAS_CAPTURE_MEAN_LIMIT = 6;
-    const BIAS_CAPTURE_NOISE_LIMIT = 1.4;
+    const RESTING_MIN_SAMPLES = 8;
 
     function showRuntimeControls(): void {
       shell?.dispatchEvent(
@@ -1296,7 +1305,7 @@ const structuredData = createToolApplicationSchema({
       );
     }
 
-    let gyroscopeSensor: GenericGyroscope | null = null;
+    let gyroscopeSensor: GenericSensor | null = null;
     let usingGenericSensor = false;
     let genericSensorLastSampleTime = 0;
     let screenAngle: OrientationAngle = getScreenAngle();
@@ -1322,20 +1331,6 @@ const structuredData = createToolApplicationSchema({
       return typeof value === "number" && Number.isFinite(value) ? value : null;
     }
 
-    function average(values: number[]): number {
-      if (!values.length) return 0;
-      return values.reduce((sum, value) => sum + value, 0) / values.length;
-    }
-
-    function rootMeanSquare(values: number[]): number {
-      if (!values.length) return 0;
-      return Math.sqrt(average(values.map((value) => value ** 2)));
-    }
-
-    function deviationRootMeanSquare(values: number[], center: number): number {
-      if (!values.length) return 0;
-      return rootMeanSquare(values.map((value) => value - center));
-    }
 
     function pushLimited(
       history: number[],
@@ -1428,9 +1423,10 @@ const structuredData = createToolApplicationSchema({
     function resetCorrectedRateHistory(): void {
       spinHistory.length = 0;
       twistRateHistory.length = 0;
-      rateXHistory.length = 0;
-      rateYHistory.length = 0;
-      rateZHistory.length = 0;
+
+      residualXHistory.length = 0;
+      residualYHistory.length = 0;
+      residualZHistory.length = 0;
       peakSpin = 0;
       peakZSpin = 0;
       visualRateZ = 0;
@@ -1448,21 +1444,25 @@ const structuredData = createToolApplicationSchema({
     }
 
     function updateBiasCaptureUi(): void {
-      if (noiseScoreLabel) {
-        noiseScoreLabel.textContent =
+      if (biasScoreLabel) {
+        biasScoreLabel.textContent =
           biasCaptureState === "captured"
             ? formatNoise(lastCapturedBiasMagnitude)
             : "--";
       }
-      if (noiseStateLabel) {
-        noiseStateLabel.textContent =
+      if (biasStateLabel) {
+        biasStateLabel.textContent =
           biasCaptureState === "idle"
             ? "Not captured -- hold still and capture"
             : biasCaptureState === "capturing"
               ? `Hold still... ${biasCaptureCountdown}`
               : biasCaptureState === "captured"
-                ? "Captured -- adjusts this page only"
-                : "Rejected -- hold the phone still and try again";
+                ? lastCaptureHighOffset
+                  ? "High offset -- adjusts this page only"
+                  : "Captured -- adjusts this page only"
+                : lastCaptureRejectReason === "too-few-samples"
+                  ? "Too few samples -- try again"
+                  : "Phone moved -- hold it still and try again";
       }
       if (captureBiasButton) {
         captureBiasButton.disabled =
@@ -1521,36 +1521,27 @@ const structuredData = createToolApplicationSchema({
     }
 
     function finishBiasCapture(): void {
-      const meanX = average(captureRawX);
-      const meanY = average(captureRawY);
-      const meanZ = average(captureRawZ);
-      const noise = Math.hypot(
-        deviationRootMeanSquare(captureRawX, meanX),
-        deviationRootMeanSquare(captureRawY, meanY),
-        deviationRootMeanSquare(captureRawZ, meanZ),
-      );
-      const mean = Math.hypot(meanX, meanY, meanZ);
-      const enoughSamples = captureRawX.length >= BIAS_CAPTURE_MIN_SAMPLES;
-
-      if (
-        !enoughSamples ||
-        noise > BIAS_CAPTURE_NOISE_LIMIT ||
-        mean > BIAS_CAPTURE_MEAN_LIMIT
-      ) {
+      // A large but steady offset is the result being measured, so only a
+      // moving phone or too little data rejects the capture.
+      const result = evaluateBiasCapture(captureRawX, captureRawY, captureRawZ);
+      if (!result.ok) {
+        lastCaptureRejectReason = result.reason;
         biasCaptureState = "rejected";
         updateBiasCaptureUi();
         return;
       }
 
-      rateBiasX = meanX;
-      rateBiasY = meanY;
-      rateBiasZ = meanZ;
+      const { perAxisMean, biasMagnitude } = result.stats;
+      rateBiasX = perAxisMean.x;
+      rateBiasY = perAxisMean.y;
+      rateBiasZ = perAxisMean.z;
       rateBiasXReady = true;
       rateBiasYReady = true;
       rateBiasZReady = true;
       settleCorrectedRates();
       resetCorrectedRateHistory();
-      lastCapturedBiasMagnitude = mean;
+      lastCapturedBiasMagnitude = biasMagnitude;
+      lastCaptureHighOffset = result.highOffset;
       biasCaptureState = "captured";
       updateBiasCaptureUi();
     }
@@ -1682,39 +1673,8 @@ const structuredData = createToolApplicationSchema({
       });
     }
 
-    function graphLineColor(): { r: number; g: number; b: number } {
-      const fallback = { r: 51, g: 65, b: 85 };
-      if (!graphCanvas) return fallback;
-      const computed = getComputedStyle(graphCanvas).color;
-      const match = computed.match(
-        /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/,
-      );
-      if (!match) return fallback;
-      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
-    }
-
-    function graphColors(): { grid: string; baseline: string; line: string } {
-      const c = graphLineColor();
-      const withAlpha = (alpha: number): string =>
-        `rgb(${c.r} ${c.g} ${c.b} / ${alpha})`;
-      return {
-        grid: withAlpha(0.1),
-        baseline: withAlpha(0.35),
-        line: withAlpha(0.9),
-      };
-    }
-
     function resizeGraph(): void {
-      if (!graphCanvas) return;
-      const rect = graphCanvas.getBoundingClientRect();
-      graphWidth = rect.width;
-      graphHeight = rect.height;
-      if (graphWidth <= 0 || graphHeight <= 0) return;
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      graphCanvas.width = Math.round(graphWidth * ratio);
-      graphCanvas.height = Math.round(graphHeight * ratio);
-      const context = graphCanvas.getContext("2d");
-      context?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      motionGraph.resize();
       drawGraph();
     }
 
@@ -1767,78 +1727,11 @@ const structuredData = createToolApplicationSchema({
     }
 
     function updateGraphLabels(series: GraphSeries): void {
-      if (graphWindowLabel) {
-        const sampleLabel =
-          series.sampleCount > 0
-            ? `Last ${series.sampleCount} sample${series.sampleCount === 1 ? "" : "s"}`
-            : "No samples yet";
-        graphWindowLabel.textContent = `${series.label} - ${sampleLabel}`;
-      }
+      motionGraph.updateLabel(series);
     }
 
     function drawGraph(series = currentGraphSeries()): void {
-      updateGraphLabels(series);
-      if (!graphCanvas || graphWidth <= 0 || graphHeight <= 0) return;
-      const context = graphCanvas.getContext("2d");
-      if (!context) return;
-
-      context.clearRect(0, 0, graphWidth, graphHeight);
-      const colors = graphColors();
-
-      context.strokeStyle = colors.grid;
-      context.lineWidth = 1;
-      for (let index = 1; index < 4; index += 1) {
-        const y = (graphHeight / 4) * index;
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(graphWidth, y);
-        context.stroke();
-      }
-
-      const values = series.values;
-      let minValue: number;
-      let maxValue: number;
-      if (series.baseline !== undefined) {
-        const deviation = Math.max(
-          series.baseline - series.min,
-          series.max - series.baseline,
-          0.001,
-        );
-        minValue = series.baseline - deviation;
-        maxValue = series.baseline + deviation;
-      } else {
-        minValue = series.min;
-        maxValue = series.max;
-      }
-      const span = Math.max(0.001, maxValue - minValue);
-
-      if (series.baseline !== undefined) {
-        const baselineY =
-          graphHeight - ((series.baseline - minValue) / span) * graphHeight;
-        context.strokeStyle = colors.baseline;
-        context.setLineDash([6, 6]);
-        context.beginPath();
-        context.moveTo(0, baselineY);
-        context.lineTo(graphWidth, baselineY);
-        context.stroke();
-        context.setLineDash([]);
-      }
-
-      if (values.length <= 1) return;
-
-      context.strokeStyle = colors.line;
-      context.lineWidth = 2.25;
-      context.lineJoin = "round";
-      context.lineCap = "round";
-      context.beginPath();
-
-      values.forEach((value, index) => {
-        const x = (index / (values.length - 1)) * graphWidth;
-        const y = graphHeight - ((value - minValue) / span) * graphHeight;
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      });
-      context.stroke();
+      motionGraph.draw(series);
     }
 
     function computeHeadingDriftRange(): number {
@@ -1891,28 +1784,17 @@ const structuredData = createToolApplicationSchema({
         displayDriftY,
         displayDriftZ,
       );
-      const restingBias = recentRotationData
-        ? Math.hypot(
-            average(rateXHistory.map(applyDriftRateDeadband)),
-            average(rateYHistory.map(applyDriftRateDeadband)),
-            average(rateZHistory.map(applyDriftRateDeadband)),
-          )
-        : 0;
-      const idleRate = recentRotationData
-        ? rootMeanSquare(
-            spinHistory.map((value) =>
-              value < driftQuietRateThreshold ? 0 : value,
-            ),
-          )
-        : 0;
-      const driftScore = Math.max(spinMagnitude, idleRate, restingBias);
-      const driftState = !recentRotationData
-        ? ("waiting" as const)
-        : driftScore < driftQuietRateThreshold
-          ? ("calm" as const)
-          : driftScore < 5.5
-            ? ("minor" as const)
-            : ("high" as const);
+      const resting = recentRotationData
+        ? restingStats(residualXHistory, residualYHistory, residualZHistory)
+        : null;
+      const restingReady =
+        resting !== null && resting.samples >= RESTING_MIN_SAMPLES;
+      const restingBias = restingReady ? resting.biasMagnitude : 0;
+      const restingNoise = restingReady ? resting.noiseRms : 0;
+      const driftScore = restingBias;
+      const driftState = restingReady
+        ? gradeDrift(restingBias)
+        : ("waiting" as const);
       return {
         recentRotationData,
         recentAnyRotationData,
@@ -1921,7 +1803,7 @@ const structuredData = createToolApplicationSchema({
         displayDriftY,
         displayDriftZ,
         spinMagnitude,
-        idleRate,
+        restingNoise,
         restingBias,
         driftScore,
         driftState,
@@ -1933,16 +1815,17 @@ const structuredData = createToolApplicationSchema({
       const recentHeadingData = hasRecentAlphaData();
       const headingRange = computeHeadingDriftRange();
       const {
-        recentRotationData,
         recentAnyRotationData,
         tiltMagnitude,
         displayDriftX,
         displayDriftY,
         spinMagnitude,
+        restingNoise,
         driftScore,
         driftState,
       } = metrics;
-      const driftText = recentRotationData ? formatNoise(driftScore) : "--";
+      const driftText =
+        driftState === "waiting" ? "--" : formatNoise(driftScore);
       const displayRateZ = applyQuietRateDeadband(rateZ);
 
       updateSampleMetrics();
@@ -1986,12 +1869,22 @@ const structuredData = createToolApplicationSchema({
           driftState === "waiting"
             ? "Waiting for rate"
             : driftState === "calm"
-              ? "Calm in quiet band"
+              ? "Calm"
               : driftState === "minor"
                 ? "Minor drift"
                 : "High drift";
       }
       stage?.setAttribute("data-drift-state", driftState);
+      if (noiseScoreLabel)
+        noiseScoreLabel.textContent =
+          driftState === "waiting" ? "--" : formatNoise(restingNoise);
+      if (noiseStateLabel)
+        noiseStateLabel.textContent =
+          driftState === "waiting"
+            ? "Waiting for rate"
+            : restingNoise <= BIAS_CAPTURE.noiseLimit
+              ? "Steady"
+              : "Moving or noisy";
 
       if (headingDriftLabel)
         headingDriftLabel.textContent = recentHeadingData
@@ -2098,7 +1991,7 @@ const structuredData = createToolApplicationSchema({
 
     function updateStageInfo(metrics = computeFrameMetrics()): void {
       if (!stageInfo) return;
-      const { tiltMagnitude, spinMagnitude, idleRate } = metrics;
+      const { tiltMagnitude, driftState } = metrics;
 
       if (started && sampleCount > 0 && !hasCheckData(currentCheck)) {
         stageInfo.textContent =
@@ -2140,7 +2033,7 @@ const structuredData = createToolApplicationSchema({
       }
 
       stageInfo.textContent =
-        idleRate < 1.5 && spinMagnitude < 3
+        driftState === "calm"
           ? "Resting spin looks calm and settled close to zero."
           : "Hold the phone flat and still for a few seconds, then use “Zero rate” to remove the resting offset.";
     }
@@ -2454,9 +2347,10 @@ const structuredData = createToolApplicationSchema({
         const spinMagnitude = currentSpinMagnitude();
         peakSpin = Math.max(peakSpin, spinMagnitude);
         pushLimited(spinHistory, spinMagnitude);
-        pushLimited(rateXHistory, rateX);
-        pushLimited(rateYHistory, rateY);
-        pushLimited(rateZHistory, rateZ);
+
+        pushLimited(residualXHistory, latestRawRateX - (rateBiasXReady ? rateBiasX : 0));
+        pushLimited(residualYHistory, latestRawRateY - (rateBiasYReady ? rateBiasY : 0));
+        pushLimited(residualZHistory, latestRawRateZ - (rateBiasZReady ? rateBiasZ : 0));
       }
 
       sensorWatchdog.markSample(now);
@@ -2534,12 +2428,12 @@ const structuredData = createToolApplicationSchema({
     }
 
     function genericSensorSupported(): boolean {
-      return typeof (window as WindowWithGyroscope).Gyroscope === "function";
+      return genericSensorCtor("Gyroscope") !== null;
     }
 
-    function handleGenericGyroscopeReading(): void {
+    function handleGenericGyroscopeReading(sensor: GenericSensor): void {
       if (
-        !gyroscopeSensor ||
+        sensor !== gyroscopeSensor ||
         !started ||
         pausedForFullscreen ||
         sensorsPausedForVisibility
@@ -2550,9 +2444,9 @@ const structuredData = createToolApplicationSchema({
         ? now - genericSensorLastSampleTime
         : 0;
       genericSensorLastSampleTime = now;
-      const x = finiteNumber(gyroscopeSensor.x);
-      const y = finiteNumber(gyroscopeSensor.y);
-      const z = finiteNumber(gyroscopeSensor.z);
+      const x = finiteNumber(sensor.x);
+      const y = finiteNumber(sensor.y);
+      const z = finiteNumber(sensor.z);
       ingestRotationSample(
         x === null ? null : x * RAD_TO_DEG,
         y === null ? null : y * RAD_TO_DEG,
@@ -2600,67 +2494,21 @@ const structuredData = createToolApplicationSchema({
       }
     }
 
-    function tryStartGenericSensor(): Promise<boolean> {
-      return new Promise((resolve) => {
-        const win = window as WindowWithGyroscope;
-        if (!win.Gyroscope) {
-          resolve(false);
-          return;
-        }
-        try {
-          const sensor = new win.Gyroscope({ frequency: 60 });
-          let settled = false;
-          let startupTimer = 0;
-          function settle(ok: boolean): void {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(startupTimer);
-            resolve(ok);
-          }
-          function handleFailure(): void {
-            if (settled) {
-              recoverFromGenericSensorFailure();
-              return;
-            }
-            stopGenericSensor();
-            settle(false);
-          }
-          sensor.addEventListener("reading", handleGenericGyroscopeReading, {
-            signal,
-          });
-          sensor.addEventListener("activate", () => settle(true), { signal });
-          sensor.addEventListener(
-            "error",
-            handleFailure,
-            { signal },
-          );
-          gyroscopeSensor = sensor;
-          startupTimer = window.setTimeout(() => {
-            stopGenericSensor();
-            settle(false);
-          }, 1000);
-          sensor.start();
-        } catch {
-          stopGenericSensor();
-          resolve(false);
-        }
+    async function tryStartGenericSensor(): Promise<boolean> {
+      const sensor = await startGenericSensor("Gyroscope", {
+        signal,
+        onReading: handleGenericGyroscopeReading,
+        onError: recoverFromGenericSensorFailure,
       });
-    }
-
-    async function requestPermissions(): Promise<{
-      motion: boolean;
-      orientation: boolean;
-    }> {
-      const motionResult = await requestMotionPermission();
-      const orientationResult = await requestOrientationPermission();
-      return {
-        motion: motionResult.granted,
-        orientation: orientationResult.granted,
-      };
+      gyroscopeSensor = sensor;
+      return sensor !== null;
     }
 
     async function startTest(): Promise<void> {
       if (started || startInFlight) return;
+      // iOS only shows the permission prompts while the click is being
+      // handled, so request both before the first await.
+      const permissionsRequest = requestMotionAndOrientationPermission();
       startInFlight = true;
       startCancelled = false;
       syncStartButton();
@@ -2687,7 +2535,11 @@ const structuredData = createToolApplicationSchema({
         return;
       }
 
-      const permissions = await requestPermissions();
+      const results = await permissionsRequest;
+      const permissions = {
+        motion: results.motion.granted,
+        orientation: results.orientation.granted,
+      };
       if (startCancelled) {
         startInFlight = false;
         syncStartButton();
@@ -2988,6 +2840,7 @@ const structuredData = createToolApplicationSchema({
       stopOrientationWatch?.();
       stopOrientationWatch = null;
       graphResizeObserver?.disconnect();
+      motionGraph.disconnect();
       graphResizeObserver = null;
       driftVisualResizeObserver?.disconnect();
       driftVisualResizeObserver = null;
