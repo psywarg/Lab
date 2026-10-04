@@ -844,18 +844,26 @@ const structuredData = createToolApplicationSchema({
       showRuntimeControls as showShellControls,
     } from "@/utils/phones/tools/runtimeShell";
     import {
+      gravityOffsetState,
+      isShakeEvent,
+      isStillSample,
+      motionDeltaState,
+      noiseState,
+      peakDeltaState,
+      stepAccel,
+      stillnessEvidence,
+    } from "@/utils/phones/tools/accelerometer";
+    import {
       createMotionGraph,
       finiteNumber,
       genericSensorCtor,
       mean as average,
-      standardDeviation,
       startGenericSensor,
       type GenericSensor,
       type GraphSeries,
     } from "@/utils/phones/tools/motion";
 
     const ORIENTATION_STALE_MS = 2500;
-    const GRAVITY_LPF_ALPHA = 0.08;
 
     const checkHints = {
       flat: "Place the phone flat and watch whether total force settles near 1 g.",
@@ -1267,9 +1275,9 @@ const structuredData = createToolApplicationSchema({
     }
 
     function updateDiagnostics(delta: number): void {
-      const hasStillnessWindow = stillForceHistory.length >= 8;
-      const noise = standardDeviation(stillForceHistory);
-      const gravityError = Math.abs(average(stillForceHistory) - 1);
+      const evidence = stillnessEvidence(stillForceHistory);
+      const { noise, gravityError } = evidence;
+      const hasStillnessWindow = evidence.ready;
       const avgInterval = average(intervalHistory);
       const sampleRate = avgInterval > 0 ? 1000 / avgInterval : 0;
       const rateText = sampleRate > 0 ? `${sampleRate.toFixed(1)} Hz` : "-- Hz";
@@ -1277,27 +1285,13 @@ const structuredData = createToolApplicationSchema({
       if (motionDeltaLabel)
         motionDeltaLabel.textContent = `${delta.toFixed(2)} g`;
       if (motionDeltaStateLabel) {
-        motionDeltaStateLabel.textContent =
-          delta < 0.35
-            ? "Stable"
-            : delta < 1.2
-              ? "Moving"
-              : delta < 3
-                ? "Strong motion"
-                : "Sharp spike";
+        motionDeltaStateLabel.textContent = motionDeltaState(delta);
       }
 
       if (peakDeltaLabel)
         peakDeltaLabel.textContent = `${peakDelta.toFixed(2)} g`;
       if (peakDeltaStateLabel) {
-        peakDeltaStateLabel.textContent =
-          peakDelta < 0.35
-            ? "No spike yet"
-            : peakDelta < 1.2
-              ? "Light motion"
-              : peakDelta < 3
-                ? "Clear spike"
-                : "Heavy spike";
+        peakDeltaStateLabel.textContent = peakDeltaState(peakDelta);
       }
 
       if (runRate) runRate.textContent = rateText;
@@ -1324,28 +1318,14 @@ const structuredData = createToolApplicationSchema({
           ? `${gravityError.toFixed(3)} g`
           : "--";
       if (evidenceGravityStateLabel) {
-        evidenceGravityStateLabel.textContent = !hasStillnessWindow
-          ? "Collecting flat samples"
-          : gravityError < 0.03
-            ? "On target"
-            : gravityError < 0.08
-              ? "Slight offset"
-              : "High offset";
+        evidenceGravityStateLabel.textContent = gravityOffsetState(evidence);
       }
       if (evidenceNoiseLabel)
         evidenceNoiseLabel.textContent = hasStillnessWindow
           ? `${noise.toFixed(3)} g`
           : "--";
       if (evidenceNoiseStateLabel) {
-        evidenceNoiseStateLabel.textContent = !hasStillnessWindow
-          ? "Collecting flat samples"
-          : noise < 0.015
-            ? "Quiet"
-            : noise < 0.045
-              ? "Normal"
-              : noise < 0.09
-                ? "Noisy"
-                : "Very noisy";
+        evidenceNoiseStateLabel.textContent = noiseState(evidence);
       }
 
       const graphSeries = currentGraphSeries();
@@ -1549,66 +1529,22 @@ const structuredData = createToolApplicationSchema({
         linearZAvailable;
       if (!hasAnyMotionData) return;
 
-      const prevX = latestX;
-      const prevY = latestY;
-      const prevZ = latestZ;
-      const hadPreviousSample = gravityEstReady;
-
-      if (gx !== null) latestX = gx;
-      if (gy !== null) latestY = gy;
-      if (gz !== null) latestZ = gz;
+      const step = stepAccel(
+        {
+          latest: { x: latestX, y: latestY, z: latestZ },
+          gravity: { x: gravityEstX, y: gravityEstY, z: gravityEstZ },
+          gravityReady: gravityEstReady,
+        },
+        { gx, gy, gz, lx, ly, lz },
+      );
+      ({ x: latestX, y: latestY, z: latestZ } = step.estimate.latest);
+      ({ x: gravityEstX, y: gravityEstY, z: gravityEstZ } = step.estimate.gravity);
+      gravityEstReady = step.estimate.gravityReady;
       sampleCount += 1;
 
-      if (hasGravityData) {
-        if (!gravityEstReady) {
-          gravityEstX = latestX;
-          gravityEstY = latestY;
-          gravityEstZ = latestZ;
-          gravityEstReady = true;
-        } else {
-          gravityEstX += (latestX - gravityEstX) * GRAVITY_LPF_ALPHA;
-          gravityEstY += (latestY - gravityEstY) * GRAVITY_LPF_ALPHA;
-          gravityEstZ += (latestZ - gravityEstZ) * GRAVITY_LPF_ALPHA;
-        }
-      }
-
-      const totalG = hasGravityData
-        ? Math.sqrt(latestX ** 2 + latestY ** 2 + latestZ ** 2) / 9.80665
-        : null;
-      const tiltSignal = currentTiltSignal();
-      const gravityDelta =
-        hasGravityData && hadPreviousSample
-          ? Math.sqrt(
-              (latestX - prevX) ** 2 +
-                (latestY - prevY) ** 2 +
-                (latestZ - prevZ) ** 2,
-            ) / 9.80665
-          : 0;
-
-      const derivedLinearX = hasGravityData ? latestX - gravityEstX : 0;
-      const derivedLinearY = hasGravityData ? latestY - gravityEstY : 0;
-      const derivedLinearZ = hasGravityData ? latestZ - gravityEstZ : 0;
-
-      const linearAxes: number[] = [];
-      linearAxes.push(lx ?? (hasGravityData ? derivedLinearX : 0));
-      linearAxes.push(ly ?? (hasGravityData ? derivedLinearY : 0));
-      linearAxes.push(lz ?? (hasGravityData ? derivedLinearZ : 0));
-      const dominantLinearAxis = linearAxes.reduce(
-        (strongest, value) =>
-          Math.abs(value) > Math.abs(strongest) ? value : strongest,
-        0,
-      );
-      latestLiftSignal =
-        lz !== null
-          ? lz / 9.80665
-          : hasGravityData
-            ? derivedLinearZ / 9.80665
-            : 0;
-      latestShakeSignal = dominantLinearAxis / 9.80665;
-      const delta =
-        hasGravityData && hadPreviousSample
-          ? gravityDelta
-          : Math.abs(latestShakeSignal);
+      const { totalG, delta, tiltSignal } = step;
+      latestLiftSignal = step.liftSignal;
+      latestShakeSignal = step.shakeSignal;
       const liftSignal = Math.abs(latestLiftSignal);
       lastSampleTime = performance.now();
       if (intervalMs > 0) {
@@ -1629,7 +1565,7 @@ const structuredData = createToolApplicationSchema({
       if (deltaHistory.length > 48) deltaHistory.shift();
       if (liftHistory.length > 48) liftHistory.shift();
       if (shakeHistory.length > 48) shakeHistory.shift();
-      if (currentCheck === "flat" && totalG !== null && delta < 0.08) {
+      if (currentCheck === "flat" && totalG !== null && isStillSample(totalG, delta)) {
         stillForceHistory.push(totalG);
         if (stillForceHistory.length > 48) stillForceHistory.shift();
       }
@@ -1637,11 +1573,13 @@ const structuredData = createToolApplicationSchema({
       const now = lastSampleTime;
       if (
         currentCheck === "shake" &&
-        sampleCount > 1 &&
-        ((totalG !== null && totalG > 1.65) ||
-          delta > 0.8 ||
-          Math.abs(latestShakeSignal) > 0.8) &&
-        now - lastShakeAt > 500
+        isShakeEvent({
+          totalG,
+          delta,
+          shakeSignal: latestShakeSignal,
+          sampleCount,
+          msSinceLastShake: now - lastShakeAt,
+        })
       ) {
         shakeCount += 1;
         lastShakeAt = now;
