@@ -425,12 +425,19 @@ const structuredData = createToolApplicationSchema({
       detectClipping,
       getAudioContextClass,
       onAudioContextStateChange,
-      percentile,
       rampParam,
       strokeWaveform,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
     import {
+      formatClipEvents,
+      formatDbfs,
+      formatSeconds,
+      isNewClipEvent,
+      levelEstimates,
+      nextPeakHold,
+      pickRecorderMimeType,
+      snrDb,
       mergeMeterReports,
       micConstraints,
       micDeviceOptions,
@@ -571,9 +578,6 @@ const structuredData = createToolApplicationSchema({
       return Boolean(playback && !playback.paused && !playback.ended);
     }
 
-    function formatSeconds(milliseconds: number): string {
-      return (Math.max(0, milliseconds) / 1000).toFixed(1);
-    }
 
     function syncStartButton(): void {
       if (!startButton) return;
@@ -788,9 +792,6 @@ const structuredData = createToolApplicationSchema({
       else drawWaveform();
     }
 
-    function formatDbfs(value: number): string {
-      return value <= SILENCE_DBFS + 0.5 ? "--" : `${value.toFixed(1)} dBFS`;
-    }
 
     function resetMeasurements(): void {
       levelHistory = [];
@@ -820,17 +821,11 @@ const structuredData = createToolApplicationSchema({
       if (statFloor) statFloor.textContent = formatDbfs(noiseFloorDb);
       if (statPeak) statPeak.textContent = formatDbfs(peakDb);
       if (statSnr) {
-        const usable =
-          noiseFloorDb > SILENCE_DBFS && speechDb > noiseFloorDb + 1;
-        statSnr.textContent = usable
-          ? `${Math.round(speechDb - noiseFloorDb)} dB`
-          : "--";
+        const snr = snrDb(noiseFloorDb, speechDb);
+        statSnr.textContent = snr === null ? "--" : `${Math.round(snr)} dB`;
       }
       if (statClip) {
-        statClip.textContent =
-          clipEvents === 0
-            ? "None"
-            : `${clipEvents} ${clipEvents === 1 ? "event" : "events"}`;
+        statClip.textContent = formatClipEvents(clipEvents);
         statClip.dataset.alert = String(clipEvents > 0);
       }
     }
@@ -865,10 +860,11 @@ const structuredData = createToolApplicationSchema({
       if (runLevel) runLevel.textContent = `${level}%`;
       if (meterValue) meterValue.textContent = `${level}%`;
 
-      if (peakAmplitude >= peakHoldAmplitude || now - peakHoldAt > 1500) {
-        peakHoldAmplitude = peakAmplitude;
-        peakHoldAt = now;
-      }
+      ({ amplitude: peakHoldAmplitude, at: peakHoldAt } = nextPeakHold(
+        peakAmplitude,
+        now,
+        { amplitude: peakHoldAmplitude, at: peakHoldAt },
+      ));
       if (meterPeak) {
         meterPeak.style.setProperty(
           "--mic-peak",
@@ -877,7 +873,7 @@ const structuredData = createToolApplicationSchema({
         meterPeak.dataset.visible = String(peakHoldAmplitude > 0.01);
       }
 
-      if (clipped && now - lastClipAt > 250) {
+      if (isNewClipEvent(clipped, now, lastClipAt)) {
         clipEvents += 1;
         lastClipAt = now;
       }
@@ -887,10 +883,8 @@ const structuredData = createToolApplicationSchema({
       measureWindow.push(rmsDb);
       if (measureWindow.length > MEASURE_SAMPLES) measureWindow.shift();
 
-      if (measureWindow.length >= 30) {
-        noiseFloorDb = percentile(measureWindow, 0.1);
-        speechDb = percentile(measureWindow, 0.95);
-      }
+      const estimates = levelEstimates(measureWindow);
+      if (estimates) ({ noiseFloorDb, speechDb } = estimates);
     }
 
     function renderFrame(now: number): void {
@@ -1271,7 +1265,7 @@ const structuredData = createToolApplicationSchema({
     function getRecorderOptions(): MediaRecorderOptions | undefined {
       if (!("MediaRecorder" in window)) return undefined;
       if (typeof MediaRecorder.isTypeSupported !== "function") return undefined;
-      const mimeType = RECORDER_MIME_TYPES.find((type) =>
+      const mimeType = pickRecorderMimeType(RECORDER_MIME_TYPES, (type) =>
         MediaRecorder.isTypeSupported(type),
       );
       return mimeType ? { mimeType } : undefined;

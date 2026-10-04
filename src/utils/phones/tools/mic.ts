@@ -2,6 +2,8 @@
 // Microphone capture settings and the sample-accurate level meter used by
 // the mic test. Kept free of DOM access so the AudioWorklet can import it.
 
+import { SILENCE_DBFS, percentile } from "./audio";
+
 /**
  * Raw capture by default: echo cancellation, noise suppression and automatic
  * gain change the level, noise floor and SNR the test is trying to measure.
@@ -127,4 +129,64 @@ export function mergeMeterReports(reports: readonly MeterReport[]): MeterReport 
     clipped,
     samples,
   };
+}
+
+// --- Level statistics ---------------------------------------------------------
+
+/** Readings needed before the noise floor and speech level are shown. */
+export const LEVEL_ESTIMATE_MIN_SAMPLES = 30;
+
+/**
+ * Noise floor (10th percentile) and speech level (95th percentile) of a
+ * rolling window of RMS readings in dBFS, or null until it has 30 readings.
+ */
+export function levelEstimates(
+  window: readonly number[],
+): { noiseFloorDb: number; speechDb: number } | null {
+  if (window.length < LEVEL_ESTIMATE_MIN_SAMPLES) return null;
+  return { noiseFloorDb: percentile([...window], 0.1), speechDb: percentile([...window], 0.95) };
+}
+
+/** Speech minus noise floor, or null while either is unusable. */
+export function snrDb(noiseFloorDb: number, speechDb: number): number | null {
+  const usable = noiseFloorDb > SILENCE_DBFS && speechDb > noiseFloorDb + 1;
+  return usable ? speechDb - noiseFloorDb : null;
+}
+
+/** Clips closer together than this count as one event. */
+export const CLIP_EVENT_DEBOUNCE_MS = 250;
+
+export function isNewClipEvent(clipped: boolean, now: number, lastClipAt: number): boolean {
+  return clipped && now - lastClipAt > CLIP_EVENT_DEBOUNCE_MS;
+}
+
+/** The meter's peak marker holds the highest level for 1.5 s. */
+export const PEAK_HOLD_MS = 1500;
+
+export type PeakHold = { amplitude: number; at: number };
+
+export function nextPeakHold(amplitude: number, now: number, hold: PeakHold): PeakHold {
+  return amplitude >= hold.amplitude || now - hold.at > PEAK_HOLD_MS
+    ? { amplitude, at: now }
+    : hold;
+}
+
+export function formatDbfs(value: number): string {
+  return value <= SILENCE_DBFS + 0.5 ? "--" : `${value.toFixed(1)} dBFS`;
+}
+
+export function formatSeconds(milliseconds: number): string {
+  return (Math.max(0, milliseconds) / 1000).toFixed(1);
+}
+
+export function formatClipEvents(count: number): string {
+  return count === 0 ? "None" : `${count} ${count === 1 ? "event" : "events"}`;
+}
+
+/** First recording format the browser supports, in order of preference. */
+export function pickRecorderMimeType(
+  candidates: readonly string[],
+  isSupported: (type: string) => boolean,
+): string | undefined {
+  return candidates.find((type) => isSupported(type));
 }
