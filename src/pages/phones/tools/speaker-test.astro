@@ -23,7 +23,7 @@ const referenceItems = [
     check:
       "Start with a low-volume tone or pink noise before trying louder sweeps.",
     reading:
-      "Frequency is shown in Hz, meaning sound-wave cycles per second: lower values sound deeper and higher values sound sharper. The volume percentage controls this browser signal, not the phone's system volume.",
+      "Frequency is shown in Hz, meaning sound-wave cycles per second: lower values sound deeper and higher values sound sharper. The volume control sets this browser signal's level in dB (the % is the signal amplitude), not the phone's system volume.",
     good: "Sound starts cleanly, stays stable, and does not buzz or drop out unexpectedly.",
     concern:
       "No sound, crackling, rattling, harsh buzz, or sudden level drops during a simple signal.",
@@ -43,7 +43,7 @@ const referenceItems = [
     check:
       "Use pink noise first, then white or brown noise depending on whether you want a brighter or bass-heavier check.",
     reading:
-      "White noise emphasizes the bright high end, pink noise sounds more evenly balanced by octave, and brown noise emphasizes bass. The six meter bars are spaced by octave from 60 Hz to 16 kHz, matching how hearing divides the range.",
+      "White noise emphasizes the bright high end, pink noise sounds more evenly balanced by octave, and brown noise emphasizes bass. The six meter bars split 60 Hz to 16 kHz into equal steps of about 1.3 octaves each, roughly matching how hearing divides the range.",
     good: "Noise sounds even and steady without extra clicking, fluttering, hiss spikes, or cabinet-like rattle.",
     concern:
       "One side rasps more than the other, or a specific noise type reveals hiss, break-up, or low-end buzzing.",
@@ -516,15 +516,15 @@ const structuredData = createToolApplicationSchema({
                   class="speaker-range-input text-accent-ink order-3 m-0 h-4 basis-full bg-transparent p-0 accent-current"
                   id="speaker-volume"
                   type="range"
-                  min="0"
-                  max="100"
+                  min="-60"
+                  max="0"
                   step="1"
-                  value="25"
+                  value="-12"
                 />
                 <strong
                   id="speaker-volume-label"
                   class="text-xsmall ml-auto shrink-0 leading-tight tracking-normal normal-case"
-                  >25%</strong
+                  >-12 dB · 25%</strong
                 >
               </label>
             </div>
@@ -742,11 +742,15 @@ const structuredData = createToolApplicationSchema({
     import { getBrowserCapabilities } from "@/utils/phones/tools/capabilities";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
     import {
+      averageBandLevel,
+      computePeakAmplitude,
       createLogBands,
+      formatVolumeLabel,
       getAudioContextClass,
       onAudioContextStateChange,
       promoteAudioSession,
       rampParam,
+      volumeDbToGain,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
 
@@ -772,6 +776,11 @@ const structuredData = createToolApplicationSchema({
     const METER_BAND_COUNT = 6;
     const METER_MIN_HZ = 60;
     const METER_MAX_HZ = 16000;
+    // 4096 gives about 12 Hz bins at 48 kHz, so the lowest band (60 to 150 Hz)
+    // spans several bins instead of one or two.
+    const METER_FFT_SIZE = 4096;
+    const WAVEFORM_SAMPLES = 512;
+    const NOISE_BUFFER_SECONDS = 10;
 
     const shell = document.getElementById(
       "speaker-shell",
@@ -956,28 +965,41 @@ const structuredData = createToolApplicationSchema({
       if (!isPlaying) setStatus(getReadyStatus());
     }
 
+    function targetGain(): number {
+      const gain = volumeDbToGain(Number(volumeInput?.value));
+      // StereoPanner's equal-power law plays a centred mono source 3 dB lower
+      // on each side than a fully panned one, so Mono gets the 3 dB back.
+      return pannerNode && activeChannel === "mono" ? gain * Math.SQRT2 : gain;
+    }
+
+    function applyToneFrequency(): void {
+      // Only the steady tone follows the slider; the sweep and hearing steps
+      // schedule their own frequencies.
+      if (
+        !oscillator ||
+        !frequencyInput ||
+        !audioContext ||
+        activeMode !== "signal" ||
+        activeSignal !== "tone"
+      )
+        return;
+      rampParam(
+        oscillator.frequency,
+        Number(frequencyInput.value),
+        audioContext,
+        0.02,
+      );
+    }
+
     function syncLabels(): void {
       if (frequencyInput && frequencyLabel) {
         frequencyLabel.textContent = `${frequencyInput.value} Hz`;
       }
       if (volumeInput && volumeLabel) {
-        volumeLabel.textContent = `${volumeInput.value}%`;
+        volumeLabel.textContent = formatVolumeLabel(Number(volumeInput.value));
       }
-      if (gainNode && volumeInput && audioContext && activeMode === "signal") {
-        rampParam(
-          gainNode.gain,
-          Number(volumeInput.value) / 100,
-          audioContext,
-          0.02,
-        );
-      }
-      if (oscillator && frequencyInput && audioContext && activeMode === "signal") {
-        rampParam(
-          oscillator.frequency,
-          Number(frequencyInput.value),
-          audioContext,
-          0.02,
-        );
+      if (gainNode && audioContext && activeMode === "signal") {
+        rampParam(gainNode.gain, targetGain(), audioContext, 0.02);
       }
       if (frequencyRow)
         frequencyRow.hidden = !(activeMode === "signal" && activeSignal === "tone");
@@ -1069,7 +1091,8 @@ const structuredData = createToolApplicationSchema({
       context: AudioContext,
       type: "pink" | "white" | "brown",
     ): AudioBuffer {
-      const length = context.sampleRate * 2;
+      // Long enough that the loop point is not heard as a repeating pattern.
+      const length = context.sampleRate * NOISE_BUFFER_SECONDS;
       const buffer = context.createBuffer(1, length, context.sampleRate);
       const channel = buffer.getChannelData(0);
 
@@ -1233,22 +1256,6 @@ const structuredData = createToolApplicationSchema({
       }
     }
 
-    function averageBand(data: Uint8Array, band: FrequencyBand): number {
-      let sum = 0;
-      for (let bin = band.startBin; bin < band.endBin; bin += 1) {
-        sum += data[bin] ?? 0;
-      }
-      return sum / Math.max(1, band.endBin - band.startBin);
-    }
-
-    function amplitudeFromTimeDomain(data: Float32Array): number {
-      let peak = 0;
-      for (let index = 0; index < data.length; index += 1) {
-        const sample = Math.abs(data[index] ?? 0);
-        if (sample > peak) peak = sample;
-      }
-      return peak;
-    }
 
     function updateChannelLevels(): void {
       if (!levelLeftEl || !levelRightEl) return;
@@ -1259,8 +1266,8 @@ const structuredData = createToolApplicationSchema({
       }
       analyserL.getFloatTimeDomainData(levelDataL as Float32Array<ArrayBuffer>);
       analyserR.getFloatTimeDomainData(levelDataR as Float32Array<ArrayBuffer>);
-      const left = Math.round(amplitudeFromTimeDomain(levelDataL) * 100);
-      const right = Math.round(amplitudeFromTimeDomain(levelDataR) * 100);
+      const left = Math.round(computePeakAmplitude(levelDataL) * 100);
+      const right = Math.round(computePeakAmplitude(levelDataR) * 100);
       levelLeftEl.textContent = `Left ${left}%`;
       levelRightEl.textContent = `Right ${right}%`;
     }
@@ -1283,11 +1290,11 @@ const structuredData = createToolApplicationSchema({
           meterFrequencyData as Uint8Array<ArrayBuffer>,
         );
         meterBands.forEach((band, index) => {
-          const average = averageBand(
+          const average = averageBandLevel(
             meterFrequencyData as Uint8Array,
             band,
           );
-          const level = Math.min(100, Math.round((average / 255) * 100));
+          const level = Math.min(100, Math.round(average * 100));
           const bar = meterBars[index];
           if (bar) bar.style.height = `${Math.max(5, level)}%`;
         });
@@ -1307,9 +1314,10 @@ const structuredData = createToolApplicationSchema({
 
     function connectAnalysis(sourceNode: AudioNode, context: AudioContext): void {
       mixAnalyser = context.createAnalyser();
-      mixAnalyser.fftSize = 512;
+      mixAnalyser.fftSize = METER_FFT_SIZE;
       meterFrequencyData = new Uint8Array(mixAnalyser.frequencyBinCount);
-      meterTimeData = new Uint8Array(mixAnalyser.fftSize);
+      // The waveform only draws a short window so a tone stays readable.
+      meterTimeData = new Uint8Array(WAVEFORM_SAMPLES);
       meterBands = createLogBands(
         METER_BAND_COUNT,
         METER_MIN_HZ,
@@ -1433,7 +1441,7 @@ const structuredData = createToolApplicationSchema({
       oscillator?.start();
       noiseSource?.start();
       applyChannelPanning();
-      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.05);
+      rampParam(gainNode.gain, targetGain(), context, 0.05);
       setPlaying(true);
       if (meterFrame === 0) meterFrame = requestAnimationFrame(updateMeter);
       setStatus(
@@ -1471,7 +1479,7 @@ const structuredData = createToolApplicationSchema({
       oscillator.connect(gainNode).connect(context.destination);
       connectAnalysis(gainNode, context);
       oscillator.start();
-      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.1);
+      rampParam(gainNode.gain, targetGain(), context, 0.1);
 
       setPlaying(true);
       waterRemainingMs = WATER_CYCLE_MS;
@@ -1535,7 +1543,7 @@ const structuredData = createToolApplicationSchema({
       oscillator.connect(gainNode).connect(context.destination);
       connectAnalysis(gainNode, context);
       oscillator.start();
-      rampParam(gainNode.gain, Number(volumeInput.value) / 100, context, 0.1);
+      rampParam(gainNode.gain, targetGain(), context, 0.1);
 
       setPlaying(true);
       hearingActive = true;
@@ -1658,7 +1666,14 @@ const structuredData = createToolApplicationSchema({
       );
     });
 
-    frequencyInput?.addEventListener("input", syncLabels, { signal: abortSignal });
+    frequencyInput?.addEventListener(
+      "input",
+      () => {
+        syncLabels();
+        applyToneFrequency();
+      },
+      { signal: abortSignal },
+    );
     volumeInput?.addEventListener("input", syncLabels, { signal: abortSignal });
     startButton?.addEventListener("click", () => void handleStart(), {
       signal: abortSignal,

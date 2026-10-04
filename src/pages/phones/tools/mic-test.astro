@@ -30,7 +30,7 @@ const referenceItems = [
     label: "Speech Level",
     check: "Speak normally from your usual phone distance for a few seconds.",
     reading:
-      "Level is a relative digital peak from 0% to 100%, and Peak is the same measurement in dBFS, where 0 dBFS is the loudest value the browser can record. Neither is a calibrated real-world volume. The browser or operating system may also apply automatic gain, noise suppression, or echo cancellation, so use the values as same-device comparisons rather than universal pass limits.",
+      "Level is a relative digital peak from 0% to 100%, and Peak is the same measurement in dBFS, where 0 dBFS is the loudest value the browser can record. Neither is a calibrated real-world volume. The test asks the browser to turn off automatic gain, noise suppression, and echo cancellation so you measure the microphone itself; turn on Call processing to hear what calls and voice apps get. Some phones apply processing in the operating system regardless, so use the values as same-device comparisons rather than universal pass limits.",
     good:
       "As a rough guide, ordinary speech often peaks below 0 dBFS without clipping; consistency and clean playback matter more than a specific number.",
     concern:
@@ -155,7 +155,7 @@ const structuredData = createToolApplicationSchema({
         <ToolRuntime
           shellId="mic-shell"
           actionBarLabel="Microphone test actions"
-          dockPrimaryItemCount={1}
+          dockPrimaryItemCount={4}
           buttons={[
             {
               label: "Start",
@@ -283,6 +283,30 @@ const structuredData = createToolApplicationSchema({
           </p>
 
           <Fragment slot="dockPrimary">
+            <div class="grid w-full grid-cols-2 gap-2 sm:gap-3">
+            <div class={sliderLabelClasses}>
+              <label
+                class="text-xsmall shrink-0 leading-tight font-bold tracking-widest uppercase"
+                for="mic-device"
+                >Input</label
+              >
+              <label
+                class="text-xsmall ml-auto flex shrink-0 items-center gap-1.5 leading-tight tracking-normal normal-case"
+              >
+                <input
+                  id="mic-processing"
+                  type="checkbox"
+                  class="accent-current m-0 size-3.5"
+                />
+                Call processing
+              </label>
+              <select
+                id="mic-device"
+                class="text-xsmall order-3 m-0 h-6 min-w-0 basis-full truncate rounded-md border-0 bg-transparent p-0 leading-tight"
+              >
+                <option value="">System default</option>
+              </select>
+            </div>
             <label class={sliderLabelClasses} for="mic-volume">
               <span
                 class="text-xsmall shrink-0 leading-tight font-bold tracking-widest uppercase"
@@ -302,6 +326,7 @@ const structuredData = createToolApplicationSchema({
                 >100%</strong
               >
             </label>
+            </div>
             <audio id="mic-playback" preload="metadata" hidden></audio>
           </Fragment>
         </ToolRuntime>
@@ -345,13 +370,6 @@ const structuredData = createToolApplicationSchema({
       @apply font-bold text-red-600 dark:text-red-400;
     }
 
-    :global(#mic-shell .tool-runtime-dock-head) {
-      @apply md:col-span-6 md:col-start-1;
-    }
-
-    :global(#mic-shell .tool-runtime-dock-extra) {
-      @apply md:col-span-2 md:col-start-7;
-    }
 
     .mic-volume-input {
       -webkit-appearance: none;
@@ -411,6 +429,13 @@ const structuredData = createToolApplicationSchema({
       rampParam,
       type FrequencyBand,
     } from "@/utils/phones/tools/audio";
+    import {
+      mergeMeterReports,
+      micConstraints,
+      micDeviceOptions,
+      type MeterReport,
+    } from "@/utils/phones/tools/mic";
+    import micMeterWorkletUrl from "@/utils/phones/tools/mic-meter.worklet.ts?worker&url";
 
     type MicView = "waveform" | "spectrum" | "levels";
 
@@ -466,6 +491,12 @@ const structuredData = createToolApplicationSchema({
       document.querySelectorAll<HTMLButtonElement>("[data-mic-view]"),
     );
     const dockTip = document.getElementById("mic-dock-tip");
+    const deviceSelect = document.getElementById(
+      "mic-device",
+    ) as HTMLSelectElement | null;
+    const processingToggle = document.getElementById(
+      "mic-processing",
+    ) as HTMLInputElement | null;
 
     const pageController = new AbortController();
     const { signal } = pageController;
@@ -475,6 +506,12 @@ const structuredData = createToolApplicationSchema({
     let audioContext: AudioContext | null = null;
     let analyser: AnalyserNode | null = null;
     let source: MediaStreamAudioSourceNode | null = null;
+    // Sample-accurate meter; null where AudioWorklet is unavailable, in which
+    // case the analyser snapshot taken each frame is used instead.
+    let meterNode: AudioWorkletNode | null = null;
+    let pendingMeterReports: MeterReport[] = [];
+    let lastMeterReport: MeterReport | null = null;
+    let trackEvents: AbortController | null = null;
     let stopStateWatch: (() => void) | null = null;
     let recorder: MediaRecorder | null = null;
     let chunks: BlobPart[] = [];
@@ -805,8 +842,21 @@ const structuredData = createToolApplicationSchema({
         analyser.getByteFrequencyData(frequencyData as Uint8Array<ArrayBuffer>);
       }
 
-      const peakAmplitude = computePeakAmplitude(timeData);
-      const rmsDb = computeRmsDbfs(timeData);
+      let peakAmplitude: number;
+      let rmsDb: number;
+      let clipped: boolean;
+      if (meterNode) {
+        const merged = mergeMeterReports(pendingMeterReports);
+        pendingMeterReports = [];
+        if (merged) lastMeterReport = merged;
+        peakAmplitude = lastMeterReport?.peak ?? 0;
+        rmsDb = amplitudeToDbfs(lastMeterReport?.rms ?? 0);
+        clipped = merged?.clipped ?? false;
+      } else {
+        peakAmplitude = computePeakAmplitude(timeData);
+        rmsDb = computeRmsDbfs(timeData);
+        clipped = detectClipping(timeData);
+      }
       const framePeakDb = amplitudeToDbfs(peakAmplitude);
       if (framePeakDb > peakDb) peakDb = framePeakDb;
 
@@ -827,7 +877,7 @@ const structuredData = createToolApplicationSchema({
         meterPeak.dataset.visible = String(peakHoldAmplitude > 0.01);
       }
 
-      if (detectClipping(timeData) && now - lastClipAt > 250) {
+      if (clipped && now - lastClipAt > 250) {
         clipEvents += 1;
         lastClipAt = now;
       }
@@ -861,6 +911,7 @@ const structuredData = createToolApplicationSchema({
 
     function startRendering(): void {
       if (animationFrame !== 0 || !analyser || document.hidden) return;
+      pendingMeterReports = [];
       lastDraw = 0;
       lastMetricPaint = 0;
       animationFrame = requestAnimationFrame(renderFrame);
@@ -931,6 +982,85 @@ const structuredData = createToolApplicationSchema({
       syncButtons();
     }
 
+    async function refreshDevices(): Promise<void> {
+      if (!deviceSelect || !navigator.mediaDevices?.enumerateDevices) return;
+      let devices: MediaDeviceInfo[];
+      try {
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch {
+        return;
+      }
+      const selected = deviceSelect.value;
+      const options = micDeviceOptions(devices);
+      deviceSelect.replaceChildren(
+        ...options.map((option) => new Option(option.label, option.value)),
+      );
+      // A device that was unplugged falls back to the system default.
+      deviceSelect.value = options.some((option) => option.value === selected)
+        ? selected
+        : "";
+    }
+
+    async function createMeterNode(
+      context: AudioContext,
+      input: AudioNode,
+    ): Promise<AudioWorkletNode | null> {
+      if (!context.audioWorklet || typeof AudioWorkletNode === "undefined") {
+        return null;
+      }
+      try {
+        await context.audioWorklet.addModule(micMeterWorkletUrl);
+        const node = new AudioWorkletNode(context, "mic-meter", {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+        });
+        node.port.onmessage = (event: MessageEvent<MeterReport>) => {
+          pendingMeterReports.push(event.data);
+        };
+        input.connect(node);
+        return node;
+      } catch {
+        return null;
+      }
+    }
+
+    function watchTrack(track: MediaStreamTrack | undefined): void {
+      trackEvents?.abort();
+      trackEvents = new AbortController();
+      if (!track) return;
+      const options = { signal: trackEvents.signal };
+      track.addEventListener(
+        "ended",
+        () => {
+          stopMic();
+          setStatus(
+            "The microphone stopped. It was unplugged, switched off, or taken by another app. Press Start to try again.",
+          );
+          setInput("Disconnected");
+        },
+        options,
+      );
+      track.addEventListener(
+        "mute",
+        () =>
+          setStatus(
+            "The system paused this microphone, often for a call, another app, or a privacy switch. Readings resume when it comes back.",
+          ),
+        options,
+      );
+      track.addEventListener(
+        "unmute",
+        () => setStatus("Listening. Speak normally and watch the level meter."),
+        options,
+      );
+    }
+
+    function restartMic(): void {
+      if (!stream) return;
+      stopMic();
+      void startMic();
+    }
+
     function toggleMic(): void {
       if (stream) {
         stopMic();
@@ -976,9 +1106,12 @@ const structuredData = createToolApplicationSchema({
       let nextStream: MediaStream | null = null;
       let nextAudioContext: AudioContext | null = null;
       try {
-        const mediaRequest = navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
+        const mediaRequest = navigator.mediaDevices.getUserMedia(
+          micConstraints(
+            deviceSelect?.value ?? "",
+            processingToggle?.checked ?? false,
+          ),
+        );
         mediaRequest
           .then((lateStream) => {
             if (requestId !== micStartRequestId) stopStreamTracks(lateStream);
@@ -1027,8 +1160,21 @@ const structuredData = createToolApplicationSchema({
         nextAnalyser.smoothingTimeConstant = 0.7;
         const nextSource = nextAudioContext.createMediaStreamSource(nextStream);
         nextSource.connect(nextAnalyser);
+        const nextMeterNode = await createMeterNode(
+          nextAudioContext,
+          nextSource,
+        );
+        if (requestId !== micStartRequestId) {
+          stopStreamTracks(nextStream);
+          void nextAudioContext.close().catch(() => undefined);
+          return;
+        }
 
         stream = nextStream;
+        meterNode = nextMeterNode;
+        pendingMeterReports = [];
+        lastMeterReport = null;
+        watchTrack(nextStream.getAudioTracks()[0]);
         audioContext = nextAudioContext;
         analyser = nextAnalyser;
         source = nextSource;
@@ -1063,6 +1209,8 @@ const structuredData = createToolApplicationSchema({
         resizeCanvas();
         startRendering();
         wakeLock.request();
+        // Device names are only available once permission is granted.
+        void refreshDevices();
       } catch (error) {
         clearMicPermissionTimeout();
         stopStreamTracks(nextStream);
@@ -1088,6 +1236,8 @@ const structuredData = createToolApplicationSchema({
       clearRecordCountdownTimer();
       clearPlaybackCountdownTimer();
 
+      trackEvents?.abort();
+      trackEvents = null;
       stopStreamTracks(stream);
       stream = null;
 
@@ -1095,6 +1245,11 @@ const structuredData = createToolApplicationSchema({
       stopStateWatch = null;
       source?.disconnect();
       analyser?.disconnect();
+      if (meterNode) meterNode.port.onmessage = null;
+      meterNode?.disconnect();
+      meterNode = null;
+      pendingMeterReports = [];
+      lastMeterReport = null;
       const closingContext = audioContext;
       audioContext = null;
       analyser = null;
@@ -1306,6 +1461,13 @@ const structuredData = createToolApplicationSchema({
     }
 
     volumeInput?.addEventListener("input", syncPlaybackVolume, { signal });
+    deviceSelect?.addEventListener("change", restartMic, { signal });
+    processingToggle?.addEventListener("change", restartMic, { signal });
+    navigator.mediaDevices?.addEventListener(
+      "devicechange",
+      () => void refreshDevices(),
+      { signal },
+    );
     document.addEventListener(
       "visibilitychange",
       () => {
@@ -1335,5 +1497,6 @@ const structuredData = createToolApplicationSchema({
     syncButtons();
     setStatus(IDLE_COPY);
     setInput("Not started");
+    void refreshDevices();
   </script>
 </BaseLayout>

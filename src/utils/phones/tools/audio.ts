@@ -190,6 +190,23 @@ export function averageBandLevel(
   return sum / Math.max(1, band.endBin - band.startBin) / 255;
 }
 
+/** Volume slider range in dB. The lowest position is silence. */
+export const VOLUME_MIN_DB = -60;
+export const VOLUME_MAX_DB = 0;
+
+export function volumeDbToGain(db: number): number {
+  if (!Number.isFinite(db) || db <= VOLUME_MIN_DB) return 0;
+  return 10 ** (Math.min(db, VOLUME_MAX_DB) / 20);
+}
+
+/** "-12 dB · 25%", where % is the signal amplitude; "Off" at the bottom. */
+export function formatVolumeLabel(db: number): string {
+  const gain = volumeDbToGain(db);
+  if (gain === 0) return "Off";
+  const percent = Math.round(gain * 100);
+  return `${Math.round(db)} dB · ${percent < 1 ? "<1" : percent}%`;
+}
+
 export function rampParam(
   param: AudioParam,
   target: number,
