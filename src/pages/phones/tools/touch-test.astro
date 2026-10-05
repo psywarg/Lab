@@ -645,6 +645,7 @@ const structuredData = createToolApplicationSchema({
 
   <script>
     import { onPageHide, observeResize } from "@/utils/phones/tools/lifecycle";
+    import { onOrientationChange } from "@/utils/phones/tools/orientation";
     import { createRafScheduler } from "@/utils/site/raf";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
     import {
@@ -907,6 +908,8 @@ const structuredData = createToolApplicationSchema({
 
     // Coverage is scored on exactly the cells drawn in the overlay.
     const coverage = createCoverageGrid({ cols: 0, rows: 0 });
+    // Screen angle the coverage grid was last built at, to follow rotations.
+    let coverageAngle: number | null = null;
     let cellElements: HTMLDivElement[] = [];
     let maxTouches = 0;
 
@@ -1222,7 +1225,20 @@ const structuredData = createToolApplicationSchema({
       const rect = refreshStageRect();
       if (!rect || rect.width === 0 || rect.height === 0) return;
       const size = gridSizeFor(rect.width, rect.height, CELL_TARGET_PX);
-      coverage.resize(size);
+      const angle =
+        typeof screen.orientation?.angle === "number" ? screen.orientation.angle : null;
+      if (angle !== null && coverageAngle !== null) {
+        coverage.resize(size, { from: coverageAngle, to: angle });
+      } else {
+        // Without the angle a rotation can't be followed, so a changed grid
+        // starts over rather than lighting cells that were never touched.
+        const { cols, rows } = coverage.size;
+        if (angle === null && (cols !== size.cols || rows !== size.rows)) {
+          coverage.clear();
+        }
+        coverage.resize(size);
+      }
+      coverageAngle = angle;
       overlay.style.gridTemplateColumns = `repeat(${size.cols}, minmax(0, 1fr))`;
       overlay.style.gridTemplateRows = `repeat(${size.rows}, minmax(0, 1fr))`;
 
@@ -2091,12 +2107,15 @@ const structuredData = createToolApplicationSchema({
     );
 
     const stageResizeObserver = observeResize(stage, queueOverlayResize);
+    // A half turn keeps the stage size, so it needs its own trigger.
+    const stopOrientationWatch = onOrientationChange(queueOverlayResize);
 
     function cleanupTouchPage(): void {
       rafScheduler.cancel();
       resizeScheduler.cancel();
       clearGhostTimer();
       stageResizeObserver?.disconnect();
+      stopOrientationWatch();
       pageController.abort();
       wakeLock.release();
       setOverscrollLock(false);
