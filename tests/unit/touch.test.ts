@@ -13,6 +13,7 @@ import {
   normalizePointerTimestamp,
   precisionSummary,
   recordDriftSample,
+  remapForRotation,
 } from "@/utils/phones/tools/touch";
 
 describe("gridSizeFor", () => {
@@ -57,6 +58,58 @@ describe("createCoverageGrid", () => {
     grid.resize({ cols: 4, rows: 4 });
     expect(grid.isHit(1, 1)).toBe(true);
     expect(grid.hitCount).toBe(1);
+  });
+});
+
+describe("remapForRotation", () => {
+  // The panel's natural top-left corner, seen at each screen angle.
+  it("follows the panel corner through each counter-clockwise turn", () => {
+    expect(remapForRotation(0, 0, 0, 90)).toEqual({ x: 0, y: 1 });
+    expect(remapForRotation(0, 0, 0, 180)).toEqual({ x: 1, y: 1 });
+    expect(remapForRotation(0, 0, 0, 270)).toEqual({ x: 1, y: 0 });
+    expect(remapForRotation(0.25, 0.5, 0, 0)).toEqual({ x: 0.25, y: 0.5 });
+  });
+
+  it("round-trips back to the start angle", () => {
+    for (const angle of [90, 180, 270]) {
+      const turned = remapForRotation(0.25, 0.75, 0, angle);
+      expect(remapForRotation(turned.x, turned.y, angle, 0)).toEqual({ x: 0.25, y: 0.75 });
+    }
+  });
+});
+
+describe("coverage grid through a rotation", () => {
+  const coverTopRow = (grid: ReturnType<typeof createCoverageGrid>) => {
+    for (let col = 0; col < grid.size.cols; col += 1) grid.mark((col + 0.5) * 10, 5, 0, 60, 120);
+  };
+  const litCells = (grid: ReturnType<typeof createCoverageGrid>) => {
+    const cells: [number, number][] = [];
+    for (let row = 0; row < grid.size.rows; row += 1) {
+      for (let col = 0; col < grid.size.cols; col += 1) if (grid.isHit(col, row)) cells.push([col, row]);
+    }
+    return cells;
+  };
+
+  it("puts the portrait top row on the left side after a 90 degree turn", () => {
+    const grid = createCoverageGrid({ cols: 6, rows: 12 });
+    coverTopRow(grid);
+    grid.resize({ cols: 12, rows: 6 }, { from: 0, to: 90 });
+    expect(litCells(grid).every(([col]) => col === 0)).toBe(true);
+    expect(grid.hitCount).toBe(6);
+  });
+
+  it("puts it on the right side after a 270 degree turn", () => {
+    const grid = createCoverageGrid({ cols: 6, rows: 12 });
+    coverTopRow(grid);
+    grid.resize({ cols: 12, rows: 6 }, { from: 0, to: 270 });
+    expect(litCells(grid).every(([col]) => col === 11)).toBe(true);
+  });
+
+  it("flips a half turn even though the grid size is unchanged", () => {
+    const grid = createCoverageGrid({ cols: 6, rows: 12 });
+    coverTopRow(grid);
+    grid.resize({ cols: 6, rows: 12 }, { from: 0, to: 180 });
+    expect(litCells(grid).every(([, row]) => row === 11)).toBe(true);
   });
 });
 

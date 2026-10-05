@@ -143,3 +143,40 @@ test("Drift: tracing the guide reports a small deviation, 30 px off reports abou
   expect(off).toBeGreaterThanOrEqual(26);
   expect(off).toBeLessThanOrEqual(34);
 });
+
+test("C4: covered cells follow the panel through a screen rotation", async ({ page, context }) => {
+  const cdp = await cdpFor(context, page);
+  const touch = createTouch(cdp);
+  await openTool(page, "touch-test");
+  await startTest(page);
+  const topRow = await page.evaluate(() => {
+    const rects = Array.from(document.querySelectorAll(".touch-cell")).map((cell) => cell.getBoundingClientRect());
+    const top = Math.min(...rects.map((rect) => rect.y));
+    return rects.filter((rect) => rect.y === top).map((rect) => [rect.x + rect.width / 2, rect.y + rect.height / 2] as const);
+  });
+  expect(topRow.length).toBeGreaterThan(1);
+  for (const [x, y] of topRow) await touch.tap(x, y);
+  await expect(page.locator(".touch-cell--hit")).toHaveCount(topRow.length);
+  expect(await page.evaluate(() => screen.orientation.angle)).toBe(0);
+
+  // Turn the phone 90 degrees counter-clockwise: the panel's top edge is now on the left.
+  const viewport = page.viewportSize() ?? { width: 0, height: 0 };
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: viewport.height,
+    height: viewport.width,
+    deviceScaleFactor: 0,
+    mobile: true,
+    screenOrientation: { type: "landscapePrimary", angle: 90 },
+  });
+  await expect.poll(() => page.evaluate(() => screen.orientation.angle)).toBe(90);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const cells = Array.from(document.querySelectorAll(".touch-cell"));
+        const left = Math.min(...cells.map((cell) => cell.getBoundingClientRect().x));
+        const hit = cells.filter((cell) => cell.classList.contains("touch-cell--hit"));
+        return hit.length > 0 && hit.every((cell) => cell.getBoundingClientRect().x === left);
+      }),
+    )
+    .toBe(true);
+});

@@ -28,10 +28,42 @@ export type CoverageGrid = {
   mark: (x: number, y: number, radius: number, width: number, height: number) => number[];
   isHit: (col: number, row: number) => boolean;
   percent: () => number;
-  /** Changes the grid size, carrying hits over by cell centre. */
-  resize: (size: GridSize) => void;
+  /**
+   * Changes the grid size, carrying hits over by cell centre. With
+   * `rotation`, each hit follows the screen turn to the same spot on the panel.
+   */
+  resize: (size: GridSize, rotation?: ScreenRotation) => void;
   clear: () => void;
 };
+
+/** Screen orientation angles (`screen.orientation.angle`) before and after. */
+export type ScreenRotation = { from: number; to: number };
+
+const normalizeAngle = (angle: number): number => ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
+
+/**
+ * Moves a point (0-1 stage coordinates) through a screen rotation so it stays
+ * on the same physical spot of the panel. `screen.orientation.angle` is the
+ * counter-clockwise turn from the natural orientation: at 90 the panel's
+ * natural top edge is on the user's left and its left edge at the bottom.
+ */
+export function remapForRotation(
+  x: number,
+  y: number,
+  fromAngle: number,
+  toAngle: number,
+): { x: number; y: number } {
+  // To the panel's natural frame (u right, v down)...
+  const from = normalizeAngle(fromAngle);
+  const [u, v] =
+    from === 90 ? [1 - y, x] : from === 180 ? [1 - x, 1 - y] : from === 270 ? [y, 1 - x] : [x, y];
+  // ...and back out at the new angle.
+  const to = normalizeAngle(toAngle);
+  if (to === 90) return { x: v, y: 1 - u };
+  if (to === 180) return { x: 1 - u, y: 1 - v };
+  if (to === 270) return { x: 1 - v, y: u };
+  return { x: u, y: v };
+}
 
 export function createCoverageGrid(initial: GridSize): CoverageGrid {
   let size = initial;
@@ -82,15 +114,19 @@ export function createCoverageGrid(initial: GridSize): CoverageGrid {
       // Floor so 100% is only shown when every cell is really lit.
       return Math.floor((hits.size / total) * 100);
     },
-    resize(next) {
-      if (next.cols === size.cols && next.rows === size.rows) return;
+    resize(next, rotation) {
+      const turned =
+        rotation !== undefined && normalizeAngle(rotation.from) !== normalizeAngle(rotation.to);
+      if (!turned && next.cols === size.cols && next.rows === size.rows) return;
       const previous = size;
       const carried = new Set<number>();
       hits.forEach((key) => {
         const col = key % previous.cols;
         const row = Math.floor(key / previous.cols);
-        const nx = (col + 0.5) / previous.cols;
-        const ny = (row + 0.5) / previous.rows;
+        const centre = { x: (col + 0.5) / previous.cols, y: (row + 0.5) / previous.rows };
+        const { x: nx, y: ny } = turned
+          ? remapForRotation(centre.x, centre.y, rotation.from, rotation.to)
+          : centre;
         const newCol = clampIndex(Math.floor(nx * next.cols), next.cols);
         const newRow = clampIndex(Math.floor(ny * next.rows), next.rows);
         carried.add(newRow * next.cols + newCol);
