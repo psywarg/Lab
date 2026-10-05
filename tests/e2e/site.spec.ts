@@ -1,7 +1,8 @@
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import sharp from "sharp";
+import { inLatinSubset } from "../../src/utils/site/fontSubset";
 import { blockExternal, collectErrors } from "./helpers";
 
 for (const [path, icon] of [
@@ -171,4 +172,25 @@ test("CLS: the explainer page stays under 0.1 while the web font swaps in on a p
   // 0.1 is Google's "good" limit. The byline wrapping under the swap gave 0.25.
   expect(cls).toBeLessThan(0.1);
   await context.close();
+});
+
+test("Fonts: every character in the built pages is in the trimmed Sorted fonts", () => {
+  test.skip(test.info().project.name !== "desktop", "Checks build output; one viewport is enough");
+  const files = readdirSync("dist", { recursive: true, encoding: "utf8" }).filter(
+    (file) => file.endsWith(".html") || file.endsWith(".svg"),
+  );
+  const missing = new Map<string, string>();
+  for (const file of files) {
+    const text = readFileSync(join("dist", file), "utf8")
+      .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+      .replace(/&[a-z]+;/gi, " ");
+    for (const char of text) {
+      if (!inLatinSubset(char.codePointAt(0) ?? 0)) missing.set(char, file);
+    }
+  }
+  expect([...missing].map(([char, file]) => `${char} (U+${(char.codePointAt(0) ?? 0).toString(16)}) in ${file}`)).toEqual([]);
 });
