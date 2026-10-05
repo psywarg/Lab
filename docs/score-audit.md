@@ -1,6 +1,6 @@
 # Score audit
 
-Date: 2026-10-04. Scores are out of 10, comparing the original code review with the code after the six fix PRs and the image review. Each score cites only things measured in this work. Anything not measured is marked **not verified**.
+Date: 2026-10-05. Scores are out of 10, comparing the original code review with the code after the six fix PRs, the image review and a final review pass. Each score cites only things measured in this work. Anything not measured is marked **not verified**.
 
 ## Summary
 
@@ -8,7 +8,7 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
 |---|---|---|---|---|
 | Build and tooling | 6 | 9 | CI green on every PR; lint covers `.astro` scripts; 0 audit findings | None |
 | Architecture | 5 | **7** | 18 tested tool modules, 106 unit tests, listed duplicates removed | Below 8: see below |
-| Performance | 7 | 8 | Immutable caching, eager LCP card, transform-only animations, no analytics before consent, images sized to the layout | Field LCP/INP |
+| Performance | 7 | 8 | Lab LCP equal or faster on 8 pages, SoC CLS 0.162 to 0.003, no analytics before consent, immutable caching | Field LCP/INP/CLS |
 | Screen test | 7 | 8 | 1 px patterns, transform animations, tap-to-reveal, fps readout, fallback fullscreen | Real devices |
 | Stuck pixel fixer | 6 | 8 | 3/s cap above 140 px, truthful copy, no auto-start, diagnosis unit tests | Flash analyser; diagnosis UI flow |
 | Touch test | 4 | 8 | 100% coverage, graded precision, equal Hz for 1 and 2 fingers, drift e2e | Real touch screens |
@@ -28,14 +28,16 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
 | 3 | psywarg/Lab#4 | Speaker sweep, mono level, dB volume; mic raw capture, device handling, worklet meter |
 | 4 | psywarg/Lab#5 | Icons, OG images, consent-gated analytics, strict CSP and headers, contact worker, diagram viewer, nav accessibility |
 | 5 | psywarg/Lab#6 | Logic moved into tested modules; this audit |
-| Images | this PR | PNG masters, AVIF with WebP fallback, per-layout sizes, OG quality, SVGO |
+| Images | psywarg/Lab#7 | PNG masters, AVIF with WebP fallback, per-layout sizes, OG quality, SVGO |
+| Images | psywarg/Lab#8 | AVIF q80 (4:4:4) |
+| Review | this PR | Consent re-grant fix, font-swap CLS fixes, this rescore |
 
 ## Test inventory (measured on this branch)
 
 - **Unit (Vitest):** 106 tests in 13 files.
   - Modules covered: `accelerometer`, `analytics`, `audio`, `contact` (worker), `gyroscope`, `mic`, `motion`, `screen`, `shared` (`runtimeShell`, `stats`, `strokeWaveform`), `site-utils`, `speaker`, `stuckPixel`, `touch`.
-- **E2e (Playwright, Chromium):** 222 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
-  - 194 passed, 28 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
+- **E2e (Playwright, Chromium):** 228 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
+  - 198 passed, 30 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
   - The suite runs under the production `_headers` and the per-page CSP.
 - **Other checks:**
   - `astro check`: 0 errors, 0 warnings, 0 hints.
@@ -91,6 +93,7 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
 - Burn-in animations move a layer with `transform` instead of repainting `background-position` (M2 test).
 - Google Analytics, previously loaded through Partytown on every visit, now loads only after Accept (H9 tests).
 - Tool page script bundles are 12.6 to 29.3 KB raw and 4.9 to 9.7 KB gzip. Measured from `dist/_astro`.
+- Lab comparison against the original code: see "Final review pass" below.
 - **Not verified:** field Core Web Vitals.
 - Image bytes per page are in the image pipeline section. They rose, mainly on phones, because images were previously served below the needed resolution.
 
@@ -173,6 +176,55 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
   - **IMG10:** Astro emits every imported SVG file to `dist/_astro`, even when it is only used inline (`emitImageMetadata` runs before the SVG component branch in `vite-plugin-assets.js`, with no option to skip it). The 5 Sorto files, 70.6 KB in total, are unreferenced. Visitors never download them.
   - **M15:** the 404 illustrations stay inline. As `<img>` they rendered at a different size, because the inline SVGs keep their fixed height attributes. SVGO cut `404.html` from 108.9 KB to 79.4 KB (41.5 to 29.1 KB gzip).
 - **Not 9 because:** the masters are placeholders made from the old lossy AVIF files, so they carry those artefacts until the originals are exported.
+
+## Final review pass (2026-10-05)
+
+Everything from `6deb952` (the original upload) to `main` was re-checked.
+
+**Method**
+- **Clean install from the lockfile:** `astro check` 0/0/0, lint clean, 106 unit tests, 20 pages built, `npm audit` 0.
+- **Full e2e:** 198 passed, 30 skipped by design.
+- **Page sweep:** all 20 pages at 1366, Pixel 7, iPhone 14 and 320 px, in light and dark. No console errors, CSP violations, broken images or horizontal overflow.
+- **Tool flows:** each tool's controls driven at 4 viewports, including fullscreen entry and exit with and without the Fullscreen API, touch hold-to-pause with touch and with a mouse, mic start and speaker start/stop. No errors.
+- **Code review:** the contact worker, consent and analytics, layout and CSP, diagram viewer, motion modules and mic device handling.
+- **Lab performance:** the original build and the current build served the same way (Brotli, as Cloudflare compresses text), on Pixel 7 with slow 4G (150 ms, 1.6 Mbps) and the CPU slowed 4x. Each value is the median of 3 loads.
+
+**Found and fixed (each with a test that failed first)**
+1. **Consent:** Reject then Accept on the same page left `analytics_storage` denied until the next page load. `loadAnalytics` now re-grants. New e2e test.
+2. **Explainer CLS, present before this work too:** on a 412 px phone the byline wrapped onto a second line only after the Sorted font loaded, pushing the article down 39 px.
+   - Measured CLS: 0.162 (original), 0.172 to 0.247 (current, depending on font timing).
+   - The byline now stacks below 640 px, as its hidden `|` separator already implied.
+3. **Consent banner CLS:** the banner was shown before the fonts loaded, and the swap resized it on screen. That added 0.03 to 0.09 to first-visit CLS. It now appears after `document.fonts.ready`.
+   - With fonts delayed 1.5 s, CLS on the SoC explainer is 0.033, down from 0.247. A new e2e test holds it under 0.1.
+
+**Checked, not a bug:** hidden stuck-pixel diagnosis buttons (they are `inert` and `visibility: hidden`); the screen test's Auto mode entering fullscreen (by design); the Shiki CSP build warning (there are no code blocks, and inline style attributes are allowed anyway).
+
+**Lab results, original → current**
+
+| Page | FCP | LCP | CLS | TBT | Bytes |
+|---|---|---|---|---|---|
+| `/` | 832 → 820 ms | 832 → 820 ms | 0.002 → 0.005 | 105 → 82 ms | 264 → 277 KB |
+| `/phones` | 836 → 952 ms | 1208 → 980 ms | 0.001 → 0.002 | 95 → 81 ms | 211 → 294 KB |
+| `/phones/tools` | 820 → 804 ms | 820 → 804 ms | 0.001 → 0.002 | 89 → 68 ms | 244 → 362 KB |
+| `/phones/explainers/soc` | 916 → 952 ms | 916 → 952 ms | 0.162 → 0.003 | 167 → 145 ms | 205 → 251 KB |
+| `/contact` | 808 → 840 ms | 808 → 840 ms | 0.001 → 0.002 | 64 → 87 ms | 189 → 195 KB |
+| screen test | 928 → 976 ms | 928 → 976 ms | 0.002 → 0.002 | 158 → 173 ms | 210 → 220 KB |
+| mic test | 944 → 980 ms | 944 → 980 ms | 0.002 → 0.002 | 185 → 178 ms | 203 → 212 KB |
+| touch test | 940 → 956 ms | 940 → 956 ms | 0.002 → 0.002 | 176 → 172 ms | 209 → 219 KB |
+
+- The CLS column here is measured with fonts arriving at normal speed.
+- Bytes rose mostly from images, which are now served at the needed resolution and AVIF q80.
+- The compressed stylesheet shrank from 38.7 KB to 16.4 KB, because the original inlined the SVG sprites into it.
+- Both builds had Google requests blocked. In production, the original also loaded Partytown and gtag for every visitor; the current code loads nothing until Accept.
+
+**Open, not fixed**
+- **Font-swap reflow on slow first visits.** With the font delayed 1.5 s and no Arial installed, ordinary paragraphs re-wrap when the font arrives. At 360 px, 4 pages still exceed 0.1: methodology 0.193, terms 0.185, accelerometer 0.202, gyroscope 0.249.
+  - Astro's adjusted fallback is based on `local("Arial")`. That exists on Windows, macOS and iOS but not on Android or this test machine, so this measures the Android-like case.
+  - Options, not measurable here: (a) fallbacks ending in `system-ui`, so Astro also builds adjusted Roboto, Segoe UI and Helvetica Neue fallbacks; (b) `font-display: optional` for body text, which removes the shift but shows the system font on first visits over slow connections; (c) preloading the 500 and 600 weights.
+- **Contact delivery check:** a 2xx response from the Apps Script counts as sent. If the script can fail while still returning 200, that is not detected. Unknown without the script's source.
+
+**Scores after this pass:** unchanged from the summary table. Performance stays at 8: the new lab evidence supports it, and the font-swap reflow on slow first visits keeps it from 9.
+- Average across the 11 areas: original review 5.3 (58 of 110), now 8.0 (88 of 110).
 
 ## Also changed, outside the original scorecard
 - **Security headers:**

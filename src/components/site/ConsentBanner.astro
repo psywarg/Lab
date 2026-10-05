@@ -46,7 +46,13 @@
   const consent = readConsent();
 
   if (consent === "granted") loadAnalytics();
-  if (banner && consent === null) banner.hidden = false;
+  // Shown once the web fonts are in, so the swap cannot resize it on screen
+  // and shift the page (first visits are when fonts are not cached yet).
+  if (banner && consent === null) {
+    void document.fonts.ready.then(() => {
+      if (readConsent() === null) banner.hidden = false;
+    });
+  }
 
   banner
     ?.querySelectorAll<HTMLButtonElement>("[data-consent-choice]")

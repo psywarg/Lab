@@ -139,3 +139,36 @@ test("M14: the diagram loads only near the viewport and the dialog copy has uniq
   });
   expect(result).toEqual({ duplicates: [], cpuTitle: "Central Processing Unit" });
 });
+
+test("CLS: the explainer page stays under 0.1 while the web font swaps in on a phone", async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Sets its own phone viewport");
+  const context = await browser.newContext({
+    viewport: { width: 412, height: 915 },
+    deviceScaleFactor: 2.625,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  await blockExternal(page);
+  // Slow fonts, as on a first visit over a mobile connection.
+  await page.route(/\.woff2$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    const shifts = { total: 0 };
+    Object.assign(window, { __cls: shifts });
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) {
+        if (!entry.hadRecentInput) shifts.total += entry.value;
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  });
+  await page.goto("/phones/explainers/soc");
+  await page.waitForFunction(() => document.fonts.status === "loaded" && performance.now() > 2000);
+  await page.waitForTimeout(300);
+  const cls = await page.evaluate(() => (window as unknown as { __cls: { total: number } }).__cls.total);
+  // 0.1 is Google's "good" limit. The byline wrapping under the swap gave 0.25.
+  expect(cls).toBeLessThan(0.1);
+  await context.close();
+});

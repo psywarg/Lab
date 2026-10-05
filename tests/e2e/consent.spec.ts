@@ -68,3 +68,20 @@ test("H9: Cookie settings reopens the banner and can withdraw consent", async ({
   await banner(page).getByRole("button", { name: "Reject" }).click();
   expect(await page.evaluate(() => localStorage.getItem("consent:analytics"))).toBe("denied");
 });
+
+test("H9: Accept after Reject on the same page grants analytics again", async ({ page }) => {
+  await recordGoogle(page);
+  await page.goto("/");
+  await banner(page).getByRole("button", { name: "Accept" }).click();
+  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await banner(page).getByRole("button", { name: "Reject" }).click();
+  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await banner(page).getByRole("button", { name: "Accept" }).click();
+  const lastConsent = await page.evaluate(() => {
+    const updates = ((window as unknown as { dataLayer: ArrayLike<unknown>[] }).dataLayer ?? []).filter(
+      (entry) => entry[0] === "consent" && entry[1] === "update",
+    );
+    return (updates.at(-1)?.[2] as { analytics_storage?: string } | undefined)?.analytics_storage;
+  });
+  expect(lastConsent).toBe("granted");
+});
