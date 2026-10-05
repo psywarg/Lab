@@ -1,6 +1,7 @@
 // src/utils/site/fontSubset.ts
-// The characters kept in the Sorted fonts by `npm run fonts:subset`. Text
-// outside this set falls back to a system font, which tests/e2e/site.spec.ts
+// The characters kept in the Sorted fonts, which were trimmed once with
+// subset-font 2.9.0 (HarfBuzz) to this set plus the default OpenType features.
+// Text outside it falls back to a system font, which tests/e2e/site.spec.ts
 // checks against the built pages.
 
 // Google Fonts' "latin" range: English and Western European text, common

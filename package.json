@@ -20,7 +20,6 @@
     "preview:cloudflare": "astro build && wrangler dev",
     "lint": "eslint .",
     "svgo": "svgo --config svgo.config.mjs --recursive --folder src/assets",
-    "fonts:subset": "node scripts/subset-fonts.mjs",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test": "npm run test:unit && npm run test:e2e"
@@ -38,8 +37,6 @@
     "@tailwindcss/vite": "4.3.3",
     "eslint": "^10.8.1",
     "eslint-plugin-astro": "^3.1.0",
-    "globals": "^17.13.0",
-    "subset-font": "2.9.0",
     "svgo": "^4.1.0",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",

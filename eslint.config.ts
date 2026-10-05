@@ -2,7 +2,6 @@ import { defineConfig } from "eslint/config";
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import eslintPluginAstro from "eslint-plugin-astro";
-import globals from "globals";
 
 export default defineConfig(
   // 1. Core JS recommended rules
@@ -42,13 +41,7 @@ export default defineConfig(
     },
   },
 
-  // 6. Node scripts run from npm scripts.
-  {
-    files: ["scripts/**/*.mjs"],
-    languageOptions: { globals: globals.node },
-  },
-
-  // 7. Custom project rules & ignores
+  // 6. Custom project rules & ignores
   {
     rules: {
       // Allow intentionally unused parameters and variables prefixed with "_".

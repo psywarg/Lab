@@ -235,8 +235,8 @@ Everything from `6deb952` (the original upload) to `main` was re-checked.
 - The site's text uses ASCII plus © ° · ’ “ ” •.
 
 **Change**
-- `npm run fonts:subset` (`scripts/subset-fonts.mjs`, using `subset-font`) keeps Google Fonts' Latin range and the default OpenType features. Each file now has 223 glyphs.
-- The originals are kept in `src/assets/fonts/sorted/source/`.
+- The fonts were trimmed once with `subset-font` 2.9.0 to Google Fonts' Latin range and the default OpenType features. Each file now has 223 glyphs.
+- The range is recorded in `src/utils/site/fontSubset.ts`. The trim script and the original files were removed afterwards at your request.
 - Sizes: Regular 51.1 to 7.8 KB, Medium 50.5 to 7.6 KB, SemiBold 51.1 to 7.9 KB, Italic 58.6 to 8.5 KB (each 85% smaller).
 - Screenshots of 7 pages in light and dark, desktop and phone, plus the diagram dialog, are pixel-identical (29 of 29).
 - A dist test fails if any page uses a character outside the subset. It catches Ł and ź, and correctly passes ó.
