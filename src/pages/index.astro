@@ -3,13 +3,12 @@
 
 export const prerender = true;
 
-import socImage from "@/assets/images/phones/explainers/soc/soc.avif";
-import screenToolImage from "@/assets/images/phones/tools/screen-test.avif";
+import socImage from "@/assets/images/phones/explainers/soc/soc.png";
+import screenToolImage from "@/assets/images/phones/tools/screen-test.png";
 import SortoHome from "@/assets/images/sorto/sorto-home.svg";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
 import { ORGANIZATION_ID, SITE_ORIGIN, WEBSITE_ID } from "@/utils/site/schema";
-import { Picture } from "astro:assets";
+import ResponsiveImage from "@/components/site/ResponsiveImage.astro";
 
 const title = "Sorted Tech - Insights Beyond Influence";
 const metaDescription =
@@ -129,14 +128,10 @@ const structuredData = {
                   class="group w-30 touch-manipulation self-start overflow-hidden rounded-lg sm:row-span-3 sm:w-40 sm:rounded-xl lg:w-50"
                   aria-label={card.heading}
                 >
-                  <Picture
+                  <ResponsiveImage
                     src={card.image}
                     alt={card.imageAlt}
-                    formats={["avif"]}
-                    fallbackFormat="jpeg"
-                    layout={IMAGE_PRESETS["spotlight-thumbnail"].layout}
-                    sizes={IMAGE_PRESETS["spotlight-thumbnail"].sizes}
-                    widths={IMAGE_PRESETS["spotlight-thumbnail"].widths}
+                    preset="spotlight-thumbnail"
                     class="transition-transform duration-300 ease-out group-hover:scale-105"
                   />
                 </a>

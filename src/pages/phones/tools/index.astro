@@ -6,9 +6,8 @@ export const prerender = true;
 import Icons from "@/assets/icons/content-sprites.svg?url";
 import { toolsIndex } from "@/content/phones/tools";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { IMAGE_PRESETS } from "@/utils/site/imagePresets";
 import { SITE_ORIGIN } from "@/utils/site/schema";
-import { Picture } from "astro:assets";
+import ResponsiveImage from "@/components/site/ResponsiveImage.astro";
 
 const title = "Free Online Phone Hardware Test: Screen, Touch, Audio & Sensors";
 const metaDescription =
@@ -60,14 +59,10 @@ const structuredData = {
             class="group bg-custom-100 dark:bg-custom-800 border-accent-line shadow-accent-glow hover:border-accent-500 flex flex-col overflow-hidden rounded-xl border shadow-md transition duration-300 ease-out hover:-translate-y-1"
           >
             <div class="border-accent-line aspect-40/21 overflow-hidden border-b">
-              <Picture
+              <ResponsiveImage
                 src={tool.image}
                 alt=""
-                formats={["avif"]}
-                fallbackFormat="png"
-                layout={IMAGE_PRESETS["index-card"].layout}
-                sizes={IMAGE_PRESETS["index-card"].sizes}
-                widths={IMAGE_PRESETS["index-card"].widths}
+                preset="tools-card"
                 loading="lazy"
                 class="h-full w-full object-cover transition duration-300 ease-out group-hover:scale-105"
               />

@@ -1,0 +1,32 @@
+---
+// src/components/site/ResponsiveImage.astro
+// Content image from a PNG master: AVIF with a WebP fallback, sized by a
+// layout preset. Quality per format is set in astro.config.ts.
+
+import type { HTMLAttributes } from "astro/types";
+import type { ImageMetadata } from "astro";
+import { Picture, type LocalImageProps } from "astro:assets";
+import { IMAGE_PRESETS, type ImagePresetName } from "@/utils/site/imagePresets";
+
+type Props = Omit<
+  LocalImageProps,
+  "src" | "layout" | "sizes" | "widths" | "densities" | "format" | "quality"
+> & {
+  src: ImageMetadata;
+  preset: ImagePresetName;
+  pictureAttributes?: HTMLAttributes<"picture">;
+};
+
+const { src, preset, ...rest } = Astro.props;
+const { layout, sizes, widths } = IMAGE_PRESETS[preset];
+---
+
+<Picture
+  src={src}
+  formats={["avif"]}
+  fallbackFormat="webp"
+  layout={layout}
+  sizes={sizes}
+  widths={widths}
+  {...rest}
+/>

@@ -15,9 +15,9 @@ export type OgImage = {
 };
 
 /**
- * Social preview image: a 1200x630 JPEG built from the page's own image (or
- * the site default). Crawlers that read og:image do not reliably accept
- * AVIF, which is what the page images are stored as.
+ * Social preview image: a 1200x630 JPEG at quality 85, built from the page's
+ * own PNG master (or the site default). Crawlers that read og:image do not
+ * reliably accept AVIF, which is what the page images are served as.
  */
 export async function getOgImage(
   source: ImageMetadata = defaultOgSource,
@@ -25,6 +25,7 @@ export async function getOgImage(
   const image = await getImage({
     src: source,
     format: "jpeg",
+    quality: 85,
     width: OG_IMAGE_WIDTH,
     height: OG_IMAGE_HEIGHT,
     fit: "cover",
