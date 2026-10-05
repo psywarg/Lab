@@ -67,9 +67,13 @@ type GtagWindow = Window & {
 let analyticsLoaded = false;
 
 export function loadAnalytics(): void {
-  if (analyticsLoaded) return;
-  analyticsLoaded = true;
   const w = window as GtagWindow;
+  if (analyticsLoaded) {
+    // Already loaded on this page and then revoked: grant again.
+    w.gtag?.("consent", "update", { analytics_storage: "granted" });
+    return;
+  }
+  analyticsLoaded = true;
   w.dataLayer = w.dataLayer ?? [];
   // gtag.js only treats `arguments` objects as commands, not plain arrays,
   // so this must stay a classic function rather than a rest-args arrow.
