@@ -35,7 +35,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 
 ## Test inventory (measured on this branch)
 
-- **Unit (Vitest):** 108 tests in 13 files.
+- **Unit (Vitest):** 106 tests in 13 files.
   - Modules covered: `accelerometer`, `analytics`, `audio`, `contact` (worker), `gyroscope`, `mic`, `motion`, `screen`, `shared` (`runtimeShell`, `stats`, `strokeWaveform`), `site-utils`, `speaker`, `stuckPixel`, `touch`.
 - **E2e (Playwright, Chromium):** 231 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
   - 199 passed, 32 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
@@ -236,10 +236,11 @@ Everything from `6deb952` (the original upload) to `main` was re-checked.
 
 **Change**
 - The fonts were trimmed once with `subset-font` 2.9.0 to Google Fonts' Latin range and the default OpenType features. Each file now has 223 glyphs.
-- The range is recorded in `src/utils/site/fontSubset.ts`. The trim script and the original files were removed afterwards at your request.
+- The trim script and the original files were removed afterwards at your request.
 - Sizes: Regular 51.1 to 7.8 KB, Medium 50.5 to 7.6 KB, SemiBold 51.1 to 7.9 KB, Italic 58.6 to 8.5 KB (each 85% smaller).
 - Screenshots of 7 pages in light and dark, desktop and phone, plus the diagram dialog, are pixel-identical (29 of 29).
-- A dist test fails if any page uses a character outside the subset. It catches Ł and ź, and correctly passes ó.
+- A dist test reads the font files themselves (with `fontace`) and fails if any page's static text or SVG text uses a character they lack. It catches ↑ and the U+2010 hyphen, which are in the Latin range but not in the font, and correctly passes – and ó.
+  - Text written by scripts at runtime is not checked. Today that is emoji and one "→", which the original font lacked too.
 
 **Lab results** (Pixel 7, slow 4G, CPU 4x, Brotli, median of 3)
 - **A:** before the font trim (`main` at `1063bc2`).
