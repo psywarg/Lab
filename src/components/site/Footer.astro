@@ -1,5 +1,15 @@
 ---
 // src/components/site/Footer.astro
+
+import Icons from "@/assets/icons/site-sprites.svg?url";
+import { SOCIAL_PROFILES } from "@/utils/site/schema";
+
+const socialLinks = [
+  { name: "YouTube", icon: "social-youtube", href: SOCIAL_PROFILES.youtube },
+  { name: "Instagram", icon: "social-instagram", href: SOCIAL_PROFILES.instagram },
+  { name: "X", icon: "social-x", href: SOCIAL_PROFILES.x },
+  { name: "Telegram", icon: "social-telegram", href: SOCIAL_PROFILES.telegram },
+];
 ---
 
 <footer
@@ -61,6 +71,26 @@
       >
     </div>
   </div>
+
+  <ul class="mt-4 flex items-center justify-center gap-3" aria-label="Sorted Tech on social media">
+    {
+      socialLinks.map(({ name, icon, href }) => (
+        <li>
+          <a
+            href={href}
+            target="_blank"
+            rel="me noopener"
+            aria-label={`Sorted Tech on ${name} (opens in a new tab)`}
+            class="bg-accent-500/15 text-accent-ink hover:border-accent-600 hover:bg-accent-500 grid size-10 place-items-center rounded-xl border border-transparent transition ease-in-out hover:text-white active:scale-95"
+          >
+            <svg class="size-5.5" aria-hidden="true">
+              <use href={`${Icons}#${icon}`} />
+            </svg>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
 
   <div
     class="text-xsmall text-custom-500 mt-2 px-4 leading-relaxed"
