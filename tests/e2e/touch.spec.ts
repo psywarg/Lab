@@ -206,3 +206,23 @@ test("C4: covered cells follow the panel through a screen rotation", async ({ pa
     )
     .toBe(true);
 });
+
+test("the finger number sits above its bubble, clear of the finger", async ({ page, context }) => {
+  const touch = createTouch(await cdpFor(context, page));
+  await openTool(page, "touch-test");
+  await startTest(page, "multitouch");
+  await touch.send("touchStart", [[150, 400]]);
+  const marker = page.locator(".touch-marker").first();
+  await expect(marker).toHaveCount(1);
+  const layout = await marker.evaluate((el) => {
+    const label = getComputedStyle(el, "::after");
+    const border = Number.parseFloat(getComputedStyle(el).borderTopWidth);
+    // `bottom` is measured from the bubble's padding edge, inside its border.
+    const lift = Number.parseFloat(label.bottom) + Number.parseFloat(label.marginBottom) - border;
+    return { size: el.getBoundingClientRect().height, gapAboveBubble: lift - (el.getBoundingClientRect().height - 2 * border) };
+  });
+  expect(layout.size).toBe(56);
+  // The whole label sits above the bubble's outer edge, not over the finger.
+  expect(layout.gapAboveBubble).toBeGreaterThanOrEqual(4);
+  await touch.send("touchEnd", []);
+});

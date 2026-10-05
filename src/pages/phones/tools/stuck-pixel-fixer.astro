@@ -949,14 +949,14 @@ const structuredData = createToolApplicationSchema({
     }
 
     :global(.pixel-auto-marker) {
-      @apply pointer-events-none absolute z-4 size-6 -translate-x-1/2 -translate-y-1/2 rounded-full transition duration-200;
+      @apply pointer-events-none absolute z-4 size-8 -translate-x-1/2 -translate-y-1/2 rounded-full transition duration-200;
       box-shadow:
         0 0 0 2px #000,
         0 0 0 4px #fff;
     }
 
     :global(.pixel-auto-marker strong) {
-      @apply text-[0.6rem] absolute inset-0 grid place-items-center leading-none font-bold whitespace-nowrap text-white;
+      @apply text-[0.6rem] absolute bottom-full left-1/2 mb-2 -translate-x-1/2 leading-none font-bold whitespace-nowrap text-white;
       text-shadow:
         -1px -1px 0 #000,
         1px -1px 0 #000,
