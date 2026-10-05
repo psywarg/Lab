@@ -5,6 +5,12 @@
 export const GA_MEASUREMENT_ID = "G-HJ4YRNZ9LG";
 export const CONSENT_STORAGE_KEY = "consent:analytics";
 export const CONSENT_OPEN_EVENT = "consent:open";
+/**
+ * Google's opt-out switch: while this window property is true, gtag.js sends
+ * nothing to Google Analytics. Consent Mode alone still sends cookieless
+ * pings after consent is withdrawn on a page where gtag.js already runs.
+ */
+export const GA_DISABLE_KEY = `ga-disable-${GA_MEASUREMENT_ID}`;
 
 export type ConsentState = "granted" | "denied";
 
@@ -62,12 +68,14 @@ export function grantedCommands(now: Date): unknown[][] {
 type GtagWindow = Window & {
   dataLayer?: unknown[];
   gtag?: (...args: unknown[]) => void;
+  [GA_DISABLE_KEY]?: boolean;
 };
 
 let analyticsLoaded = false;
 
 export function loadAnalytics(): void {
   const w = window as GtagWindow;
+  w[GA_DISABLE_KEY] = false;
   if (analyticsLoaded) {
     // Already loaded on this page and then revoked: grant again.
     w.gtag?.("consent", "update", { analytics_storage: "granted" });
@@ -91,6 +99,7 @@ export function loadAnalytics(): void {
 /** Stops analytics storage and removes the GA cookies already set. */
 export function revokeAnalytics(): void {
   const w = window as GtagWindow;
+  w[GA_DISABLE_KEY] = true;
   w.gtag?.("consent", "update", { analytics_storage: "denied" });
   const host = location.hostname;
   const domains = ["", host, `.${host.split(".").slice(-2).join(".")}`];

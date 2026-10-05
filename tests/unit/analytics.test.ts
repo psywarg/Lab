@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  GA_DISABLE_KEY,
   GA_MEASUREMENT_ID,
   analyticsCookieNames,
   grantedCommands,
@@ -37,5 +38,11 @@ describe("grantedCommands", () => {
     ]);
     expect(commands[0]?.[2]).toMatchObject({ analytics_storage: "denied", ad_storage: "denied" });
     expect(commands[1]?.[2]).toEqual({ analytics_storage: "granted" });
+  });
+});
+
+describe("GA_DISABLE_KEY", () => {
+  it("is the window property Google checks: ga-disable-<measurement ID>", () => {
+    expect(GA_DISABLE_KEY).toBe("ga-disable-G-HJ4YRNZ9LG");
   });
 });

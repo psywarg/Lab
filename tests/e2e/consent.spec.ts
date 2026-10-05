@@ -75,8 +75,11 @@ test("H9: Accept after Reject on the same page grants analytics again", async ({
   await banner(page).getByRole("button", { name: "Accept" }).click();
   await page.getByRole("button", { name: "Cookie settings" }).click();
   await banner(page).getByRole("button", { name: "Reject" }).click();
+  // Consent Mode alone would keep sending cookieless pings on this page.
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>)["ga-disable-G-HJ4YRNZ9LG"])).toBe(true);
   await page.getByRole("button", { name: "Cookie settings" }).click();
   await banner(page).getByRole("button", { name: "Accept" }).click();
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>)["ga-disable-G-HJ4YRNZ9LG"])).toBe(false);
   const lastConsent = await page.evaluate(() => {
     const updates = ((window as unknown as { dataLayer: ArrayLike<unknown>[] }).dataLayer ?? []).filter(
       (entry) => entry[0] === "consent" && entry[1] === "update",
