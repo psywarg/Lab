@@ -568,19 +568,19 @@ const structuredData = createToolApplicationSchema({
     }
 
     :global(.touch-marker) {
-      @apply absolute top-0 left-0 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/50 shadow-xl ring-5 shadow-blue-600/40 ring-blue-300/10 will-change-transform ring-inset;
+      @apply absolute top-0 left-0 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/50 shadow-xl ring-5 shadow-blue-600/40 ring-blue-300/10 will-change-transform ring-inset;
     }
 
     :global(.touch-marker)::after {
-      @apply text-xsmall absolute bottom-[calc(100%+0.5rem)] left-1/2 grid h-6 min-w-6 -translate-x-1/2 place-items-center rounded-full border border-white bg-blue-500/40 px-1.5 leading-none font-bold text-white shadow-xl shadow-blue-600/40 content-[attr(data-touch-label)];
+      @apply text-xsmall absolute bottom-full mb-2 left-1/2 grid h-6 min-w-6 -translate-x-1/2 place-items-center rounded-full border border-white bg-blue-500/40 px-1.5 leading-none font-bold text-white shadow-xl shadow-blue-600/40 content-[attr(data-touch-label)];
     }
 
     :global(.ghost-marker) {
-      @apply absolute top-0 left-0 size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-red-500 bg-red-500/20 shadow-xl shadow-red-600/40;
+      @apply absolute top-0 left-0 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-red-500 bg-red-500/20 shadow-xl shadow-red-600/40;
     }
 
     :global(.ghost-marker)::after {
-      @apply text-2xsmall absolute -bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-0.5 leading-none font-bold whitespace-nowrap text-white content-[attr(data-ghost-label)];
+      @apply text-2xsmall absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-0.5 leading-none font-bold whitespace-nowrap text-white content-[attr(data-ghost-label)];
     }
 
     :global(#touch-start.touch-start--running) {

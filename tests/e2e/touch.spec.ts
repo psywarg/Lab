@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createPointerRateTracker } from "../../src/utils/phones/tools/touch";
 import { cdpFor, createTouch, openTool } from "./helpers";
 
 test.skip(({ isMobile }) => !isMobile, "Touch tests need a touch viewport");
@@ -49,29 +50,54 @@ test("H2: the bottom row of the grid can be touched without leaving the test", a
   await expect(page.locator("tool-runtime-shell")).toHaveAttribute("data-fullscreen", "true");
 });
 
-test("H3: sample rate does not double with two fingers", async ({ page, context }) => {
+test("H3: sample rate is measured per finger, so two fingers do not double it", async ({ page, context }) => {
+  // Record the same samples the page feeds its rate tracker (pointerdown, and
+  // every coalesced pointermove), so the expected rate comes from the exact
+  // events the page saw and machine load cannot change the outcome.
+  await page.addInitScript(() => {
+    const samples: [number, number][] = [];
+    Object.assign(window, { __rateSamples: samples });
+    window.addEventListener("pointerdown", (event) => samples.push([event.pointerId, event.timeStamp]), true);
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        for (const sample of event.getCoalescedEvents?.() ?? [event]) samples.push([event.pointerId, sample.timeStamp]);
+      },
+      true,
+    );
+  });
   const touch = createTouch(await cdpFor(context, page));
   await openTool(page, "touch-test");
   await startTest(page, "multitouch");
-  async function rateWith(fingers: readonly (readonly [number, number])[]): Promise<number> {
-    await touch.send("touchStart", fingers);
-    for (let i = 0; i < 50; i += 1) {
-      await touch.send("touchMove", fingers.map(([x, y]) => [x + i, y + i * 3] as const));
-      await page.waitForTimeout(16);
-    }
-    const text = (await stageStat(page, "rate").textContent()) ?? "";
-    await touch.send("touchEnd", []);
-    await page.waitForTimeout(1200);
-    return Number.parseInt(text, 10);
+  await page.evaluate(() => ((window as unknown as { __rateSamples: unknown[] }).__rateSamples.length = 0));
+
+  const fingers = [[100, 200], [260, 200]] as const;
+  await touch.send("touchStart", fingers);
+  for (let i = 0; i < 50; i += 1) {
+    await touch.send("touchMove", fingers.map(([x, y]) => [x + i, y + i * 3] as const));
+    await page.waitForTimeout(16);
   }
-  const one = await rateWith([[100, 200]]);
-  const two = await rateWith([[100, 200], [260, 200]]);
-  expect(one).toBeGreaterThan(0);
-  // CDP event dispatch timing varies under load (a ratio of 1.54 has been
-  // seen with correct code); the bug this guards against doubled the rate
-  // (ratio 2.0), which this bound still fails clearly.
-  expect(two / one).toBeGreaterThan(0.6);
-  expect(two / one).toBeLessThan(1.75);
+
+  const expectedRate = async () => {
+    const samples = await page.evaluate(
+      () => (window as unknown as { __rateSamples: [number, number][] }).__rateSamples,
+    );
+    const tracker = createPointerRateTracker(1000);
+    for (const [pointerId, timestamp] of samples) tracker.record(pointerId, timestamp);
+    return { rate: tracker.rate() ?? 0, pointers: new Set(samples.map(([id]) => id)).size };
+  };
+  const { pointers } = await expectedRate();
+  expect(pointers).toBe(2);
+  // Pooling both fingers into one series (the original bug) reads about
+  // twice the per-finger rate and fails this.
+  await expect
+    .poll(async () => {
+      const shown = Number.parseInt((await stageStat(page, "rate").textContent()) ?? "", 10);
+      const { rate } = await expectedRate();
+      return rate > 0 && Math.abs(shown - rate) <= 1;
+    })
+    .toBe(true);
+  await touch.send("touchEnd", []);
 });
 
 test("C5: a tap 5 px from the target centre grades as Centre", async ({ page, context }) => {
@@ -179,4 +205,24 @@ test("C4: covered cells follow the panel through a screen rotation", async ({ pa
       }),
     )
     .toBe(true);
+});
+
+test("the finger number sits above its bubble, clear of the finger", async ({ page, context }) => {
+  const touch = createTouch(await cdpFor(context, page));
+  await openTool(page, "touch-test");
+  await startTest(page, "multitouch");
+  await touch.send("touchStart", [[150, 400]]);
+  const marker = page.locator(".touch-marker").first();
+  await expect(marker).toHaveCount(1);
+  const layout = await marker.evaluate((el) => {
+    const label = getComputedStyle(el, "::after");
+    const border = Number.parseFloat(getComputedStyle(el).borderTopWidth);
+    // `bottom` is measured from the bubble's padding edge, inside its border.
+    const lift = Number.parseFloat(label.bottom) + Number.parseFloat(label.marginBottom) - border;
+    return { size: el.getBoundingClientRect().height, gapAboveBubble: lift - (el.getBoundingClientRect().height - 2 * border) };
+  });
+  expect(layout.size).toBe(56);
+  // The whole label sits above the bubble's outer edge, not over the finger.
+  expect(layout.gapAboveBubble).toBeGreaterThanOrEqual(4);
+  await touch.send("touchEnd", []);
 });
