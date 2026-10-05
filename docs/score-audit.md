@@ -158,7 +158,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 - **Masters (IMG6):** every raster image is a 1200x630 PNG in `src/assets/images/`, listed in `docs/images.md`. The lossy AVIF masters and the unused `cpu.avif` are removed.
 - **Formats and quality (IMG5, IMG6):**
   - `ResponsiveImage.astro` serves AVIF with a WebP fallback for all 6 content images. No PNG or JPEG variant is emitted (IMG5 test).
-  - AVIF is q80 with full colour resolution (4:4:4), and WebP q75. q80 is about 1.9x the bytes of q60 and 2.3 to 2.5 dB closer to the master at 1000w. q50 visibly smoothed fine texture in 2x crops.
+  - AVIF is q80 with full colour resolution (4:4:4), and WebP q75. q80 is 1.8 to 1.9x the bytes of q60 and 1.9 to 2.5 dB closer to the master at 1000w. q50 visibly smoothed fine texture in 2x crops.
 - **Sizing (IMG2):** one preset per layout, with `sizes` taken from measured boxes. The IMG2 test checks each image at 360@3x, 412@2.625x, 1024, 1366 and 1920: measured ratios are 1.00 to 1.17. The old build fails it: `/phones` cards at 0.64 on phones, the explainer hero at 0.38 to 0.43 on desktop, and tool cards at 1.51 at 1024.
 - **OG weight (IMG7):** JPEG q85 with mozjpeg, 31.9 to 127.4 KB per image (`st-og` 127.4 KB). Before, they were q80, 33.4 to 124.4 KB.
 - **SVGs (IMG8):** SVGO with IDs and symbols kept takes `src/assets` SVGs from 162.9 KB to 121.3 KB (`notfound-404` 62.8 to 38.5 KB). Screenshots of 7 pages, light and dark, desktop and phone, differ only in anti-aliasing.

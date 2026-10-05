@@ -21,6 +21,21 @@ const THEME_INIT_HASH: `sha256-${string}` = `sha256-${createHash("sha256")
   .update(readFileSync("./src/scripts/theme-init.js", "utf8"))
   .digest("base64")}`;
 
+// Encoder settings for every generated image. Astro's image cache is keyed on
+// each transform (size, format, quality passed in code), not on these
+// defaults, so changing one would silently reuse images made with the old
+// value. Folding a hash of them into the cache folder gives each set its own
+// cache.
+const IMAGE_ENCODERS = {
+  avif: { quality: 80, chromaSubsampling: "4:4:4" },
+  webp: { quality: 75 },
+  jpeg: { mozjpeg: true },
+} as const;
+const IMAGE_ENCODERS_HASH = createHash("sha256")
+  .update(JSON.stringify(IMAGE_ENCODERS))
+  .digest("hex")
+  .slice(0, 8);
+
 // Hosts from Google's GA4 CSP guide and Cloudflare's Turnstile CSP guide.
 const GOOGLE_TAG = "https://*.googletagmanager.com";
 const GOOGLE_ANALYTICS = "https://*.google-analytics.com";
@@ -87,19 +102,16 @@ export default defineConfig({
   build: {
     format: "file",
   },
+  cacheDir: `./node_modules/.astro/${IMAGE_ENCODERS_HASH}`,
   image: {
     // Content images are AVIF with a WebP fallback. AVIF is q80 with full
-    // colour resolution (4:4:4): about 1.9x the bytes of q60, and 2.3 to
+    // colour resolution (4:4:4): 1.8 to 1.9x the bytes of q60, and 1.9 to
     // 2.5 dB closer to the master at 1000w. JPEG is only used for
     // og:image (q85, set in ogImage.ts); mozjpeg makes it 12 to 22% smaller
     // at that quality.
     service: {
       entrypoint: "astro/assets/services/sharp",
-      config: {
-        avif: { quality: 80, chromaSubsampling: "4:4:4" },
-        webp: { quality: 75 },
-        jpeg: { mozjpeg: true },
-      },
+      config: IMAGE_ENCODERS,
     },
   },
   security: {
