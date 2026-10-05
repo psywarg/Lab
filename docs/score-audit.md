@@ -7,7 +7,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 | Area | Review | Now | Main evidence | Not verified |
 |---|---|---|---|---|
 | Build and tooling | 6 | 9 | CI green on every PR; lint covers `.astro` scripts; 0 audit findings | None |
-| Architecture | 5 | **7** | 18 tested tool modules, 106 unit tests, listed duplicates removed | Below 8: see below |
+| Architecture | 5 | **7** | 18 tested tool modules, 107 unit tests, listed duplicates removed | Below 8: see below |
 | Performance | 7 | 9 | Lab FCP and LCP 88 to 220 ms faster than before the font trim on 8 pages, CLS at most 0.001 on every page at 360 px on slow 4G, fonts 85% smaller, no analytics before consent | Field LCP/INP/CLS |
 | Screen test | 7 | 8 | 1 px patterns, transform animations, tap-to-reveal, fps readout, fallback fullscreen | Real devices |
 | Stuck pixel fixer | 6 | 8 | 3/s cap above 140 px, truthful copy, no auto-start, diagnosis unit tests | Flash analyser; diagnosis UI flow |
@@ -35,7 +35,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 
 ## Test inventory (measured on this branch)
 
-- **Unit (Vitest):** 106 tests in 13 files.
+- **Unit (Vitest):** 107 tests in 13 files.
   - Modules covered: `accelerometer`, `analytics`, `audio`, `contact` (worker), `gyroscope`, `mic`, `motion`, `screen`, `shared` (`runtimeShell`, `stats`, `strokeWaveform`), `site-utils`, `speaker`, `stuckPixel`, `touch`.
 - **E2e (Playwright, Chromium):** 231 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
   - 199 passed, 32 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
@@ -184,7 +184,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 Everything from `6deb952` (the original upload) to `main` was re-checked.
 
 **Method**
-- **Clean install from the lockfile:** `astro check` 0/0/0, lint clean, 106 unit tests, 20 pages built, `npm audit` 0.
+- **Clean install from the lockfile:** `astro check` 0/0/0, lint clean, 107 unit tests, 20 pages built, `npm audit` 0.
 - **Full e2e:** 198 passed, 30 skipped by design.
 - **Page sweep:** all 20 pages at 1366, Pixel 7, iPhone 14 and 320 px, in light and dark. No console errors, CSP violations, broken images or horizontal overflow.
 - **Tool flows:** each tool's controls driven at 4 viewports, including fullscreen entry and exit with and without the Fullscreen API, touch hold-to-pause with touch and with a mouse, mic start and speaker start/stop. No errors.
@@ -198,6 +198,7 @@ Everything from `6deb952` (the original upload) to `main` was re-checked.
    - The byline now stacks below 640 px, as its hidden `|` separator already implied.
 3. **Consent banner CLS:** the banner was shown before the fonts loaded, and the swap resized it on screen. That added 0.03 to 0.09 to first-visit CLS. It now appears after `document.fonts.ready`.
    - With fonts delayed 1.5 s, CLS on the SoC explainer is 0.033, down from 0.247. A new e2e test holds it under 0.1.
+4. **Consent, PR 5 review (2026-10-05):** Reject after Accept on the same page only sent Consent Mode "denied", and gtag.js keeps sending cookieless pings in that state. Reject now also sets `window["ga-disable-G-HJ4YRNZ9LG"]`, Google's switch that stops gtag.js sending; Accept clears it. The e2e test checks the flag. **Not verified** that it stops hits mid-page: this environment cannot load gtag.js.
 
 **Checked, not a bug:** hidden stuck-pixel diagnosis buttons (they are `inert` and `visibility: hidden`); the screen test's Auto mode entering fullscreen (by design); the Shiki CSP build warning (there are no code blocks, and inline style attributes are allowed anyway).
 
@@ -287,6 +288,6 @@ Everything from `6deb952` (the original upload) to `main` was re-checked.
 2. After deploy:
    - `curl -I` on a page and on a `/_astro/` file, to confirm the headers
    - send one real contact form; Turnstile under the CSP is untested
-   - GA DebugView after Accept
+   - GA DebugView after Accept, and after Accept then Reject on one page: no events should arrive after the Reject
    - a social-share debugger on a tool page
 3. Images: export the PNG originals at 1200x630 over the placeholders listed in `docs/images.md`, then rebuild.
