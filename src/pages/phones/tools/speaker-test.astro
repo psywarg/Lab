@@ -998,7 +998,8 @@ const structuredData = createToolApplicationSchema({
       if (volumeInput && volumeLabel) {
         volumeLabel.textContent = formatVolumeLabel(Number(volumeInput.value));
       }
-      if (gainNode && audioContext && activeMode === "signal") {
+      // Every mode holds a steady level, so the slider applies live in all.
+      if (gainNode && audioContext) {
         rampParam(gainNode.gain, targetGain(), audioContext, 0.02);
       }
       if (frequencyRow)

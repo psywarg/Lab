@@ -81,6 +81,43 @@ test.describe("speaker test", () => {
   });
 });
 
+test.describe("speaker volume in water and hearing modes", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const created: GainNode[] = [];
+      Object.assign(window, { __gains: created });
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with .call below
+      const original = AudioContext.prototype.createGain;
+      AudioContext.prototype.createGain = function (this: AudioContext) {
+        const node = original.call(this);
+        created.push(node);
+        return node;
+      };
+    });
+    await openTool(page, "speaker-test");
+  });
+
+  for (const mode of ["water", "hearing"]) {
+    test(`the volume slider changes the level while ${mode} plays`, async ({ page }) => {
+      await page.evaluate((id) => document.querySelector<HTMLButtonElement>(`[data-speaker-mode='${id}']`)?.click(), mode);
+      await expect(page.locator("#speaker-stage")).toHaveAttribute("data-mode", mode);
+      await page.locator("#speaker-start").click();
+      await expect(page.locator("#speaker-stage")).toHaveAttribute("data-playing", "true");
+      await page.evaluate(() => {
+        const input = document.getElementById("speaker-volume") as HTMLInputElement;
+        input.value = "-6";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      // -6 dB is a gain of 0.501; it was 0.251 (-12 dB) when playback started.
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as unknown as { __gains: GainNode[] }).__gains.at(-1)?.gain.value ?? 0),
+        )
+        .toBeCloseTo(0.501, 2);
+    });
+  }
+});
+
 test.describe("mic test", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
