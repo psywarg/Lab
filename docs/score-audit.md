@@ -8,7 +8,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 |---|---|---|---|---|
 | Build and tooling | 6 | 9 | CI green on every PR; lint covers `.astro` scripts; 0 audit findings | None |
 | Architecture | 5 | **7** | 18 tested tool modules, 106 unit tests, listed duplicates removed | Below 8: see below |
-| Performance | 7 | 8 | Lab LCP equal or faster on 8 pages, SoC CLS 0.162 to 0.003, no analytics before consent, immutable caching | Field LCP/INP/CLS |
+| Performance | 7 | 9 | Lab FCP and LCP 88 to 220 ms faster than before the font trim on 8 pages, CLS at most 0.001 on every page at 360 px on slow 4G, fonts 85% smaller, no analytics before consent | Field LCP/INP/CLS |
 | Screen test | 7 | 8 | 1 px patterns, transform animations, tap-to-reveal, fps readout, fallback fullscreen | Real devices |
 | Stuck pixel fixer | 6 | 8 | 3/s cap above 140 px, truthful copy, no auto-start, diagnosis unit tests | Flash analyser; diagnosis UI flow |
 | Touch test | 4 | 8 | 100% coverage, graded precision, equal Hz for 1 and 2 fingers, drift e2e | Real touch screens |
@@ -30,14 +30,15 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 | 5 | psywarg/Lab#6 | Logic moved into tested modules; this audit |
 | Images | psywarg/Lab#7 | PNG masters, AVIF with WebP fallback, per-layout sizes, OG quality, SVGO |
 | Images | psywarg/Lab#8 | AVIF q80 (4:4:4) |
-| Review | this PR | Consent re-grant fix, font-swap CLS fixes, this rescore |
+| Review | psywarg/Lab#9 | Consent re-grant fix, font-swap CLS fixes, rescore |
+| Fonts | this PR | Sorted trimmed to Latin; preloading 500 and 600 tested and rejected |
 
 ## Test inventory (measured on this branch)
 
-- **Unit (Vitest):** 106 tests in 13 files.
+- **Unit (Vitest):** 108 tests in 13 files.
   - Modules covered: `accelerometer`, `analytics`, `audio`, `contact` (worker), `gyroscope`, `mic`, `motion`, `screen`, `shared` (`runtimeShell`, `stats`, `strokeWaveform`), `site-utils`, `speaker`, `stuckPixel`, `touch`.
-- **E2e (Playwright, Chromium):** 228 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
-  - 198 passed, 30 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
+- **E2e (Playwright, Chromium):** 231 tests in 12 files, each run at desktop (1366x900), Pixel 7 and iPhone 14 viewport.
+  - 199 passed, 32 skipped by design: touch tests skip on desktop, nav tests skip on the other viewport type, and dist-wide checks and the image sizing tests (which set their own viewports) run once.
   - The suite runs under the production `_headers` and the per-page CSP.
 - **Other checks:**
   - `astro check`: 0 errors, 0 warnings, 0 hints.
@@ -87,7 +88,8 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
   - Then share the sensor lifecycle between accelerometer and gyroscope.
   - This is the "full 600-line target" option that was declined for Phase 5.
 
-### Performance: 8
+### Performance: 9
+- Fonts: see "Fonts (2026-10-05)" below. Trimming them to Latin is the change that lifts this to 9.
 - `/_astro/*` is served `public, max-age=31536000, immutable`. This is measured through the e2e server, which applies `_headers`; Cloudflare production is **not verified**.
 - The first card image on `/phones` and `/phones/explainers` is eager with `fetchpriority="high"` (IMG3 test). The explainer hero no longer competes at high priority.
 - Burn-in animations move a layer with `transform` instead of repainting `background-position` (M2 test).
@@ -218,13 +220,53 @@ Everything from `6deb952` (the original upload) to `main` was re-checked.
 - Both builds had Google requests blocked. In production, the original also loaded Partytown and gtag for every visitor; the current code loads nothing until Accept.
 
 **Open, not fixed**
-- **Font-swap reflow on slow first visits.** With the font delayed 1.5 s and no Arial installed, ordinary paragraphs re-wrap when the font arrives. At 360 px, 4 pages still exceed 0.1: methodology 0.193, terms 0.185, accelerometer 0.202, gyroscope 0.249.
+- **Font-swap reflow on slow first visits** (since fixed under realistic conditions, see "Fonts (2026-10-05)"). With the font delayed 1.5 s and no Arial installed, ordinary paragraphs re-wrap when the font arrives. At 360 px, 4 pages still exceed 0.1: methodology 0.193, terms 0.185, accelerometer 0.202, gyroscope 0.249.
   - Astro's adjusted fallback is based on `local("Arial")`. That exists on Windows, macOS and iOS but not on Android or this test machine, so this measures the Android-like case.
   - Options, not measurable here: (a) fallbacks ending in `system-ui`, so Astro also builds adjusted Roboto, Segoe UI and Helvetica Neue fallbacks; (b) `font-display: optional` for body text, which removes the shift but shows the system font on first visits over slow connections; (c) preloading the 500 and 600 weights.
 - **Contact delivery check:** a 2xx response from the Apps Script counts as sent. If the script can fail while still returning 200, that is not detected. Unknown without the script's source.
 
 **Scores after this pass:** unchanged from the summary table. Performance stays at 8: the new lab evidence supports it, and the font-swap reflow on slow first visits keeps it from 9.
 - Average across the 11 areas: original review 5.3 (58 of 110), now 8.0 (88 of 110).
+
+## Fonts (2026-10-05)
+
+**Findings**
+- Each Sorted file (51 KB) carried 472 characters and 1,059 glyphs: Devanagari, Greek, Cyrillic, Latin Extended-A and four stylistic sets the site never uses.
+- The site's text uses ASCII plus © ° · ’ “ ” •.
+
+**Change**
+- The fonts were trimmed once with `subset-font` 2.9.0 to Google Fonts' Latin range and the default OpenType features. Each file now has 223 glyphs.
+- The range is recorded in `src/utils/site/fontSubset.ts`. The trim script and the original files were removed afterwards at your request.
+- Sizes: Regular 51.1 to 7.8 KB, Medium 50.5 to 7.6 KB, SemiBold 51.1 to 7.9 KB, Italic 58.6 to 8.5 KB (each 85% smaller).
+- Screenshots of 7 pages in light and dark, desktop and phone, plus the diagram dialog, are pixel-identical (29 of 29).
+- A dist test fails if any page uses a character outside the subset. It catches Ł and ź, and correctly passes ó.
+
+**Lab results** (Pixel 7, slow 4G, CPU 4x, Brotli, median of 3)
+- **A:** before the font trim (`main` at `1063bc2`).
+- **B:** trimmed fonts (this PR).
+- **C:** trimmed fonts plus preloading 500 and 600.
+
+| Page | FCP A / B / C | LCP A / B / C | Fonts finished A / B / C | KB A / B / C |
+|---|---|---|---|---|
+| `/` | 816 / 728 / 776 | 816 / 728 / 776 | 1916 / 1090 / 1045 | 277 / 102 / 102 |
+| `/phones` | 896 / 756 / 740 | 992 / 808 / 876 | 1818 / 1038 / 896 | 294 / 168 / 168 |
+| `/phones/tools` | 872 / 700 / 744 | 872 / 700 / 744 | 2253 / 1053 / 948 | 362 / 235 / 235 |
+| `/phones/explainers/soc` | 968 / 748 / 812 | 968 / 748 / 812 | 1631 / 1038 / 978 | 251 / 125 / 125 |
+| `/contact` | 788 / 700 / 712 | 788 / 700 / 712 | 1442 / 948 / 864 | 195 / 68 / 68 |
+| screen test | 964 / 812 / 864 | 964 / 812 / 864 | 1632 / 1061 / 1008 | 220 / 93 / 93 |
+| mic test | 972 / 796 / 844 | 972 / 796 / 844 | 1631 / 1054 / 993 | 212 / 86 / 86 |
+| touch test | 964 / 796 / 816 | 964 / 796 / 816 | 1648 / 1053 / 956 | 219 / 92 / 92 |
+
+(Times in ms.)
+
+- **Trimming (B):** FCP and LCP are 88 to 220 ms faster on every page, fonts finish 0.4 to 1.2 s sooner, and each page downloads 127 KB less.
+- **Preloading 500 and 600 (C): rejected** under the rule set in advance. Fonts finished 45 to 157 ms sooner, but FCP was 52 to 64 ms slower on 2 pages and LCP 68 ms slower on `/phones`, because the preloads compete with the stylesheet. Only the regular weight stays preloaded.
+- **CLS at 360 px on slow 4G, all 20 pages:** worst page 0.200 (gyroscope) and 0.115 (methodology) before; worst page 0.001 after.
+  - With the font artificially delayed 1.5 s the reflow still occurs. That now needs a slower connection than the slow-4G profile.
+
+**Rescore:** Performance goes from 8 to 9.
+- Average across the 11 areas: original review 5.3 (58 of 110), now 8.1 (89 of 110).
+- Not 10, because field Core Web Vitals are not verified, and image bytes are higher than in the original (a quality choice).
 
 ## Also changed, outside the original scorecard
 - **Security headers:**
