@@ -19,7 +19,6 @@
     "deploy": "astro build && wrangler deploy",
     "preview:cloudflare": "astro build && wrangler dev",
     "lint": "eslint .",
-    "svgo": "svgo --config svgo.config.mjs --recursive --folder src/assets",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test": "npm run test:unit && npm run test:e2e"
@@ -37,7 +36,7 @@
     "@tailwindcss/vite": "4.3.3",
     "eslint": "^10.8.1",
     "eslint-plugin-astro": "^3.1.0",
-    "svgo": "^4.1.0",
+    "fontace": "^0.4.1",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "typescript-eslint": "^8.67.0",

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import sharp from "sharp";
-import { inLatinSubset } from "../../src/utils/site/fontSubset";
+import { fontace } from "fontace";
 import { blockExternal, collectErrors } from "./helpers";
 
 for (const [path, icon] of [
@@ -174,8 +174,27 @@ test("CLS: the explainer page stays under 0.1 while the web font swaps in on a p
   await context.close();
 });
 
+/** Code points present in every Sorted font file (all weights and italic). */
+function sortedFontCoverage(): (codePoint: number) => boolean {
+  const dir = "src/assets/fonts/sorted";
+  const ranges = readdirSync(dir)
+    .filter((file) => file.startsWith("Sorted-") && file.endsWith(".woff2"))
+    .map((file) =>
+      fontace(readFileSync(join(dir, file))).unicodeRangeArray.map((range) => {
+        const [start = "0", end = start] = range.replace("U+", "").split("-");
+        return [parseInt(start, 16), parseInt(end, 16)] as const;
+      }),
+    );
+  expect(ranges.length).toBe(4);
+  return (codePoint) =>
+    ranges.every((font) => font.some(([start, end]) => codePoint >= start && codePoint <= end));
+}
+
+// Static page and SVG text only: strings that scripts write at runtime are not
+// checked (today those are emoji and one "→", which the original font lacked too).
 test("Fonts: every character in the built pages is in the trimmed Sorted fonts", () => {
   test.skip(test.info().project.name !== "desktop", "Checks build output; one viewport is enough");
+  const covered = sortedFontCoverage();
   const files = readdirSync("dist", { recursive: true, encoding: "utf8" }).filter(
     (file) => file.endsWith(".html") || file.endsWith(".svg"),
   );
@@ -187,9 +206,10 @@ test("Fonts: every character in the built pages is in the trimmed Sorted fonts",
       .replace(/<[^>]+>/g, " ")
       .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
       .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
-      .replace(/&[a-z]+;/gi, " ");
+      .replace(/&[a-z]+;/gi, " ")
+      .replace(/\s/g, "");
     for (const char of text) {
-      if (!inLatinSubset(char.codePointAt(0) ?? 0)) missing.set(char, file);
+      if (!covered(char.codePointAt(0) ?? 0)) missing.set(char, file);
     }
   }
   expect([...missing].map(([char, file]) => `${char} (U+${(char.codePointAt(0) ?? 0).toString(16)}) in ${file}`)).toEqual([]);
