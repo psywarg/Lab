@@ -115,3 +115,14 @@ test("Footer: social links render as one row of icon tiles", async ({ page }) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors.filter((error) => error.includes("Unsafe attempt"))).toEqual([]);
 });
+
+test("Footer: Cookie settings is the same colour as the footer links", async ({ page }) => {
+  await blockExternal(page);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/");
+    const colour = (locator: ReturnType<Page["locator"]>) => locator.evaluate((el) => getComputedStyle(el).color);
+    const link = await colour(page.locator("footer a[href='/about']"));
+    expect(await colour(page.getByRole("button", { name: "Cookie settings" }))).toBe(link);
+  }
+});
