@@ -9,7 +9,7 @@ Every raster image has one master: a 1200x630 PNG in `src/assets/images/`. The b
 
 To replace an image, export it as a 1200x630 PNG and overwrite the file at the same path. Then run `npm run build`. No code changes are needed.
 
-Quality is set once in `astro.config.ts` (`image.service.config`): AVIF q60, WebP q75, and JPEG with mozjpeg (`og:image` is q85). Astro's image cache does not notice changes to that config, so after changing it, delete `node_modules/.astro/assets` before building. Replacing a PNG needs no cache step, because the file's content is part of the cache key.
+Quality is set once in `astro.config.ts` (`image.service.config`): AVIF q80 (4:4:4), WebP q75, and JPEG with mozjpeg (`og:image` is q85). Astro's image cache does not notice changes to that config, so after changing it, delete `node_modules/.astro/assets` before building. Replacing a PNG needs no cache step, because the file's content is part of the cache key.
 
 Export rules:
 

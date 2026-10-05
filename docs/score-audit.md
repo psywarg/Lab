@@ -153,7 +153,7 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
 - **Masters (IMG6):** every raster image is a 1200x630 PNG in `src/assets/images/`, listed in `docs/images.md`. The lossy AVIF masters and the unused `cpu.avif` are removed.
 - **Formats and quality (IMG5, IMG6):**
   - `ResponsiveImage.astro` serves AVIF with a WebP fallback for all 6 content images. No PNG or JPEG variant is emitted (IMG5 test).
-  - AVIF is q60 and WebP q75, picked from 2x crops: q50 smoothed fine texture, and q65 showed no visible change for 10 to 13% more bytes.
+  - AVIF is q80 with full colour resolution (4:4:4), and WebP q75. q80 is about 1.9x the bytes of q60 and 2.3 to 2.5 dB closer to the master at 1000w. q50 visibly smoothed fine texture in 2x crops.
 - **Sizing (IMG2):** one preset per layout, with `sizes` taken from measured boxes. The IMG2 test checks each image at 360@3x, 412@2.625x, 1024, 1366 and 1920: measured ratios are 1.00 to 1.17. The old build fails it: `/phones` cards at 0.64 on phones, the explainer hero at 0.38 to 0.43 on desktop, and tool cards at 1.51 at 1024.
 - **OG weight (IMG7):** JPEG q85 with mozjpeg, 31.9 to 127.4 KB per image (`st-og` 127.4 KB). Before, they were q80, 33.4 to 124.4 KB.
 - **SVGs (IMG8):** SVGO with IDs and symbols kept takes `src/assets` SVGs from 162.9 KB to 121.3 KB (`notfound-404` 62.8 to 38.5 KB). Screenshots of 7 pages, light and dark, desktop and phone, differ only in anti-aliasing.
@@ -162,13 +162,13 @@ Date: 2026-10-04. Scores are out of 10, comparing the original code review with 
 
   | Page | Phone 412@2.625x before | After | Desktop 1366 before | After |
   |---|---|---|---|---|
-  | `/` | 4.9 KB | 6.9 KB | 2.7 KB | 3.6 KB |
-  | `/phones` | 19.5 KB | 46.9 KB | 6.0 KB | 15.9 KB |
-  | `/phones/tools` | 39.8 KB | 95.6 KB | 14.0 KB | 17.5 KB |
-  | `/phones/explainers` | 13.6 KB | 26.6 KB | 3.4 KB | 5.0 KB |
-  | `/phones/explainers/soc` | 4.1 KB | 26.6 KB | 4.1 KB | 14.5 KB |
+  | `/` | 4.9 KB | 12.3 KB | 2.7 KB | 6.1 KB |
+  | `/phones` | 19.5 KB | 96.0 KB | 6.0 KB | 28.9 KB |
+  | `/phones/tools` | 39.8 KB | 202.0 KB | 14.0 KB | 28.5 KB |
+  | `/phones/explainers` | 13.6 KB | 48.1 KB | 3.4 KB | 9.1 KB |
+  | `/phones/explainers/soc` | 4.1 KB | 48.1 KB | 4.1 KB | 27.5 KB |
 
-  Raster bytes went up mainly because the old build served images below the needed resolution (ratios above). At q50, the new sizes alone give 69.2 KB on `/phones/tools` (phone); q60 adds the rest. Switching to q50 is one line in `astro.config.ts`.
+  Raster bytes went up mainly because the old build served images below the needed resolution (ratios above). On `/phones/tools` (phone), the new sizes give 69.2 KB at q50 and 95.6 KB at q60; q80 gives 202.0 KB. The quality is one line in `astro.config.ts`.
 - **Not fixed, with reasons:**
   - **IMG10:** Astro emits every imported SVG file to `dist/_astro`, even when it is only used inline (`emitImageMetadata` runs before the SVG component branch in `vite-plugin-assets.js`, with no option to skip it). The 5 Sorto files, 70.6 KB in total, are unreferenced. Visitors never download them.
   - **M15:** the 404 illustrations stay inline. As `<img>` they rendered at a different size, because the inline SVGs keep their fixed height attributes. SVGO cut `404.html` from 108.9 KB to 79.4 KB (41.5 to 29.1 KB gzip).
