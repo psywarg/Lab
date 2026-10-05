@@ -88,15 +88,15 @@ export default defineConfig({
     format: "file",
   },
   image: {
-    // Content images are AVIF with a WebP fallback. Quality picked by
-    // comparing q50 to q70 at 2x zoom: q50 smooths fine texture, q60 does
-    // not, and q65 adds bytes with no visible change. JPEG is only used for
+    // Content images are AVIF with a WebP fallback. AVIF is q80 with full
+    // colour resolution (4:4:4): about 1.9x the bytes of q60, and 2.3 to
+    // 2.5 dB closer to the master at 1000w. JPEG is only used for
     // og:image (q85, set in ogImage.ts); mozjpeg makes it 12 to 22% smaller
     // at that quality.
     service: {
       entrypoint: "astro/assets/services/sharp",
       config: {
-        avif: { quality: 60 },
+        avif: { quality: 80, chromaSubsampling: "4:4:4" },
         webp: { quality: 75 },
         jpeg: { mozjpeg: true },
       },
