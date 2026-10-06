@@ -16,10 +16,15 @@ import {
   createXorshift32,
   delayFromSpeed,
   diagnosisDescription,
+  followUpColors,
   formatTime,
   observationsForColors,
   pointerMatchRadius,
   speedRange,
+  visibilityPattern,
+  withAnswers,
+  type Channel,
+  type DefectObservation,
   type DiagnosisMark,
   type InspectColorId,
   type StepTap,
@@ -33,7 +38,7 @@ describe("classifyObservations", () => {
   it("finds a red subpixel stuck on from where it shows", () => {
     // Visible wherever red is not already fully on.
     const result = seenOn("black", "green", "blue", "cyan", "midGrey", "darkGrey");
-    expect(result).toMatchObject({ classification: "stuck-on", channels: ["red"], confidence: "strong", matchScore: 10 });
+    expect(result).toMatchObject({ classification: "stuck-on", channels: ["red"], confidence: "strong", matchScore: 10, scoredCount: 10 });
   });
 
   it("separates hot, dead and surface marks", () => {
@@ -43,8 +48,57 @@ describe("classifyObservations", () => {
     expect(seenOn("midGrey", "darkGrey").classification).toBe("uneven-patch");
   });
 
-  it("reports unclear when no hypothesis matches well", () => {
-    expect(seenOn("white", "red", "cyan", "midGrey")).toMatchObject({ classification: "unclear", confidence: "unclear" });
+  it("reports unclear when no hypothesis matches well, with the closest match", () => {
+    const result = seenOn("white", "red", "cyan", "midGrey");
+    expect(result).toMatchObject({ classification: "unclear", confidence: "unclear" });
+    expect(result.closest?.classification).toBeDefined();
+  });
+
+  it("does not hold a dark subpixel against dark grey, where it is too faint to see", () => {
+    // A red subpixel stuck off, missed on 6% dark grey: still a strong match, judged on 9 colours.
+    const result = seenOn("white", "red", "magenta", "yellow", "midGrey");
+    expect(result).toMatchObject({ classification: "stuck-off", channels: ["red"], confidence: "strong", matchScore: 9, scoredCount: 9 });
+  });
+
+  it("still names a single-subpixel fault when 2 responses are off and one of them is unscored", () => {
+    // Red stuck off: missed on dark grey (unscored) and on mid grey (scored).
+    expect(seenOn("white", "red", "magenta", "yellow")).toMatchObject({ classification: "stuck-off", channels: ["red"] });
+  });
+});
+
+describe("followUpColors", () => {
+  it("asks about yellow when a red+green fault's only close rival is a hot pixel", () => {
+    // Red and green stuck on: visible everywhere except white and yellow; a hot pixel also shows on yellow.
+    expect(followUpColors(observationsForColors(new Set(allBut("white", "yellow"))))).toEqual(["yellow"]);
+  });
+
+  it("asks about each colour that separates a hot pixel from its 4 close rivals", () => {
+    expect(followUpColors(observationsForColors(new Set(allBut("white"))))).toEqual(["white", "cyan", "magenta", "yellow"]);
+  });
+
+  it("asks nothing when the lead is clear, or when no defect is close", () => {
+    expect(followUpColors(observationsForColors(new Set(["black", "green", "blue", "cyan", "midGrey", "darkGrey"] as const)))).toEqual([]);
+    expect(followUpColors(observationsForColors(new Set(["white", "red", "cyan"] as const)))).toEqual([]);
+  });
+
+  it("settles every fault with one misjudged colour once its follow-ups are answered truthfully", () => {
+    const groups: Channel[][] = [["red"], ["green"], ["blue"], ["red", "green"], ["red", "blue"], ["green", "blue"], ["red", "green", "blue"]];
+    const truths = groups.flatMap((channels) => [true, false].map((stuckOn) => ({ channels, stuckOn })));
+    const failures: string[] = [];
+    for (const { channels, stuckOn } of truths) {
+      const pattern = visibilityPattern(channels, stuckOn);
+      const truth: DefectObservation[] = ALL_DIAGNOSIS_COLORS.map((color) => ({ color, visible: pattern[color] }));
+      const expected = classifyObservations(truth);
+      for (const flipped of ALL_DIAGNOSIS_COLORS) {
+        const seen = truth.map((o) => (o.color === flipped ? { ...o, visible: !o.visible } : o));
+        const answers = Object.fromEntries(followUpColors(seen).map((color) => [color, pattern[color]]));
+        const result = classifyObservations(withAnswers(seen, answers));
+        if (result.classification !== expected.classification || result.channels.join() !== expected.channels.join()) {
+          failures.push(`${stuckOn ? "on" : "off"}:${channels.join("+")} misjudged ${flipped} -> ${result.classification}:${result.channels.join("+")}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });
 
@@ -57,6 +111,7 @@ describe("labels", () => {
     channels: ["red", "green"],
     confidence: "strong",
     matchScore: 10,
+    scoredCount: 10,
     ...overrides,
   });
 
@@ -123,7 +178,7 @@ describe("speedRange (H11 flash limits)", () => {
 
 describe("buildAutoRepairQueue", () => {
   it("gives each mark the full duration and labels it", () => {
-    const mark = { x: 0, y: 0, observations: [], classification: "dead", channels: [], confidence: "likely", matchScore: 9 } as DiagnosisMark;
+    const mark = { x: 0, y: 0, observations: [], classification: "dead", channels: [], confidence: "likely", matchScore: 9, scoredCount: 9 } as DiagnosisMark;
     const queue = buildAutoRepairQueue([mark, mark], 300);
     expect(queue.map((item) => [item.label, item.patternId, item.durationSeconds])).toEqual([
       ["Mark 1", "static", 300],

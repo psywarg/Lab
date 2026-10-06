@@ -465,6 +465,60 @@ const structuredData = createToolApplicationSchema({
             </div>
 
             <div
+              id="pixel-followup"
+              class="pixel-diagnosis-confirm pixel-followup absolute inset-0 z-8 grid justify-items-center p-4"
+              data-visible="false"
+              data-place="top"
+              role="dialog"
+              aria-modal="false"
+              tabindex="-1"
+              aria-labelledby="pixel-followup-title"
+            >
+              <div
+                class="border-accent-line shadow-accent-glow relative grid w-full max-w-sm gap-3 max-h-full overflow-y-auto overscroll-contain rounded-2xl border bg-custom-100 p-4 text-center shadow-md sm:max-w-md lg:max-w-lg dark:bg-custom-700"
+              >
+                <span
+                  id="pixel-followup-progress"
+                  class="text-2xsmall absolute top-3 right-3 font-bold text-slate-500 dark:text-slate-400"
+                  >1/1</span
+                >
+                <h2
+                  id="pixel-followup-title"
+                  class="text-body mb-0 px-10 text-slate-800 dark:text-slate-200"
+                >
+                </h2>
+                <p
+                  id="pixel-followup-body"
+                  class="text-small text-custom-800 dark:text-custom-200 mb-0"
+                >
+                </p>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    id="pixel-followup-no"
+                    class="btn-base text-small"
+                  >
+                    Not visible
+                  </button>
+                  <button
+                    type="button"
+                    id="pixel-followup-yes"
+                    class="btn-base text-small"
+                  >
+                    Visible
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  data-diagnosis-cancel
+                  class="text-2xsmall text-slate-500 underline"
+                >
+                  Cancel Diagnosis
+                </button>
+              </div>
+            </div>
+
+            <div
               id="pixel-pause-notice"
               class="bg-custom-100 dark:bg-custom-700 border-accent-line shadow-accent-glow pointer-events-none absolute top-1/2 left-1/2 z-9 grid w-[min(18rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-1 rounded-2xl border px-4 py-3 text-center shadow-md"
               hidden
@@ -911,6 +965,14 @@ const structuredData = createToolApplicationSchema({
       @apply pointer-events-auto visible opacity-100;
     }
 
+    .pixel-followup[data-place="top"] {
+      @apply content-start;
+    }
+
+    .pixel-followup[data-place="bottom"] {
+      @apply content-end;
+    }
+
     .pixel-diagnosis-countdown {
       @apply text-small pointer-events-none absolute top-4 right-4 z-7 font-bold text-white [text-shadow:0_1px_3px_rgb(0_0_0_/_0.8)];
     }
@@ -1139,13 +1201,16 @@ const structuredData = createToolApplicationSchema({
       defaultDelayMs as defaultFlashDelayMs,
       delayFromSpeed,
       diagnosisDescription as describeDiagnosis,
+      followUpColors,
       formatTime,
       observationsForColors,
       pointerMatchRadius,
       speedRange,
+      withAnswers,
       type AutoRepairItem,
       type DiagnosisColor,
       type DiagnosisMark,
+      type InspectColorId,
       type StepTap,
     } from "@/utils/phones/tools/stuckPixel";
     import {
@@ -1325,11 +1390,30 @@ const structuredData = createToolApplicationSchema({
     const diagnosisCancelButtons = Array.from(
       document.querySelectorAll<HTMLButtonElement>("[data-diagnosis-cancel]"),
     );
+    const followUpPanel = document.getElementById(
+      "pixel-followup",
+    ) as HTMLDivElement | null;
+    const followUpTitle = document.getElementById(
+      "pixel-followup-title",
+    ) as HTMLElement | null;
+    const followUpBody = document.getElementById(
+      "pixel-followup-body",
+    ) as HTMLElement | null;
+    const followUpProgress = document.getElementById(
+      "pixel-followup-progress",
+    ) as HTMLElement | null;
+    const followUpYesButton = document.getElementById(
+      "pixel-followup-yes",
+    ) as HTMLButtonElement | null;
+    const followUpNoButton = document.getElementById(
+      "pixel-followup-no",
+    ) as HTMLButtonElement | null;
 
     const modalPanels = [
       warningPanel,
       diagnosisInstructPanel,
       diagnosisConfirmPanel,
+      followUpPanel,
     ].filter((panel): panel is HTMLDivElement => panel !== null);
     const focusableSelector = [
       "a[href]",
@@ -1500,6 +1584,12 @@ const structuredData = createToolApplicationSchema({
     let stepCountdownTimer: ReturnType<typeof setInterval> | null = null;
     let stepCountdownRemaining = 0;
     const DIAGNOSIS_COLORS: DiagnosisColor[] = [...QUICK_DIAGNOSIS_COLORS];
+    // After the colour steps: marks found, and the extra questions that
+    // settle near-ties (one test colour re-checked for one mark).
+    let pendingClusters: ReturnType<typeof clusterTaps> = [];
+    let followUps: { markIndex: number; color: InspectColorId }[] = [];
+    let followUpIndex = 0;
+    let followUpAnswers: Partial<Record<InspectColorId, boolean>>[] = [];
 
     const pageController = new AbortController();
     const wakeLock = createWakeLock({
@@ -2595,7 +2685,7 @@ const structuredData = createToolApplicationSchema({
           showInstructCard();
           return;
         }
-        finishDiagnosis();
+        startFollowUps();
         return;
       }
 
@@ -2617,6 +2707,7 @@ const structuredData = createToolApplicationSchema({
       hideWarningOverlay();
       diagnosisStep = 0;
       sessionTaps = [];
+      followUps = [];
       DIAGNOSIS_COLORS.length = QUICK_DIAGNOSIS_COLORS.length;
       clearDiagnosisMarkers();
       diagnosisActive = true;
@@ -2640,7 +2731,8 @@ const structuredData = createToolApplicationSchema({
     function resumeDiagnosis(): void {
       if (!diagnosisActive || !diagnosisPaused) return;
       diagnosisPaused = false;
-      paintCurrentStep();
+      if (followUps.length > 0) showFollowUp();
+      else paintCurrentStep();
       resumeStepCountdown();
       updateRunButton();
       showRuntimeControls(testShell);
@@ -2677,6 +2769,8 @@ const structuredData = createToolApplicationSchema({
         diagnosisInstructPanel.dataset.visible = "false";
       if (diagnosisConfirmPanel)
         diagnosisConfirmPanel.dataset.visible = "false";
+      if (followUpPanel) followUpPanel.dataset.visible = "false";
+      followUps = [];
       isolateStageModal(null);
       clearDiagnosisMarkers();
       resetFlashing();
@@ -2694,6 +2788,83 @@ const structuredData = createToolApplicationSchema({
       autoQueueComplete = false;
     }
 
+    function startFollowUps(): void {
+      const rect = stage?.getBoundingClientRect();
+      pendingClusters = clusterTaps(
+        sessionTaps,
+        Math.max(1, rect?.width ?? window.innerWidth),
+        Math.max(1, rect?.height ?? window.innerHeight),
+      );
+      followUpAnswers = pendingClusters.map(() => ({}));
+      followUps = pendingClusters.flatMap((cluster, markIndex) =>
+        followUpColors(observationsForColors(cluster.colors)).map((color) => ({
+          markIndex,
+          color,
+        })),
+      );
+      followUpIndex = 0;
+      if (followUps.length === 0) {
+        finishDiagnosis();
+        return;
+      }
+      showFollowUp();
+    }
+
+    function showFollowUp(): void {
+      const item = followUps[followUpIndex];
+      const cluster = item ? pendingClusters[item.markIndex] : undefined;
+      const color = [...QUICK_DIAGNOSIS_COLORS, ...DEEP_DIAGNOSIS_COLORS].find(
+        (entry) => entry.id === item?.color,
+      );
+      if (!item || !cluster || !color || !stage || !followUpPanel) return;
+      const markNumber = item.markIndex + 1;
+      stage.style.background = color.hex;
+      updateStatus("Diagnose", `Check mark #${markNumber}`);
+      clearDiagnosisMarkers();
+      const marker = document.createElement("div");
+      const label = document.createElement("strong");
+      marker.className = "pixel-auto-marker is-highlighted";
+      marker.setAttribute("aria-hidden", "true");
+      marker.style.left = `${cluster.x * 100}%`;
+      marker.style.top = `${cluster.y * 100}%`;
+      label.textContent = `#${markNumber}`;
+      marker.append(label);
+      stage.append(marker);
+      diagnosisMarkerElements.push(marker);
+      if (followUpTitle) {
+        followUpTitle.textContent = `Mark #${markNumber} on ${color.label.toLowerCase()}`;
+      }
+      if (followUpBody) {
+        followUpBody.textContent = `Look closely at the ringed spot. Can you see the mark on this ${color.label.toLowerCase()} screen?`;
+      }
+      if (followUpProgress) {
+        followUpProgress.textContent = `${followUpIndex + 1}/${followUps.length}`;
+      }
+      // Keep the card on the half of the screen away from the mark.
+      followUpPanel.dataset.place = cluster.y < 0.5 ? "bottom" : "top";
+      followUpPanel.dataset.visible = "true";
+      isolateStageModal(followUpPanel);
+      focusModal(followUpPanel);
+    }
+
+    function answerFollowUp(visible: boolean): void {
+      if (diagnosisPaused) return;
+      const item = followUps[followUpIndex];
+      if (!item) return;
+      const answers = followUpAnswers[item.markIndex];
+      if (answers) answers[item.color] = visible;
+      followUpIndex += 1;
+      if (followUpIndex < followUps.length) {
+        showFollowUp();
+        return;
+      }
+      if (followUpPanel) followUpPanel.dataset.visible = "false";
+      isolateStageModal(null);
+      clearDiagnosisMarkers();
+      followUps = [];
+      finishDiagnosis();
+    }
+
     function finishDiagnosis(): void {
       diagnosisActive = false;
       diagnosisViewing = false;
@@ -2703,27 +2874,18 @@ const structuredData = createToolApplicationSchema({
       setRunControlsHidden(false);
       applyIdleStage();
 
-      const diagnosisRect = stage?.getBoundingClientRect();
-      const diagnosisWidth = Math.max(1, diagnosisRect?.width ?? window.innerWidth);
-      const diagnosisHeight = Math.max(
-        1,
-        diagnosisRect?.height ?? window.innerHeight,
-      );
-      diagnosedMarks = clusterTaps(
-        sessionTaps,
-        diagnosisWidth,
-        diagnosisHeight,
-      ).map((cluster) => {
-        const observations = observationsForColors(cluster.colors);
-        const result = classifyObservations(observations);
+      // A follow-up answer replaces that colour's first response, since the
+      // user was then looking at one known spot.
+      diagnosedMarks = pendingClusters.map((cluster, index) => {
+        const observations = withAnswers(
+          observationsForColors(cluster.colors),
+          followUpAnswers[index] ?? {},
+        );
         return {
           x: cluster.x,
           y: cluster.y,
           observations,
-          classification: result.classification,
-          channels: result.channels,
-          confidence: result.confidence,
-          matchScore: result.matchScore,
+          ...classifyObservations(observations),
         };
       });
 
@@ -2889,6 +3051,8 @@ const structuredData = createToolApplicationSchema({
     diagnosisCancelButtons.forEach((button) =>
       button.addEventListener("click", cancelDiagnosis),
     );
+    followUpYesButton?.addEventListener("click", () => answerFollowUp(true));
+    followUpNoButton?.addEventListener("click", () => answerFollowUp(false));
     workflowTabs.forEach((tab, index) => {
       tab.addEventListener("click", () => {
         const nextMode = tab.dataset.workflowTab;

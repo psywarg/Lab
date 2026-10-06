@@ -82,11 +82,34 @@ test("H11: a 140 px spot keeps the fast grade", async ({ page }) => {
   expect(rate).toBeGreaterThan(3.1);
 });
 
+const COLOURS = {
+  black: "rgb(0, 0, 0)",
+  white: "rgb(255, 255, 255)",
+  red: "rgb(255, 0, 0)",
+  green: "rgb(0, 255, 0)",
+  blue: "rgb(0, 0, 255)",
+  cyan: "rgb(0, 255, 255)",
+  magenta: "rgb(255, 0, 255)",
+  yellow: "rgb(255, 255, 0)",
+  midGrey: "rgb(128, 128, 128)",
+  darkGrey: "rgb(16, 16, 16)",
+} as const;
+type Colour = keyof typeof COLOURS;
+const ALL_COLOURS = Object.keys(COLOURS) as Colour[];
+const allBut = (...hidden: Colour[]) => ALL_COLOURS.filter((colour) => !hidden.includes(colour));
+
 /**
- * Runs Diagnose, marking the same stage point on the listed colours only.
- * The clock is fast-forwarded through each 10 s viewing step.
+ * A spot to mark during Diagnose: where it is (0-1 of the stage), the
+ * colours it is tapped on, and how follow-up questions are answered
+ * (by default, visible exactly where it was tapped).
  */
-async function diagnose(page: Page, seenOn: readonly string[]): Promise<void> {
+type Spot = { x: number; y: number; seenOn: readonly Colour[]; answers?: Partial<Record<Colour, boolean>> };
+
+/**
+ * Runs Diagnose, tapping each spot on its colours and answering any
+ * follow-up questions. The clock is fast-forwarded through each 10 s step.
+ */
+async function diagnose(page: Page, spots: readonly Spot[]): Promise<void> {
   await page.clock.install();
   await openTool(page, "stuck-pixel-fixer");
   await page.locator("#pixel-auto-tab").click();
@@ -97,36 +120,68 @@ async function diagnose(page: Page, seenOn: readonly string[]): Promise<void> {
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-diagnosing", "true");
 
   const stage = page.locator("#pixel-stage");
+  const colourOf = async () => {
+    const background = await stage.evaluate((el) => (el as HTMLElement).style.background);
+    return ALL_COLOURS.find((colour) => COLOURS[colour] === background);
+  };
   for (;;) {
     if ((await page.locator("#pixel-diagnosis-instruct").getAttribute("data-visible")) === "true") {
       await page.locator("#pixel-diagnosis-begin").click();
     }
     await expect(page.locator("#pixel-diagnosis-countdown")).toBeVisible();
-    const colour = (await stage.evaluate((el) => (el as HTMLElement).style.background)) ?? "";
+    const colour = await colourOf();
     const box = await stage.boundingBox();
-    if (box && seenOn.includes(colour)) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    for (const spot of spots) {
+      if (box && colour && spot.seenOn.includes(colour)) {
+        await page.mouse.click(box.x + box.width * spot.x, box.y + box.height * spot.y);
+      }
+    }
     await page.clock.runFor(10_500);
     await expect(page.locator("#pixel-diagnosis-confirm")).toHaveAttribute("data-visible", "true");
     const marked = !(await page.locator("#pixel-diagnosis-confirm-marked").isHidden());
     await page.locator(marked ? "#pixel-diagnosis-confirm-next" : "#pixel-diagnosis-no-issue").click();
+    if ((await page.locator("#pixel-diagnosis-instruct").getAttribute("data-visible")) === "true") continue;
+    // Follow-up questions: find the ringed spot, then answer for that spot.
+    while ((await page.locator("#pixel-followup").getAttribute("data-visible")) === "true") {
+      const ring = await stage.locator(".pixel-auto-marker.is-highlighted").evaluate((el) => ({
+        x: Number.parseFloat((el as HTMLElement).style.left) / 100,
+        y: Number.parseFloat((el as HTMLElement).style.top) / 100,
+      }));
+      const spot = [...spots].sort(
+        (a, b) => Math.hypot(a.x - ring.x, a.y - ring.y) - Math.hypot(b.x - ring.x, b.y - ring.y),
+      )[0];
+      const asked = await colourOf();
+      if (!spot || !asked) throw new Error("Follow-up without a spot or colour");
+      followUpsAsked.push(asked);
+      const visible = spot.answers?.[asked] ?? spot.seenOn.includes(asked);
+      await page.locator(visible ? "#pixel-followup-yes" : "#pixel-followup-no").click();
+    }
     if ((await stage.getAttribute("data-diagnosing")) !== "true") return;
   }
 }
+let followUpsAsked: Colour[] = [];
+test.beforeEach(() => {
+  followUpsAsked = [];
+});
+
+/** Shows the summary for one mark by choosing it in the mark picker. */
+async function summaryFor(page: Page, markIndex: number) {
+  await page.locator("#pixel-auto-mark").selectOption(String(markIndex));
+  return {
+    title: page.locator("#pixel-diagnosis-summary-title"),
+    body: page.locator("#pixel-diagnosis-summary-body"),
+  };
+}
+
+const centre = (seenOn: readonly Colour[], answers?: Spot["answers"]): Spot[] => [{ x: 0.5, y: 0.5, seenOn, answers }];
 
 test("Diagnose identifies a red subpixel stuck on, and Auto runs Static Noise on it", async ({ page }) => {
-  test.skip(test.info().project.name !== "desktop", "One viewport is enough for this flow");
   // A red subpixel stuck on shows wherever the colour does not already drive red fully.
-  await diagnose(page, [
-    "rgb(0, 0, 0)",
-    "rgb(0, 255, 0)",
-    "rgb(0, 0, 255)",
-    "rgb(0, 255, 255)",
-    "rgb(128, 128, 128)",
-    "rgb(16, 16, 16)",
-  ]);
+  await diagnose(page, centre(["black", "green", "blue", "cyan", "midGrey", "darkGrey"]));
   await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Bright red subpixel");
   await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Strong bright red subpixel fault");
   await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Auto will run Static Noise");
+  expect(followUpsAsked).toEqual([]);
   // Finishing Diagnose has just left fullscreen; the runtime ignores a new
   // fullscreen toggle within 350 ms, so let that pass before pressing Start.
   await page.clock.runFor(500);
@@ -137,18 +192,39 @@ test("Diagnose identifies a red subpixel stuck on, and Auto runs Static Noise on
 });
 
 test("Diagnose calls a mark seen on every colour a surface or panel mark", async ({ page }) => {
-  test.skip(test.info().project.name !== "desktop", "One viewport is enough for this flow");
-  await diagnose(page, [
-    "rgb(0, 0, 0)",
-    "rgb(255, 255, 255)",
-    "rgb(255, 0, 0)",
-    "rgb(0, 255, 0)",
-    "rgb(0, 0, 255)",
-    "rgb(0, 255, 255)",
-    "rgb(255, 0, 255)",
-    "rgb(255, 255, 0)",
-    "rgb(128, 128, 128)",
-    "rgb(16, 16, 16)",
-  ]);
+  await diagnose(page, centre(ALL_COLOURS));
   await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Surface or panel mark");
+});
+
+test("Diagnose: a dark subpixel missed on dark grey is still identified", async ({ page }) => {
+  // Red stuck off shows wherever red is driven; on 6% dark grey it is too faint to see.
+  await diagnose(page, centre(["white", "red", "magenta", "yellow", "midGrey"]));
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Dark red subpixel");
+  await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Strong dark red subpixel fault. 9/9");
+});
+
+test("Diagnose: a follow-up question corrects a misjudged colour", async ({ page }) => {
+  // A hot pixel (seen on everything but white), but yellow was missed during the colour steps.
+  await diagnose(page, centre(allBut("white", "yellow"), { yellow: true }));
+  expect(followUpsAsked).toContain("yellow");
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Hot pixel");
+});
+
+test("Diagnose classifies two marks on the screen independently", async ({ page }) => {
+  await diagnose(page, [
+    // Red subpixel stuck on, upper left.
+    { x: 0.25, y: 0.3, seenOn: ["black", "green", "blue", "cyan", "midGrey", "darkGrey"] },
+    // Dead pixel (seen on everything but black), lower right.
+    { x: 0.75, y: 0.7, seenOn: allBut("black") },
+  ]);
+  await expect(page.locator("#pixel-diagnosis-summary-count")).toHaveText("2/2 identified");
+  const labels = [];
+  for (const index of [0, 1]) labels.push(await (await summaryFor(page, index)).title.textContent());
+  expect(labels.map((label) => label?.replace(/^#\d+ /, "")).sort()).toEqual(["Bright red subpixel", "Dead pixel"]);
+});
+
+test("Diagnose still calls a pretend spot on unrelated colours unclear, naming the closest match", async ({ page }) => {
+  await diagnose(page, centre(["white", "red", "cyan"]));
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Unclear pattern");
+  await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Closest match:");
 });

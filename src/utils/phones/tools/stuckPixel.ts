@@ -29,11 +29,18 @@ export type DefectObservation = {
   visible: boolean;
 };
 export type ClassificationConfidence = "strong" | "likely" | "unclear";
-export type ClassificationResult = {
+export type DefectMatch = {
   classification: DefectClassification;
   channels: Channel[];
-  confidence: ClassificationConfidence;
+  /** Test colours whose response matched this defect. */
   matchScore: number;
+  /** Test colours that count for this defect (faint responses are left out). */
+  scoredCount: number;
+};
+export type ClassificationResult = DefectMatch & {
+  confidence: ClassificationConfidence;
+  /** For an unclear result, the defect it came closest to. */
+  closest?: DefectMatch;
 };
 export type DiagnosisMark = ClassificationResult & {
   x: number;
@@ -93,28 +100,60 @@ type DefectHypothesis = {
   classification: DefectClassification;
   channels: Channel[];
   pattern: Record<InspectColorId, boolean>;
+  /** Colours where the expected response is clear enough to judge by eye. */
+  scored: Record<InspectColorId, boolean>;
 };
+
+/**
+ * A fault that changes a subpixel by less than this share of its range is
+ * too faint to judge by eye (a dark subpixel on 6% dark grey), so that
+ * colour does not count for or against the defect.
+ */
+export const MIN_JUDGEABLE_CHANGE = 0.25;
 
 /**
  * On which test colours a fault would be visible. A subpixel stuck on shows
  * wherever the colour does not already drive it fully; one stuck off shows
  * wherever the colour drives it at all.
  */
+/** How much a fault changes the brightest affected subpixel on each colour (0-1). */
+function faultChange(channels: Channel[], stuckOn: boolean): Record<InspectColorId, number> {
+  return Object.fromEntries(
+    ALL_DIAGNOSIS_COLORS.map((color) => [
+      color,
+      Math.max(
+        ...channels.map((channel) =>
+          stuckOn ? 1 - TEST_COLOR_LEVELS[color][channel] : TEST_COLOR_LEVELS[color][channel],
+        ),
+      ),
+    ]),
+  ) as Record<InspectColorId, number>;
+}
+
 export function visibilityPattern(
   channels: Channel[],
   stuckOn: boolean,
 ): Record<InspectColorId, boolean> {
+  const change = faultChange(channels, stuckOn);
   return Object.fromEntries(
-    ALL_DIAGNOSIS_COLORS.map((color) => {
-      const visible = channels.some((channel) =>
-        stuckOn
-          ? TEST_COLOR_LEVELS[color][channel] < 1
-          : TEST_COLOR_LEVELS[color][channel] > 0,
-      );
-      return [color, visible];
-    }),
+    ALL_DIAGNOSIS_COLORS.map((color) => [color, change[color] > 0]),
   ) as Record<InspectColorId, boolean>;
 }
+
+/** Colours to score: no change at all, or a change of at least MIN_JUDGEABLE_CHANGE. */
+function judgeableColors(channels: Channel[], stuckOn: boolean): Record<InspectColorId, boolean> {
+  const change = faultChange(channels, stuckOn);
+  return Object.fromEntries(
+    ALL_DIAGNOSIS_COLORS.map((color) => [
+      color,
+      change[color] === 0 || change[color] >= MIN_JUDGEABLE_CHANGE,
+    ]),
+  ) as Record<InspectColorId, boolean>;
+}
+
+const EVERY_COLOR = Object.fromEntries(
+  ALL_DIAGNOSIS_COLORS.map((color) => [color, true]),
+) as Record<InspectColorId, boolean>;
 
 const DEFECT_HYPOTHESES: DefectHypothesis[] = [
   ...CHANNEL_GROUPS.map((channels) => ({
@@ -122,19 +161,20 @@ const DEFECT_HYPOTHESES: DefectHypothesis[] = [
       channels.length === CHANNELS.length ? ("hot" as const) : ("stuck-on" as const),
     channels,
     pattern: visibilityPattern(channels, true),
+    scored: judgeableColors(channels, true),
   })),
   ...CHANNEL_GROUPS.map((channels) => ({
     classification:
       channels.length === CHANNELS.length ? ("dead" as const) : ("stuck-off" as const),
     channels,
     pattern: visibilityPattern(channels, false),
+    scored: judgeableColors(channels, false),
   })),
   {
     classification: "persistent-mark",
     channels: [],
-    pattern: Object.fromEntries(
-      ALL_DIAGNOSIS_COLORS.map((color) => [color, true]),
-    ) as Record<InspectColorId, boolean>,
+    pattern: EVERY_COLOR,
+    scored: EVERY_COLOR,
   },
   {
     classification: "uneven-patch",
@@ -145,46 +185,111 @@ const DEFECT_HYPOTHESES: DefectHypothesis[] = [
         color === "midGrey" || color === "darkGrey",
       ]),
     ) as Record<InspectColorId, boolean>,
+    scored: EVERY_COLOR,
   },
 ];
 
+type RankedHypothesis = {
+  hypothesis: DefectHypothesis;
+  matches: number;
+  scoredCount: number;
+  /** Scored colours whose response did not match. */
+  misses: number;
+};
+
+/** Every hypothesis, fewest misses first; on equal misses, the one judged on more colours. */
+function rankHypotheses(observations: DefectObservation[]): RankedHypothesis[] {
+  const byColor = new Map(
+    observations.map((observation) => [observation.color, observation.visible]),
+  );
+  return DEFECT_HYPOTHESES.map((hypothesis) => {
+    const colors = ALL_DIAGNOSIS_COLORS.filter((color) => hypothesis.scored[color]);
+    const matches = colors.filter(
+      (color) => Boolean(byColor.get(color)) === hypothesis.pattern[color],
+    ).length;
+    return { hypothesis, matches, scoredCount: colors.length, misses: colors.length - matches };
+  }).sort((left, right) => left.misses - right.misses || right.scoredCount - left.scoredCount);
+}
+
+const toMatch = ({ hypothesis, matches, scoredCount }: RankedHypothesis): DefectMatch => ({
+  classification: hypothesis.classification,
+  channels: [...hypothesis.channels],
+  matchScore: matches,
+  scoredCount,
+});
+
+/** Above this many misses a mark is unclear; above MAX_STRONG_MISSES it is at best likely. */
+const MAX_LIKELY_MISSES = 3;
+const MAX_STRONG_MISSES = 1;
+
 /**
- * Scores every defect hypothesis by how many of the 10 test colours match
- * what was seen. Below 7 matches, or a tie below 9, the result is unclear.
+ * Scores every defect hypothesis on the test colours where its response is
+ * clear enough to judge. More than 3 misses, or a tie with more than 1
+ * miss, is unclear; at most 1 miss with a clear lead is strong.
  */
 export function classifyObservations(
   observations: DefectObservation[],
 ): ClassificationResult {
-  const byColor = new Map(
-    observations.map((observation) => [observation.color, observation.visible]),
-  );
-  const scored = DEFECT_HYPOTHESES.map((hypothesis) => ({
-    hypothesis,
-    score: ALL_DIAGNOSIS_COLORS.reduce(
-      (score, color) =>
-        score + (Boolean(byColor.get(color)) === hypothesis.pattern[color] ? 1 : 0),
-      0,
-    ),
-  })).sort((left, right) => right.score - left.score);
-  const best = scored[0];
-  const runnerUp = scored[1];
-  const margin = (best?.score ?? 0) - (runnerUp?.score ?? 0);
+  const ranked = rankHypotheses(observations);
+  const best = ranked[0];
+  if (!best) {
+    return { classification: "unclear", channels: [], confidence: "unclear", matchScore: 0, scoredCount: 0 };
+  }
+  const margin = (ranked[1]?.misses ?? Number.POSITIVE_INFINITY) - best.misses;
 
-  if (!best || best.score < 7 || (best.score < 9 && margin === 0)) {
+  if (best.misses > MAX_LIKELY_MISSES || (best.misses > MAX_STRONG_MISSES && margin === 0)) {
     return {
       classification: "unclear",
       channels: [],
       confidence: "unclear",
-      matchScore: best?.score ?? 0,
+      matchScore: best.matches,
+      scoredCount: best.scoredCount,
+      closest: toMatch(best),
     };
   }
 
   return {
-    classification: best.hypothesis.classification,
-    channels: [...best.hypothesis.channels],
-    confidence: best.score >= 9 && margin >= 1 ? "strong" : "likely",
-    matchScore: best.score,
+    ...toMatch(best),
+    confidence: best.misses <= MAX_STRONG_MISSES && margin >= 1 ? "strong" : "likely",
   };
+}
+
+/**
+ * Test colours worth asking about again for one mark: where the best
+ * defect disagrees with any defect within one miss of it, the colours that
+ * separate the most rivals first. Empty when the lead is clear, or when the
+ * responses are too far from any defect for a few answers to settle it.
+ */
+export function followUpColors(observations: DefectObservation[], max = 4): InspectColorId[] {
+  const ranked = rankHypotheses(observations);
+  const best = ranked[0];
+  if (!best || best.misses > MAX_LIKELY_MISSES) return [];
+  const rivals = ranked.slice(1).filter((entry) => entry.misses <= best.misses + 1);
+  return ALL_DIAGNOSIS_COLORS.map((color) => ({
+    color,
+    separates: best.hypothesis.scored[color]
+      ? rivals.filter(
+          (rival) =>
+            rival.hypothesis.scored[color] &&
+            rival.hypothesis.pattern[color] !== best.hypothesis.pattern[color],
+        ).length
+      : 0,
+  }))
+    .filter((entry) => entry.separates > 0)
+    .sort((left, right) => right.separates - left.separates)
+    .slice(0, max)
+    .map((entry) => entry.color);
+}
+
+/** Observations with some colours re-answered (a follow-up answer replaces the first one). */
+export function withAnswers(
+  observations: DefectObservation[],
+  answers: Partial<Record<InspectColorId, boolean>>,
+): DefectObservation[] {
+  return observations.map((observation) => ({
+    ...observation,
+    visible: answers[observation.color] ?? observation.visible,
+  }));
 }
 
 export function observationsForColors(
@@ -232,7 +337,7 @@ export function diagnosisDescription(
   patternLabel: (patternId: string) => string,
 ): string {
   const confidence = mark.confidence === "strong" ? "Strong" : "Likely";
-  const match = `${mark.matchScore}/10 color responses matched`;
+  const match = `${mark.matchScore}/${mark.scoredCount} color responses matched`;
   const patterns = autoPatternIdsForMark(mark).map(patternLabel).join(", then ");
 
   switch (mark.classification) {
@@ -248,8 +353,12 @@ export function diagnosisDescription(
       return `${confidence} surface or panel mark rather than a pixel response. ${match}. Clean the screen and diagnose again. Auto only makes one Static Noise attempt.`;
     case "uneven-patch":
       return `${confidence} uneven panel patch visible mainly on grey. ${match}. This is unlikely to respond to pixel cycling, so Auto only makes one Static Noise attempt.`;
-    default:
-      return `The marked responses did not match one defect pattern closely enough. Auto will run Static Noise once. Diagnose again if the same point remains visible.`;
+    default: {
+      const closest = mark.closest
+        ? ` Closest match: ${classificationShortLabel({ ...mark, ...mark.closest }).toLowerCase()} (${mark.closest.matchScore}/${mark.closest.scoredCount}).`
+        : "";
+      return `The marked responses did not match one defect pattern closely enough.${closest} Auto will run Static Noise once. Diagnose again if the same point remains visible.`;
+    }
   }
 }
 
