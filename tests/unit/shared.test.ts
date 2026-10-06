@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  SHOW_CONTROLS_EVENT,
   isFullscreenActive,
   showRuntimeControls,
 } from "@/utils/phones/tools/runtimeShell";
@@ -9,7 +8,8 @@ describe("runtime shell helpers", () => {
   it("dispatches a bubbling show-controls event", () => {
     const target = new EventTarget();
     const seen: Event[] = [];
-    target.addEventListener(SHOW_CONTROLS_EVENT, (event) => seen.push(event));
+    // The event Runtime.astro listens for.
+    target.addEventListener("tool-runtime:show-controls", (event) => seen.push(event));
     showRuntimeControls(target as unknown as Element);
     showRuntimeControls(null);
     expect(seen).toHaveLength(1);
