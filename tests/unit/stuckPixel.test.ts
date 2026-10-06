@@ -10,6 +10,7 @@ import {
   autoMarkDurationSeconds,
   buildAutoRepairQueue,
   channelList,
+  checkColorForMark,
   classificationShortLabel,
   classifyObservations,
   clusterTaps,
@@ -19,9 +20,11 @@ import {
   followUpColors,
   formatTime,
   isRepairable,
+  markNumberList,
   observationsForColors,
   pointerMatchRadius,
   speedRange,
+  summarizeCheck,
   visibilityPattern,
   withAnswers,
   type Channel,
@@ -219,5 +222,32 @@ describe("utilities", () => {
     const first = [a(), a(), a()];
     expect([b(), b(), b()]).toEqual(first);
     expect(first.every((value) => value > 0 && value < 2 ** 32)).toBe(true);
+  });
+});
+
+describe("checking the result", () => {
+  const marked = (classification: DiagnosisMark["classification"], channels: Channel[], seen: InspectColorId[]): DiagnosisMark => ({
+    x: 0.5, y: 0.5, classification, channels, confidence: "strong", matchScore: 10, scoredCount: 10,
+    observations: observationsForColors(new Set(seen)),
+  });
+
+  it("shows each fault on the colour where it is clearest", () => {
+    expect(checkColorForMark(marked("stuck-on", ["red"], ["black", "green", "blue"]))).toBe("black");
+    expect(checkColorForMark(marked("hot", ["red", "green", "blue"], allBut("white")))).toBe("black");
+    expect(checkColorForMark(marked("stuck-off", ["green"], ["white", "green", "cyan"]))).toBe("green");
+    expect(checkColorForMark(marked("stuck-off", ["red", "blue"], ["white", "red", "blue", "magenta"]))).toBe("white");
+  });
+
+  it("falls back to a colour the mark was actually seen on", () => {
+    // Marked stuck on, but never seen on black (follow-up answers changed the result).
+    expect(checkColorForMark(marked("stuck-on", ["red"], ["green", "blue"]))).toBe("green");
+  });
+
+  it("sorts outcomes by mark and lists mark numbers", () => {
+    const results = new Map([[2, "persists"], [0, "fixed"], [1, "persists"]] as const);
+    expect(summarizeCheck(results)).toEqual({ fixed: [0], persists: [1, 2] });
+    expect(markNumberList([1])).toBe("#2");
+    expect(markNumberList([1, 2])).toBe("#2 and #3");
+    expect(markNumberList([0, 1, 3])).toBe("#1, #2 and #4");
   });
 });

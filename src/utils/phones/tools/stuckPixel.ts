@@ -479,6 +479,49 @@ export function buildAutoRepairQueue(
   });
 }
 
+// --- Checking the result ---------------------------------------------------
+
+/**
+ * The test colour that shows a mark most clearly, for checking after a run:
+ * black for a subpixel or pixel stuck on, the subpixel's own colour (or
+ * white for several) for one stuck off. Falls back to a colour the mark was
+ * actually seen on during Diagnose.
+ */
+export function checkColorForMark(mark: DiagnosisMark): InspectColorId {
+  const seen = mark.observations.filter((observation) => observation.visible).map((observation) => observation.color);
+  const preferred: InspectColorId | undefined =
+    mark.classification === "stuck-on" || mark.classification === "hot"
+      ? "black"
+      : mark.classification === "stuck-off" && mark.channels.length === 1
+        ? mark.channels[0]
+        : mark.classification === "stuck-off"
+          ? "white"
+          : undefined;
+  if (preferred && (seen.length === 0 || seen.includes(preferred))) return preferred;
+  return seen[0] ?? preferred ?? "white";
+}
+
+export type CheckOutcome = "fixed" | "persists";
+
+/** Mark indexes by outcome, in mark order. */
+export function summarizeCheck(results: ReadonlyMap<number, CheckOutcome>): { fixed: number[]; persists: number[] } {
+  const ordered = [...results].sort(([left], [right]) => left - right);
+  return {
+    fixed: ordered.filter(([, outcome]) => outcome === "fixed").map(([index]) => index),
+    persists: ordered.filter(([, outcome]) => outcome === "persists").map(([index]) => index),
+  };
+}
+
+/** "#2", "#2 and #3", "#1, #2 and #4". */
+export function markNumberList(markIndexes: readonly number[]): string {
+  const numbers = markIndexes.map((index) => `#${index + 1}`);
+  if (numbers.length <= 1) return numbers.join("");
+  return `${numbers.slice(0, -1).join(", ")} and ${numbers.at(-1)}`;
+}
+
+/** Lengths offered for a second, longer round on marks still visible. */
+export const LONGER_ROUND_MINUTES = [10, 20] as const;
+
 export function autoMarkDurationSeconds(queue: AutoRepairItem[], markIndex: number): number {
   return queue
     .filter((item) => item.markIndex === markIndex)

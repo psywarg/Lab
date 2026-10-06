@@ -109,9 +109,16 @@ type Spot = { x: number; y: number; seenOn: readonly Colour[]; answers?: Partial
  * Runs Diagnose, tapping each spot on its colours and answering any
  * follow-up questions. The clock is fast-forwarded through each 10 s step.
  */
-async function diagnose(page: Page, spots: readonly Spot[]): Promise<void> {
+async function diagnose(page: Page, spots: readonly Spot[], timerSeconds?: number): Promise<void> {
   await page.clock.install();
   await openTool(page, "stuck-pixel-fixer");
+  if (timerSeconds) {
+    await page.evaluate((value) => {
+      const timer = document.getElementById("pixel-timer") as HTMLSelectElement;
+      timer.value = String(value);
+      timer.dispatchEvent(new Event("change", { bubbles: true }));
+    }, timerSeconds);
+  }
   await page.locator("#pixel-auto-tab").click();
   await page.locator("#pixel-diagnose").click();
   await page.locator("#pixel-warning-ack").check();
@@ -269,4 +276,69 @@ test("Diagnose still calls a pretend spot on unrelated colours unclear, naming t
   await diagnose(page, centre(["white", "red", "cyan"]));
   await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Unclear pattern");
   await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Closest match:");
+});
+
+const RED_STUCK_ON: Colour[] = ["black", "green", "blue", "cyan", "midGrey", "darkGrey"];
+
+/** Starts Auto after Diagnose and lets the clock run past its end. */
+async function runAutoToEnd(page: Page, seconds: number): Promise<void> {
+  // Finishing Diagnose has just left fullscreen; the runtime ignores a new
+  // fullscreen toggle within 350 ms.
+  await page.clock.runFor(500);
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  // The run ends when its 250 ms check sees Date.now() past the end time.
+  await page.clock.fastForward(seconds * 1000 + 1000);
+  await page.clock.runFor(500);
+}
+
+test("After Auto, a mark reported gone ends the check", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  const check = page.locator("#pixel-check");
+  await expect(check).toHaveAttribute("data-visible", "true");
+  await expect(page.locator("#pixel-check-title")).toHaveText("Is mark #1 still visible?");
+  // A red subpixel stuck on is clearest on black.
+  await expect(page.locator("#pixel-stage")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await page.locator("#pixel-check-gone").click();
+  await expect(page.locator("#pixel-check-title")).toHaveText("The mark is gone");
+  await expect(page.locator("#pixel-check-longer")).toBeHidden();
+  await page.locator("#pixel-check-done").click();
+  await expect(check).toHaveAttribute("data-visible", "false");
+});
+
+test("After Auto, a mark still visible offers a longer round, then a warranty note", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  await page.locator("#pixel-check-still").click();
+  await expect(page.locator("#pixel-check-title")).toHaveText("Mark #1 is still visible");
+  await expect(page.locator("#pixel-check-done")).toHaveText("Not now");
+  // The user decides: nothing starts until a length is chosen.
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "false");
+  await page.locator("[data-longer-minutes='10']").click();
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  await expect(page.locator("#pixel-countdown")).toHaveText("10:00");
+  await page.clock.fastForward(601_000);
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+  await page.locator("#pixel-check-still").click();
+  await expect(page.locator("#pixel-check-body")).toContainText("warranty");
+  await expect(page.locator("#pixel-check-longer")).toBeHidden();
+  await expect(page.locator("#pixel-check-done")).toHaveText("Done");
+});
+
+test("After Auto with two marks, only the flashed one is checked", async ({ page }) => {
+  await diagnose(
+    page,
+    [
+      { x: 0.25, y: 0.3, seenOn: RED_STUCK_ON },
+      { x: 0.75, y: 0.7, seenOn: allBut("black") },
+    ],
+    60,
+  );
+  await runAutoToEnd(page, 60);
+  await expect(page.locator("#pixel-check-progress")).toHaveText("1/1");
+  await page.locator("#pixel-check-still").click();
+  await expect(page.locator("#pixel-check-title")).toHaveText(/^Mark #\d is still visible$/);
 });

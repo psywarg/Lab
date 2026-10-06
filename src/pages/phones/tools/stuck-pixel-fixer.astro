@@ -10,6 +10,7 @@ import ToolRuntime from "@/components/phones/tools/Runtime.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import SiteIcons from "@/assets/icons/site-sprites.svg?url";
 import { createToolApplicationSchema, SITE_ORIGIN } from "@/utils/site/schema";
+import { LONGER_ROUND_MINUTES } from "@/utils/phones/tools/stuckPixel";
 
 const tool = getToolBySlug("stuck-pixel-fixer");
 const ogImage = tool.image;
@@ -45,7 +46,7 @@ const referenceItems = [
   {
     label: "Run",
     check:
-      "Auto runs Static Noise on each stuck or hot pixel for the selected time; dead pixels, surface marks, uneven patches and unclear results are explained and skipped. Manual Override lets you run Static Noise or combine RGB, CMY, and B/W color cycles. Start with a short pass, stop if the phone becomes warm or you feel discomfort, then verify before deciding whether to repeat it.",
+      "Auto runs Static Noise on each stuck or hot pixel for the selected time; dead pixels, surface marks, uneven patches and unclear results are explained and skipped. Manual Override lets you run Static Noise or combine RGB, CMY, and B/W color cycles. Start with a short pass and stop if the phone becomes warm or you feel discomfort. When Auto finishes, it shows each mark on the color where it was clearest and asks whether it is gone; for a mark still visible you can choose one longer 10 or 20 minute round.",
     reading:
       "RGB means red, green, and blue; B/W means black and white; CMY means cyan, magenta, and yellow. Static Noise starts at 15 fps and adjusts to a 30 fps cap. Color-cycle speed and spot size are limited by mode, and reduced-motion preferences lower the fastest setting. These limits reduce risk but do not guarantee that rapidly changing patterns are safe for every person. Keep the phone ventilated and stop the run if it becomes hot.",
     good: "If the pixel improves, repeat another short pass instead of pushing one long aggressive run.",
@@ -515,6 +516,80 @@ const structuredData = createToolApplicationSchema({
                   class="text-2xsmall text-slate-500 underline"
                 >
                   Cancel Diagnosis
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="pixel-check"
+              class="pixel-diagnosis-confirm pixel-followup absolute inset-0 z-8 grid justify-items-center p-4"
+              data-visible="false"
+              data-place="top"
+              role="dialog"
+              aria-modal="false"
+              tabindex="-1"
+              aria-labelledby="pixel-check-title"
+            >
+              <div
+                class="border-accent-line shadow-accent-glow relative grid w-full max-w-sm gap-3 max-h-full overflow-y-auto overscroll-contain rounded-2xl border bg-custom-100 p-4 text-center shadow-md sm:max-w-md lg:max-w-lg dark:bg-custom-700"
+              >
+                <span
+                  id="pixel-check-progress"
+                  class="text-2xsmall absolute top-3 right-3 font-bold text-slate-500 dark:text-slate-400"
+                ></span>
+                <h2
+                  id="pixel-check-title"
+                  class="text-body mb-0 px-10 text-slate-800 dark:text-slate-200"
+                >
+                </h2>
+                <p
+                  id="pixel-check-body"
+                  class="text-small text-custom-800 dark:text-custom-200 mb-0"
+                >
+                </p>
+                <div
+                  id="pixel-check-answer"
+                  class="flex flex-wrap justify-center gap-2"
+                >
+                  <button
+                    type="button"
+                    id="pixel-check-gone"
+                    class="btn-base text-small"
+                  >
+                    Gone
+                  </button>
+                  <button
+                    type="button"
+                    id="pixel-check-still"
+                    class="btn-base text-small"
+                  >
+                    Still there
+                  </button>
+                </div>
+                <div
+                  id="pixel-check-longer"
+                  class="flex flex-wrap justify-center gap-2"
+                  hidden
+                >
+                  {
+                    LONGER_ROUND_MINUTES.map((minutes) => (
+                      <button
+                        type="button"
+                        data-longer-minutes={minutes}
+                        class="btn-base text-small"
+                      >
+                        {minutes} min
+                      </button>
+                    ))
+                  }
+                </div>
+                <button
+                  type="button"
+                  id="pixel-check-done"
+                  class="btn-base text-small justify-self-center"
+                  hidden
+                >
+                  Done
                 </button>
               </div>
             </div>
@@ -1195,6 +1270,7 @@ const structuredData = createToolApplicationSchema({
       SPEED_RAW_MAX,
       autoMarkDurationSeconds as markDurationSeconds,
       buildAutoRepairQueue as buildRepairQueue,
+      checkColorForMark,
       classificationShortLabel,
       classifyObservations,
       clusterTaps,
@@ -1204,10 +1280,13 @@ const structuredData = createToolApplicationSchema({
       diagnosisDescription as describeDiagnosis,
       followUpColors,
       formatTime,
+      markNumberList,
       observationsForColors,
       pointerMatchRadius,
       speedRange,
+      summarizeCheck,
       withAnswers,
+      type CheckOutcome,
       type AutoRepairItem,
       type DiagnosisColor,
       type DiagnosisMark,
@@ -1409,12 +1488,43 @@ const structuredData = createToolApplicationSchema({
     const followUpNoButton = document.getElementById(
       "pixel-followup-no",
     ) as HTMLButtonElement | null;
+    const checkPanel = document.getElementById(
+      "pixel-check",
+    ) as HTMLDivElement | null;
+    const checkTitle = document.getElementById(
+      "pixel-check-title",
+    ) as HTMLElement | null;
+    const checkBody = document.getElementById(
+      "pixel-check-body",
+    ) as HTMLElement | null;
+    const checkProgress = document.getElementById(
+      "pixel-check-progress",
+    ) as HTMLElement | null;
+    const checkAnswer = document.getElementById(
+      "pixel-check-answer",
+    ) as HTMLDivElement | null;
+    const checkLonger = document.getElementById(
+      "pixel-check-longer",
+    ) as HTMLDivElement | null;
+    const checkDoneButton = document.getElementById(
+      "pixel-check-done",
+    ) as HTMLButtonElement | null;
+    const checkGoneButton = document.getElementById(
+      "pixel-check-gone",
+    ) as HTMLButtonElement | null;
+    const checkStillButton = document.getElementById(
+      "pixel-check-still",
+    ) as HTMLButtonElement | null;
+    const longerRoundButtons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-longer-minutes]"),
+    );
 
     const modalPanels = [
       warningPanel,
       diagnosisInstructPanel,
       diagnosisConfirmPanel,
       followUpPanel,
+      checkPanel,
     ].filter((panel): panel is HTMLDivElement => panel !== null);
     const focusableSelector = [
       "a[href]",
@@ -1460,7 +1570,10 @@ const structuredData = createToolApplicationSchema({
     function handleModalKeydown(event: KeyboardEvent): void {
       const panel = event.currentTarget as HTMLDivElement;
       if (event.key === "Escape") {
-        if (panel !== warningPanel) {
+        if (panel === checkPanel) {
+          event.preventDefault();
+          finishResultCheck();
+        } else if (panel !== warningPanel) {
           event.preventDefault();
           cancelDiagnosis();
           diagnoseButton?.focus();
@@ -1591,6 +1704,12 @@ const structuredData = createToolApplicationSchema({
     let followUps: { markIndex: number; color: InspectColorId }[] = [];
     let followUpIndex = 0;
     let followUpAnswers: Partial<Record<InspectColorId, boolean>>[] = [];
+    // After Auto finishes: which flashed marks are still visible. Round 2 is
+    // the optional longer run on the marks that persisted.
+    let checkMarkIndexes: number[] = [];
+    let checkIndex = 0;
+    let checkResults = new Map<number, CheckOutcome>();
+    let autoRound: 1 | 2 = 1;
 
     const pageController = new AbortController();
     const wakeLock = createWakeLock({
@@ -2382,6 +2501,142 @@ const structuredData = createToolApplicationSchema({
       if (countdownLabel) countdownLabel.textContent = "Done";
       updateRunButton();
       showRuntimeControls(testShell);
+      startResultCheck();
+    }
+
+    function startResultCheck(): void {
+      checkMarkIndexes = queuedMarkIndexes();
+      checkIndex = 0;
+      checkResults = new Map();
+      if (checkMarkIndexes.length === 0) return;
+      showResultCheck();
+    }
+
+    function showCheckPanel(markY: number | null): void {
+      if (!checkPanel) return;
+      placeStageCard(checkPanel, markY);
+      checkPanel.dataset.visible = "true";
+      isolateStageModal(checkPanel);
+      focusModal(checkPanel);
+    }
+
+    function hideCheckPanel(): void {
+      if (checkPanel) checkPanel.dataset.visible = "false";
+      isolateStageModal(null);
+    }
+
+    function showResultCheck(): void {
+      const markIndex = checkMarkIndexes[checkIndex];
+      const mark = markIndex === undefined ? undefined : diagnosedMarks[markIndex];
+      if (markIndex === undefined || !mark || !stage) return;
+      const colorId = checkColorForMark(mark);
+      const color = [...QUICK_DIAGNOSIS_COLORS, ...DEEP_DIAGNOSIS_COLORS].find(
+        (entry) => entry.id === colorId,
+      );
+      stage.style.background = color?.hex ?? "#ffffff";
+      if (spot) spot.style.background = "transparent";
+      renderAutoMarkMarkers();
+      diagnosisMarkerElements.forEach((marker) =>
+        marker.classList.toggle(
+          "is-highlighted",
+          marker.dataset.autoMarkIndex === String(markIndex),
+        ),
+      );
+      updateStatus("Check", `Mark #${markIndex + 1}`);
+      if (checkTitle) checkTitle.textContent = `Is mark #${markIndex + 1} still visible?`;
+      if (checkBody) {
+        checkBody.textContent = `Look closely at the ringed spot on this ${(color?.label ?? "white").toLowerCase()} screen.`;
+      }
+      if (checkProgress) {
+        checkProgress.textContent = `${checkIndex + 1}/${checkMarkIndexes.length}`;
+      }
+      if (checkAnswer) checkAnswer.hidden = false;
+      if (checkLonger) checkLonger.hidden = true;
+      if (checkDoneButton) checkDoneButton.hidden = true;
+      showCheckPanel(mark.y);
+    }
+
+    function answerResultCheck(outcome: CheckOutcome): void {
+      const markIndex = checkMarkIndexes[checkIndex];
+      if (markIndex === undefined) return;
+      checkResults.set(markIndex, outcome);
+      checkIndex += 1;
+      if (checkIndex < checkMarkIndexes.length) {
+        showResultCheck();
+        return;
+      }
+      showCheckSummary();
+    }
+
+    function showCheckSummary(): void {
+      const { fixed, persists } = summarizeCheck(checkResults);
+      applyIdleStage();
+      clearDiagnosisMarkers();
+      if (checkProgress) checkProgress.textContent = "";
+      if (checkAnswer) checkAnswer.hidden = true;
+      const offerLonger = persists.length > 0 && autoRound === 1;
+      if (checkLonger) checkLonger.hidden = !offerLonger;
+      if (checkDoneButton) {
+        checkDoneButton.hidden = false;
+        checkDoneButton.textContent = offerLonger ? "Not now" : "Done";
+      }
+      const persisting = markNumberList(persists);
+      const verb = persists.length === 1 ? "is" : "are";
+      if (persists.length === 0) {
+        if (checkTitle) {
+          checkTitle.textContent =
+            fixed.length === 1 ? "The mark is gone" : "All marks are gone";
+        }
+        if (checkBody) {
+          checkBody.textContent = `${markNumberList(fixed)} ${fixed.length === 1 ? "is" : "are"} no longer visible.`;
+        }
+      } else if (offerLonger) {
+        if (checkTitle) checkTitle.textContent = `Mark ${persisting} ${verb} still visible`;
+        if (checkBody) {
+          checkBody.textContent = `Run a longer round on ${persists.length === 1 ? "it" : "them"}? The screen keeps flashing and the phone stays awake the whole time; stop if it gets warm.`;
+        }
+      } else {
+        if (checkTitle) checkTitle.textContent = `Mark ${persisting} ${verb} still visible`;
+        if (checkBody) {
+          checkBody.textContent = "Software flashing hasn't fixed it. If the phone is under warranty, contact the manufacturer. You can still try Manual Override.";
+        }
+      }
+      updateStatus(
+        "Checked",
+        `${fixed.length} gone, ${persists.length} still visible`,
+      );
+      showCheckPanel(null);
+    }
+
+    function startLongerRound(minutes: number): void {
+      const { persists } = summarizeCheck(checkResults);
+      hideCheckPanel();
+      autoRound = 2;
+      // Number marks as before: build from every mark, keep the persisting ones.
+      autoRepairQueue = buildRepairQueue(diagnosedMarks, minutes * 60).filter(
+        (item) => persists.includes(item.markIndex),
+      );
+      autoQueueIndex = 0;
+      autoQueueComplete = false;
+      startAutoQueueItem(0);
+    }
+
+    function finishResultCheck(): void {
+      hideCheckPanel();
+      checkMarkIndexes = [];
+      checkResults = new Map();
+      autoRound = 1;
+      // Start again runs the full first round.
+      buildAutoRepairQueue();
+      syncWorkflowUI();
+      renderAutoMarkMarkers();
+    }
+
+    function resetResultCheck(): void {
+      hideCheckPanel();
+      checkMarkIndexes = [];
+      checkResults = new Map();
+      autoRound = 1;
     }
 
     function toggleRunState(): void {
@@ -2511,6 +2766,7 @@ const structuredData = createToolApplicationSchema({
     }
 
     function resetAutoWorkflow(): void {
+      resetResultCheck();
       autoRepairQueue = [];
       autoQueueIndex = 0;
       autoQueueRunning = false;
@@ -2719,6 +2975,7 @@ const structuredData = createToolApplicationSchema({
       diagnosisStep = 0;
       sessionTaps = [];
       followUps = [];
+      resetResultCheck();
       DIAGNOSIS_COLORS.length = QUICK_DIAGNOSIS_COLORS.length;
       clearDiagnosisMarkers();
       diagnosisActive = true;
@@ -2799,6 +3056,19 @@ const structuredData = createToolApplicationSchema({
       autoQueueComplete = false;
     }
 
+    /**
+     * Puts a question card on the half of the stage away from the mark
+     * (top when there is none). At the bottom it keeps clear of the run
+     * controls dock, which can be shown over the stage.
+     */
+    function placeStageCard(panel: HTMLElement, markY: number | null): void {
+      const place = markY !== null && markY < 0.5 ? "bottom" : "top";
+      panel.dataset.place = place;
+      const dock = testShell?.querySelector<HTMLElement>(".tool-runtime-dock-primary");
+      panel.style.paddingBottom =
+        place === "bottom" ? `${(dock?.offsetHeight ?? 0) + 16}px` : "";
+    }
+
     function startFollowUps(): void {
       const rect = stage?.getBoundingClientRect();
       pendingClusters = clusterTaps(
@@ -2851,8 +3121,7 @@ const structuredData = createToolApplicationSchema({
       if (followUpProgress) {
         followUpProgress.textContent = `${followUpIndex + 1}/${followUps.length}`;
       }
-      // Keep the card on the half of the screen away from the mark.
-      followUpPanel.dataset.place = cluster.y < 0.5 ? "bottom" : "top";
+      placeStageCard(followUpPanel, cluster.y);
       followUpPanel.dataset.visible = "true";
       isolateStageModal(followUpPanel);
       focusModal(followUpPanel);
@@ -3068,6 +3337,16 @@ const structuredData = createToolApplicationSchema({
       button.addEventListener("click", cancelDiagnosis),
     );
     followUpYesButton?.addEventListener("click", () => answerFollowUp(true));
+    checkGoneButton?.addEventListener("click", () => answerResultCheck("fixed"));
+    checkStillButton?.addEventListener("click", () =>
+      answerResultCheck("persists"),
+    );
+    longerRoundButtons.forEach((button) =>
+      button.addEventListener("click", () =>
+        startLongerRound(Number(button.dataset.longerMinutes)),
+      ),
+    );
+    checkDoneButton?.addEventListener("click", finishResultCheck);
     followUpNoButton?.addEventListener("click", () => answerFollowUp(false));
     workflowTabs.forEach((tab, index) => {
       tab.addEventListener("click", () => {
