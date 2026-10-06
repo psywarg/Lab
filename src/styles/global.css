@@ -224,40 +224,12 @@
   @apply bg-surface shadow-accent-glow rounded-none px-2 py-4 shadow-md md:rounded-4xl md:p-4 lg:p-6;
 }
 
-@utility btn-vendor {
-  @apply flex items-center justify-center gap-2 rounded-2xl px-6 py-2 font-semibold text-white shadow-md transition;
-
-  @variant hover {
-    @apply -translate-y-0.5 shadow-lg;
-  }
-
-  @variant active {
-    @apply translate-y-0 scale-95;
-  }
-}
-
 @utility tool-page-shell {
   @apply mb-8 grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)] xl:grid-cols-4;
 }
 
 @utility tool-page-main {
   @apply grid min-w-0 gap-6 xl:col-span-3;
-}
-
-@utility pointer-fine-only {
-  @apply inline;
-
-  @media (pointer: coarse) {
-    @apply hidden;
-  }
-}
-
-@utility pointer-coarse-only {
-  @apply hidden;
-
-  @media (pointer: coarse) {
-    @apply inline;
-  }
 }
 
 @layer components {

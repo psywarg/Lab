@@ -415,21 +415,139 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/phones/tools/lifecycle";
     import { describeMediaError } from "@/utils/phones/tools/capabilities";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
-    import {
-      SILENCE_DBFS,
-      amplitudeToDbfs,
-      averageBandLevel,
-      computePeakAmplitude,
-      computeRmsDbfs,
-      createLogBands,
-      detectClipping,
-      getAudioContextClass,
-      onAudioContextStateChange,
-      rampParam,
-      type FrequencyBand,
-      percentile,
-    } from "@/utils/phones/tools/audio";
     import micMeterWorkletUrl from "@/utils/phones/tools/mic-meter.worklet.ts?worker&url";
+
+    // --- Logic moved in from audio.ts ---
+    // src/utils/phones/tools/audio.ts
+
+    function getAudioContextClass(): typeof AudioContext | null {
+      const withPrefix = window as Window & {
+        webkitAudioContext?: typeof AudioContext;
+      };
+      return window.AudioContext ?? withPrefix.webkitAudioContext ?? null;
+    }
+
+    function onAudioContextStateChange(
+      context: AudioContext,
+      callback: (state: AudioContextState) => void,
+    ): () => void {
+      function handleStateChange(): void {
+        callback(context.state);
+      }
+      context.addEventListener("statechange", handleStateChange);
+      return () => context.removeEventListener("statechange", handleStateChange);
+    }
+
+    const SILENCE_DBFS = -100;
+
+    function amplitudeToDbfs(amplitude: number): number {
+      if (amplitude <= 0) return SILENCE_DBFS;
+      return Math.max(SILENCE_DBFS, 20 * Math.log10(amplitude));
+    }
+
+    function computeRmsDbfs(timeDomainData: Float32Array): number {
+      let sumSquares = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        const sample = timeDomainData[index] ?? 0;
+        sumSquares += sample * sample;
+      }
+      return amplitudeToDbfs(Math.sqrt(sumSquares / timeDomainData.length));
+    }
+
+    function computePeakAmplitude(timeDomainData: Float32Array): number {
+      let peak = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        const sample = Math.abs(timeDomainData[index] ?? 0);
+        if (sample > peak) peak = sample;
+      }
+      return peak;
+    }
+
+    function detectClipping(
+      timeDomainData: Float32Array,
+      threshold = 0.99,
+      minRunLength = 3,
+    ): boolean {
+      let run = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        if (Math.abs(timeDomainData[index] ?? 0) >= threshold) {
+          run += 1;
+          if (run >= minRunLength) return true;
+        } else {
+          run = 0;
+        }
+      }
+      return false;
+    }
+
+    function percentile(values: number[], fraction: number): number {
+      if (values.length === 0) return SILENCE_DBFS;
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(
+        sorted.length - 1,
+        Math.max(0, Math.round((sorted.length - 1) * fraction)),
+      );
+      return sorted[index] ?? SILENCE_DBFS;
+    }
+
+    type FrequencyBand = {
+      startBin: number;
+      endBin: number;
+    };
+
+    function createLogBands(
+      bandCount: number,
+      minHz: number,
+      maxHz: number,
+      sampleRate: number,
+      frequencyBinCount: number,
+    ): FrequencyBand[] {
+      const nyquist = sampleRate / 2;
+      const hzPerBin = nyquist / frequencyBinCount;
+      const top = Math.min(maxHz, nyquist);
+      const bottom = Math.max(minHz, hzPerBin);
+      const ratio = Math.log(top / bottom) / bandCount;
+      const bands: FrequencyBand[] = [];
+
+      for (let band = 0; band < bandCount; band += 1) {
+        const startHz = bottom * Math.exp(ratio * band);
+        const endHz = bottom * Math.exp(ratio * (band + 1));
+        const startBin = Math.min(
+          frequencyBinCount - 1,
+          Math.floor(startHz / hzPerBin),
+        );
+        const endBin = Math.min(
+          frequencyBinCount,
+          Math.max(startBin + 1, Math.ceil(endHz / hzPerBin)),
+        );
+        bands.push({ startBin, endBin });
+      }
+
+      return bands;
+    }
+
+    function averageBandLevel(
+      frequencyData: Uint8Array,
+      band: FrequencyBand,
+    ): number {
+      let sum = 0;
+      for (let bin = band.startBin; bin < band.endBin; bin += 1) {
+        sum += frequencyData[bin] ?? 0;
+      }
+      return sum / Math.max(1, band.endBin - band.startBin) / 255;
+    }
+
+    function rampParam(
+      param: AudioParam,
+      target: number,
+      context: BaseAudioContext,
+      seconds = 0.03,
+    ): void {
+      const now = context.currentTime;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+      param.linearRampToValueAtTime(target, now + seconds);
+    }
 
     // --- Logic moved in from mic.ts, audio.ts (strokeWaveform, PathContext) ---
 

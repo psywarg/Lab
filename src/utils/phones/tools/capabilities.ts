@@ -131,19 +131,6 @@ export function getBrowserCapabilities(): BrowserCapabilities {
   return cached;
 }
 
-export function getCapabilityTip(required: "generic-sensor"): string | null {
-  const caps = getBrowserCapabilities();
-
-  if (required === "generic-sensor" && !caps.genericSensor) {
-    if (caps.suggestedBrowser) {
-      return `This browser reports motion at a fixed rate and can't isolate gravity. ${caps.suggestedBrowser} supports the fuller sensor API for a more complete reading.`;
-    }
-    return "This browser reports motion at a fixed rate and can't isolate gravity as cleanly as Chrome on Android. The reading is still usable.";
-  }
-
-  return null;
-}
-
 export type SensorPermissionReason =
   "insecure-origin" | "denied" | "unsupported";
 
