@@ -353,3 +353,16 @@ test("Start during the result check closes it and runs the first round again", a
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
   await expect(page.locator("#pixel-countdown")).toHaveText(/^0[01]:\d\d$/);
 });
+
+test("Switching to Manual during the result check closes it", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+  // The workflow tabs are only shown outside fullscreen.
+  await page.locator("#pixel-fullscreen").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-test-shell")).toHaveAttribute("data-fullscreen", "false");
+  await page.locator("#pixel-manual-tab").click();
+  await expect(page.locator("#pixel-test-shell")).toHaveAttribute("data-workflow", "manual");
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "false");
+});

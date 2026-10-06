@@ -2541,6 +2541,8 @@ const structuredData = createToolApplicationSchema({
     function setWorkflowMode(nextMode: WorkflowMode): void {
       if (workflowMode === nextMode) return;
       if (diagnosisActive) cancelDiagnosis();
+      // The result check belongs to Auto; leaving Auto drops it.
+      resetResultCheck();
       if (stage?.dataset.running === "true" || runPaused) {
         resetFlashing(false);
       }
