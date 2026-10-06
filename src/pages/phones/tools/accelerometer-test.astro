@@ -828,10 +828,12 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/phones/tools/lifecycle";
     import { createRafScheduler } from "@/utils/site/raf";
     import {
-      requestMotionAndOrientationPermission,
       getMotionPermissionState,
       describeSensorUnavailability,
       type SensorPermissionReason,
+      type SensorPermissionResult,
+      requestMotionPermission,
+      requestOrientationPermission,
     } from "@/utils/phones/tools/capabilities";
     import {
       getScreenAngle,
@@ -843,26 +845,471 @@ const structuredData = createToolApplicationSchema({
       isFullscreenActive as shellIsFullscreen,
       showRuntimeControls as showShellControls,
     } from "@/utils/phones/tools/runtimeShell";
-    import { applyStartButton } from "@/utils/phones/tools/sensorSession";
-    import {
-      gravityOffsetState,
-      isShakeEvent,
-      isStillSample,
-      motionDeltaState,
-      noiseState,
-      peakDeltaState,
-      stepAccel,
-      stillnessEvidence,
-    } from "@/utils/phones/tools/accelerometer";
-    import {
-      createMotionGraph,
-      finiteNumber,
-      genericSensorCtor,
-      mean as average,
-      startGenericSensor,
-      type GenericSensor,
-      type GraphSeries,
-    } from "@/utils/phones/tools/motion";
+
+    // --- Logic moved in from accelerometer.ts, motion.ts, sensorSession.ts, capabilities.ts (requestMotionAndOrientationPermission) ---
+
+    export const STANDARD_GRAVITY = 9.80665;
+    /** Low-pass weight for the gravity estimate used to derive linear motion. */
+    const GRAVITY_LPF_ALPHA = 0.08;
+
+    type AccelInput = {
+      gx: number | null;
+      gy: number | null;
+      gz: number | null;
+      lx: number | null;
+      ly: number | null;
+      lz: number | null;
+    };
+
+    type AccelEstimate = {
+      latest: Vector3;
+      gravity: Vector3;
+      gravityReady: boolean;
+    };
+
+    type AccelStep = {
+      estimate: AccelEstimate;
+      hasGravityData: boolean;
+      /** Magnitude of the raw reading, in g; null without all three axes. */
+      totalG: number | null;
+      /** Change since the last sample, in g. */
+      delta: number;
+      /** Signed vertical linear acceleration, in g. */
+      liftSignal: number;
+      /** Strongest linear axis, signed, in g. */
+      shakeSignal: number;
+      /** Horizontal component of the raw reading, in g. */
+      tiltSignal: number;
+    };
+
+    /**
+     * Folds one reading into the estimate. Missing axes keep their last value.
+     * Linear motion comes from the linear sensor when it reports, otherwise
+     * from the raw reading minus the low-passed gravity estimate.
+     */
+    function stepAccel(
+      previous: AccelEstimate,
+      { gx, gy, gz, lx, ly, lz }: AccelInput,
+      alpha = GRAVITY_LPF_ALPHA,
+    ): AccelStep {
+      const hasGravityData = gx !== null && gy !== null && gz !== null;
+      const prev = previous.latest;
+      const latest = {
+        x: gx ?? prev.x,
+        y: gy ?? prev.y,
+        z: gz ?? prev.z,
+      };
+      const hadPreviousSample = previous.gravityReady;
+
+      let gravity = previous.gravity;
+      let gravityReady = previous.gravityReady;
+      if (hasGravityData) {
+        gravity = gravityReady
+          ? {
+              x: gravity.x + (latest.x - gravity.x) * alpha,
+              y: gravity.y + (latest.y - gravity.y) * alpha,
+              z: gravity.z + (latest.z - gravity.z) * alpha,
+            }
+          : { ...latest };
+        gravityReady = true;
+      }
+
+      const totalG = hasGravityData
+        ? Math.sqrt(latest.x ** 2 + latest.y ** 2 + latest.z ** 2) / STANDARD_GRAVITY
+        : null;
+      const tiltSignal = hasGravityData ? Math.hypot(latest.x, latest.y) / STANDARD_GRAVITY : 0;
+      const gravityDelta =
+        hasGravityData && hadPreviousSample
+          ? Math.sqrt((latest.x - prev.x) ** 2 + (latest.y - prev.y) ** 2 + (latest.z - prev.z) ** 2) /
+            STANDARD_GRAVITY
+          : 0;
+
+      const derived = {
+        x: hasGravityData ? latest.x - gravity.x : 0,
+        y: hasGravityData ? latest.y - gravity.y : 0,
+        z: hasGravityData ? latest.z - gravity.z : 0,
+      };
+      const linearAxes = [lx ?? derived.x, ly ?? derived.y, lz ?? derived.z];
+      const dominantLinearAxis = linearAxes.reduce(
+        (strongest, value) => (Math.abs(value) > Math.abs(strongest) ? value : strongest),
+        0,
+      );
+      const liftSignal = lz !== null ? lz / STANDARD_GRAVITY : derived.z / STANDARD_GRAVITY;
+      const shakeSignal = dominantLinearAxis / STANDARD_GRAVITY;
+      const delta = hasGravityData && hadPreviousSample ? gravityDelta : Math.abs(shakeSignal);
+
+      return {
+        estimate: { latest, gravity, gravityReady },
+        hasGravityData,
+        totalG,
+        delta,
+        liftSignal,
+        shakeSignal,
+        tiltSignal,
+      };
+    }
+
+    /** Samples steadier than this count towards the flat-check window. */
+    const STILL_DELTA_LIMIT_G = 0.08;
+
+    function isStillSample(totalG: number | null, delta: number): boolean {
+      return totalG !== null && delta < STILL_DELTA_LIMIT_G;
+    }
+
+    const SHAKE_DEBOUNCE_MS = 500;
+
+    /** A shake is a 1.65 g total, or a 0.8 g jump or linear spike, at most every 500 ms. */
+    function isShakeEvent(step: {
+      totalG: number | null;
+      delta: number;
+      shakeSignal: number;
+      sampleCount: number;
+      msSinceLastShake: number;
+    }): boolean {
+      return (
+        step.sampleCount > 1 &&
+        ((step.totalG !== null && step.totalG > 1.65) ||
+          step.delta > 0.8 ||
+          Math.abs(step.shakeSignal) > 0.8) &&
+        step.msSinceLastShake > SHAKE_DEBOUNCE_MS
+      );
+    }
+
+    // --- Verdicts ---------------------------------------------------------------
+
+    const STILL_WINDOW_MIN_SAMPLES = 8;
+
+    type StillnessEvidence = {
+      ready: boolean;
+      /** Standard deviation of total force while still, in g. */
+      noise: number;
+      /** Distance of the mean total force from 1 g. */
+      gravityError: number;
+    };
+
+    function stillnessEvidence(stillForce: readonly number[]): StillnessEvidence {
+      return {
+        ready: stillForce.length >= STILL_WINDOW_MIN_SAMPLES,
+        noise: standardDeviation(stillForce),
+        gravityError: Math.abs(average(stillForce) - 1),
+      };
+    }
+
+    function gravityOffsetState(evidence: StillnessEvidence): string {
+      if (!evidence.ready) return "Collecting flat samples";
+      if (evidence.gravityError < 0.03) return "On target";
+      if (evidence.gravityError < 0.08) return "Slight offset";
+      return "High offset";
+    }
+
+    function noiseState(evidence: StillnessEvidence): string {
+      if (!evidence.ready) return "Collecting flat samples";
+      if (evidence.noise < 0.015) return "Quiet";
+      if (evidence.noise < 0.045) return "Normal";
+      if (evidence.noise < 0.09) return "Noisy";
+      return "Very noisy";
+    }
+
+    function motionDeltaState(delta: number): string {
+      if (delta < 0.35) return "Stable";
+      if (delta < 1.2) return "Moving";
+      if (delta < 3) return "Strong motion";
+      return "Sharp spike";
+    }
+
+    function peakDeltaState(peak: number): string {
+      if (peak < 0.35) return "No spike yet";
+      if (peak < 1.2) return "Light motion";
+      if (peak < 3) return "Clear spike";
+      return "Heavy spike";
+    }
+    export type Vector3 = { x: number; y: number; z: number };
+
+    /** A sensor reading as a number, or null when missing or not finite. */
+    function finiteNumber(value: number | null | undefined): number | null {
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+
+    function average(values: readonly number[]): number {
+      if (values.length === 0) return 0;
+      let sum = 0;
+      for (const value of values) sum += value;
+      return sum / values.length;
+    }
+
+    /** Sample standard deviation (n - 1). */
+    function standardDeviation(values: readonly number[]): number {
+      if (values.length < 2) return 0;
+      const centre = average(values);
+      let sum = 0;
+      for (const value of values) sum += (value - centre) ** 2;
+      return Math.sqrt(sum / (values.length - 1));
+    }
+
+    // --- Generic Sensor API -------------------------------------------------
+
+    type GenericSensor = EventTarget & {
+      readonly x?: number;
+      readonly y?: number;
+      readonly z?: number;
+      start(): void;
+      stop(): void;
+    };
+
+    type GenericSensorCtor = new (options?: { frequency?: number }) => GenericSensor;
+
+    type GenericSensorName =
+      | "Accelerometer"
+      | "LinearAccelerationSensor"
+      | "GravitySensor"
+      | "Gyroscope";
+
+    function genericSensorCtor(name: GenericSensorName): GenericSensorCtor | null {
+      const candidate = (window as unknown as Record<string, unknown>)[name];
+      return typeof candidate === "function" ? (candidate as GenericSensorCtor) : null;
+    }
+
+    type StartGenericSensorOptions = {
+      frequency?: number;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+      onReading: (sensor: GenericSensor) => void;
+      /** Called for errors after the sensor has activated. */
+      onError?: () => void;
+    };
+
+    /**
+     * Starts a Generic Sensor and resolves with it once it activates, or with
+     * null if it is unsupported, errors, or does not activate within the timeout.
+     */
+    function startGenericSensor(
+      name: GenericSensorName,
+      { frequency = 60, timeoutMs = 1000, signal, onReading, onError }: StartGenericSensorOptions,
+    ): Promise<GenericSensor | null> {
+      const Ctor = genericSensorCtor(name);
+      if (!Ctor) return Promise.resolve(null);
+
+      return new Promise((resolve) => {
+        let settled = false;
+        let sensor: GenericSensor | null = null;
+        const finish = (value: GenericSensor | null): void => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          if (!value) sensor?.stop();
+          resolve(value);
+        };
+        const timer = window.setTimeout(() => finish(null), timeoutMs);
+        try {
+          sensor = new Ctor({ frequency });
+          const current = sensor;
+          current.addEventListener("reading", () => onReading(current), { signal });
+          current.addEventListener("activate", () => finish(current), { signal });
+          current.addEventListener(
+            "error",
+            () => {
+              if (settled) onError?.();
+              else finish(null);
+            },
+            { signal },
+          );
+          current.start();
+        } catch {
+          finish(null);
+        }
+      });
+    }
+
+    // --- Graph --------------------------------------------------------------
+
+    type GraphSeries = {
+      values: readonly number[];
+      sampleCount: number;
+      min: number;
+      max: number;
+      baseline?: number;
+      label: string;
+    };
+
+    type Rgb = { r: number; g: number; b: number };
+
+    type MotionGraph = {
+      resize: () => void;
+      draw: (series: GraphSeries) => void;
+      updateLabel: (series: GraphSeries) => void;
+      disconnect: () => void;
+    };
+
+    /**
+     * Line graph on a canvas. The line colour comes from the canvas's CSS
+     * `color`, read once and re-read only when the theme class changes.
+     */
+    function createMotionGraph(
+      canvas: HTMLCanvasElement | null,
+      label: HTMLElement | null,
+      fallbackColor: Rgb,
+    ): MotionGraph {
+      let width = 0;
+      let height = 0;
+      let color: Rgb | null = null;
+
+      const themeObserver =
+        typeof MutationObserver === "undefined"
+          ? null
+          : new MutationObserver(() => {
+              color = null;
+            });
+      themeObserver?.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+
+      function lineColor(): Rgb {
+        if (color) return color;
+        const computed = canvas ? getComputedStyle(canvas).color : "";
+        const match = computed.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+        color = match
+          ? { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) }
+          : fallbackColor;
+        return color;
+      }
+
+      function updateLabel(series: GraphSeries): void {
+        if (!label) return;
+        const sampleLabel =
+          series.sampleCount > 0
+            ? `Last ${series.sampleCount} sample${series.sampleCount === 1 ? "" : "s"}`
+            : "No samples yet";
+        label.textContent = `${series.label} - ${sampleLabel}`;
+      }
+
+      function resize(): void {
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        if (width <= 0 || height <= 0) return;
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        canvas.getContext("2d")?.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function draw(series: GraphSeries): void {
+        updateLabel(series);
+        if (!canvas || width <= 0 || height <= 0) return;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+
+        context.clearRect(0, 0, width, height);
+        const { r, g, b } = lineColor();
+        const withAlpha = (alpha: number): string => `rgb(${r} ${g} ${b} / ${alpha})`;
+
+        context.strokeStyle = withAlpha(0.1);
+        context.lineWidth = 1;
+        for (let index = 1; index < 4; index += 1) {
+          const y = (height / 4) * index;
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+          context.stroke();
+        }
+
+        let minValue = series.min;
+        let maxValue = series.max;
+        if (series.baseline !== undefined) {
+          const deviation = Math.max(
+            series.baseline - series.min,
+            series.max - series.baseline,
+            0.001,
+          );
+          minValue = series.baseline - deviation;
+          maxValue = series.baseline + deviation;
+        }
+        const span = Math.max(0.001, maxValue - minValue);
+
+        if (series.baseline !== undefined) {
+          const baselineY = height - ((series.baseline - minValue) / span) * height;
+          context.strokeStyle = withAlpha(0.35);
+          context.setLineDash([6, 6]);
+          context.beginPath();
+          context.moveTo(0, baselineY);
+          context.lineTo(width, baselineY);
+          context.stroke();
+          context.setLineDash([]);
+        }
+
+        const values = series.values;
+        if (values.length <= 1) return;
+
+        context.strokeStyle = withAlpha(0.9);
+        context.lineWidth = 2.25;
+        context.lineJoin = "round";
+        context.lineCap = "round";
+        context.beginPath();
+        values.forEach((value, index) => {
+          const x = (index / (values.length - 1)) * width;
+          const y = height - ((value - minValue) / span) * height;
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.stroke();
+      }
+
+      return {
+        resize,
+        draw,
+        updateLabel,
+        disconnect: () => themeObserver?.disconnect(),
+      };
+    }
+    export type SensorRunState = {
+      started: boolean;
+      /** Paused because fullscreen was left, or by the user. */
+      paused: boolean;
+      /** Permission or sensor start still in progress. */
+      inFlight: boolean;
+    };
+
+    type StartButtonView = {
+      running: boolean;
+      label: "Starting..." | "Pause" | "Resume" | "Start";
+      disabled: boolean;
+    };
+
+    function startButtonView({ started, paused, inFlight }: SensorRunState): StartButtonView {
+      const running = started && !paused;
+      return {
+        running,
+        disabled: inFlight,
+        label: inFlight ? "Starting..." : running ? "Pause" : paused ? "Resume" : "Start",
+      };
+    }
+
+    function applyStartButton(button: HTMLElement | null, state: SensorRunState): void {
+      if (!button) return;
+      const view = startButtonView(state);
+      button.classList.toggle("is-running", view.running);
+      button.setAttribute("aria-pressed", String(view.running));
+      button.toggleAttribute("disabled", view.disabled);
+      button.textContent = view.label;
+    }
+
+    /**
+     * Requests motion and orientation together. Both `requestPermission` calls
+     * run synchronously here, so call this from a click handler before any
+     * `await`; iOS rejects requests made after the user gesture has ended.
+     */
+    async function requestMotionAndOrientationPermission(): Promise<{
+      motion: SensorPermissionResult;
+      orientation: SensorPermissionResult;
+    }> {
+      const [motion, orientation] = await Promise.all([
+        requestMotionPermission(),
+        requestOrientationPermission(),
+      ]);
+      return { motion, orientation };
+    }
 
     const ORIENTATION_STALE_MS = 2500;
 

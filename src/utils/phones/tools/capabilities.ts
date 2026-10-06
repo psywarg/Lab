@@ -190,22 +190,6 @@ export function requestOrientationPermission(): Promise<SensorPermissionResult> 
   return requestGatedSensorPermission(ctor);
 }
 
-/**
- * Requests motion and orientation together. Both `requestPermission` calls
- * run synchronously here, so call this from a click handler before any
- * `await`; iOS rejects requests made after the user gesture has ended.
- */
-export async function requestMotionAndOrientationPermission(): Promise<{
-  motion: SensorPermissionResult;
-  orientation: SensorPermissionResult;
-}> {
-  const [motion, orientation] = await Promise.all([
-    requestMotionPermission(),
-    requestOrientationPermission(),
-  ]);
-  return { motion, orientation };
-}
-
 export type MotionPermissionState = "granted" | "denied" | "prompt" | "unknown";
 
 export async function getMotionPermissionState(): Promise<MotionPermissionState> {

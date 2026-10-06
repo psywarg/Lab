@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createPointerRateTracker } from "../../src/utils/phones/tools/touch";
 import { cdpFor, createTouch, openTool } from "./helpers";
 
 test.skip(({ isMobile }) => !isMobile, "Touch tests need a touch viewport");
@@ -50,6 +49,34 @@ test("H2: the bottom row of the grid can be touched without leaving the test", a
   await expect(page.locator("tool-runtime-shell")).toHaveAttribute("data-fullscreen", "true");
 });
 
+/**
+ * Reference for the rate the page shows: samples per second for each pointer
+ * over its last 1000 ms, pointers idle for longer dropped, median across
+ * pointers, rounded. Same definition as the touch test page.
+ */
+function expectedPointerRate(samples: readonly (readonly [number, number])[]): number | null {
+  const windowMs = 1000;
+  const byPointer = new Map<number, number[]>();
+  for (const [pointerId, timestampMs] of samples) {
+    const list = byPointer.get(pointerId) ?? [];
+    list.push(timestampMs);
+    while (list.length > 0 && (list[0] ?? 0) < timestampMs - windowMs) list.shift();
+    byPointer.set(pointerId, list);
+    byPointer.forEach((other, id) => {
+      const last = other[other.length - 1];
+      if (id !== pointerId && (last === undefined || last < timestampMs - windowMs)) byPointer.delete(id);
+    });
+  }
+  const rates = [...byPointer.values()]
+    .filter((list) => list.length >= 2 && (list.at(-1) ?? 0) > (list[0] ?? 0))
+    .map((list) => ((list.length - 1) / ((list.at(-1) ?? 0) - (list[0] ?? 0))) * 1000)
+    .sort((a, b) => a - b);
+  if (rates.length === 0) return null;
+  const mid = Math.floor(rates.length / 2);
+  const value = rates.length % 2 === 1 ? (rates[mid] ?? 0) : ((rates[mid - 1] ?? 0) + (rates[mid] ?? 0)) / 2;
+  return Math.round(value);
+}
+
 test("H3: sample rate is measured per finger, so two fingers do not double it", async ({ page, context }) => {
   // Record the same samples the page feeds its rate tracker (pointerdown, and
   // every coalesced pointermove), so the expected rate comes from the exact
@@ -82,9 +109,7 @@ test("H3: sample rate is measured per finger, so two fingers do not double it", 
     const samples = await page.evaluate(
       () => (window as unknown as { __rateSamples: [number, number][] }).__rateSamples,
     );
-    const tracker = createPointerRateTracker(1000);
-    for (const [pointerId, timestamp] of samples) tracker.record(pointerId, timestamp);
-    return { rate: tracker.rate() ?? 0, pointers: new Set(samples.map(([id]) => id)).size };
+    return { rate: expectedPointerRate(samples) ?? 0, pointers: new Set(samples.map(([id]) => id)).size };
   };
   const { pointers } = await expectedRate();
   expect(pointers).toBe(2);
