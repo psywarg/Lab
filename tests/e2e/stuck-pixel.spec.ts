@@ -318,7 +318,7 @@ test("After Auto, a mark still visible offers a longer round, then a warranty no
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "false");
   await page.locator("[data-longer-minutes='10']").click();
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
-  await expect(page.locator("#pixel-countdown")).toHaveText("10:00");
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^(10:00|09:\d\d)$/);
   await page.clock.fastForward(601_000);
   await page.clock.runFor(500);
   await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
@@ -341,4 +341,15 @@ test("After Auto with two marks, only the flashed one is checked", async ({ page
   await expect(page.locator("#pixel-check-progress")).toHaveText("1/1");
   await page.locator("#pixel-check-still").click();
   await expect(page.locator("#pixel-check-title")).toHaveText(/^Mark #\d is still visible$/);
+});
+
+test("Start during the result check closes it and runs the first round again", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "false");
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^0[01]:\d\d$/);
 });

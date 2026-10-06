@@ -2647,6 +2647,9 @@ const structuredData = createToolApplicationSchema({
         return;
       }
       if (workflowMode === "auto") {
+        // Start while the result check is open drops the check and runs
+        // the full first round again.
+        if (checkPanel?.dataset.visible === "true") finishResultCheck();
         if (autoRepairQueue.length === 0) return;
         if (runPaused) {
           startAutoQueueItem(autoQueueIndex, pausedRunRemainingMs);
