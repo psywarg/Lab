@@ -42,6 +42,15 @@ The project's rules: something becomes its own component or util only when 3 or 
   - the accelerometer and gyroscope share copied code again (review item L1);
   - the maths that only unit tests covered is now unverified. That includes Diagnose with every colour misjudged, drift distance, rotation remapping, noise spectra and dB mapping.
   - The project's own rules are met.
+- **Round 2** (psywarg/Lab#18), on files that were in the original upload:
+  - **Moved:**
+    - `audio.ts` (2 users) is copied into the mic and speaker pages;
+    - `sensor.ts` (2 users) is copied into the accelerometer and gyroscope pages;
+    - `imagePresets.ts` (1 user) moved into `ResponsiveImage.astro`;
+    - `escapeHtml` (1 user) moved into `410.ts`.
+  - **Removed, unused:** `getCapabilityTip`, `removeStoredValue`, `measureNoiseFloor`, and the CSS utilities `btn-vendor`, `pointer-fine-only` and `pointer-coarse-only`.
+  - **Left as they are** (the project owner's choice): the layout parts, `navigation.ts`, `ogImage.ts`, `410.ts`, the contact worker, the content helpers, `DiagramViewer`, `storage.ts`, and the `article-body` and `.mdx-content` CSS.
+  - **Unit tests:** 9 more were removed with their subjects. The audio level maths (dBFS, RMS, peak, clipping, percentile, log bands, band averaging) and the 410 page's HTML escaping are now **not verified** by a unit test. 12 unit tests remain. The browser tests are unchanged and pass.
 
 ## Delivery
 
