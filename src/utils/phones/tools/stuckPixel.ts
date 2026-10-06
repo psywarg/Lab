@@ -327,9 +327,20 @@ export function classificationShortLabel(mark: DiagnosisMark): string {
   }
 }
 
-/** Patterns Auto runs for a mark. Every defect type currently gets Static Noise. */
-export function autoPatternIdsForMark(_mark: DiagnosisMark): string[] {
-  return ["static"];
+const REPAIRABLE: readonly DefectClassification[] = ["stuck-on", "stuck-off", "hot"];
+
+/**
+ * Faults pixel flashing may help: a subpixel or whole pixel stuck in one
+ * state. Dead pixels, surface marks, uneven patches and unclear results are
+ * explained but not flashed.
+ */
+export function isRepairable(mark: Pick<DiagnosisMark, "classification">): boolean {
+  return REPAIRABLE.includes(mark.classification);
+}
+
+/** Patterns Auto runs for a mark: Static Noise for a repairable fault, nothing otherwise. */
+export function autoPatternIdsForMark(mark: DiagnosisMark): string[] {
+  return isRepairable(mark) ? ["static"] : [];
 }
 
 export function diagnosisDescription(
@@ -348,16 +359,16 @@ export function diagnosisDescription(
     case "hot":
       return `${confidence} hot pixel with all three subpixels staying on. ${match}. Auto will run ${patterns}.`;
     case "dead":
-      return `${confidence} dead pixel with all three subpixels staying off. ${match}. Software repair is unlikely to help, so Auto only makes one Static Noise attempt.`;
+      return `${confidence} dead pixel with all three subpixels staying off. ${match}. Software can't revive a pixel that stays off, so Auto skips it. If the phone is under warranty, ask the manufacturer about its dead-pixel policy.`;
     case "persistent-mark":
-      return `${confidence} surface or panel mark rather than a pixel response. ${match}. Clean the screen and diagnose again. Auto only makes one Static Noise attempt.`;
+      return `${confidence} surface or panel mark rather than a pixel response. ${match}. Auto skips it. Clean the screen and diagnose again.`;
     case "uneven-patch":
-      return `${confidence} uneven panel patch visible mainly on grey. ${match}. This is unlikely to respond to pixel cycling, so Auto only makes one Static Noise attempt.`;
+      return `${confidence} uneven panel patch visible mainly on grey. ${match}. Pixel flashing doesn't fix panel patches, so Auto skips it.`;
     default: {
       const closest = mark.closest
         ? ` Closest match: ${classificationShortLabel({ ...mark, ...mark.closest }).toLowerCase()} (${mark.closest.matchScore}/${mark.closest.scoredCount}).`
         : "";
-      return `The marked responses did not match one defect pattern closely enough.${closest} Auto will run Static Noise once. Diagnose again if the same point remains visible.`;
+      return `The marked responses did not match one defect pattern closely enough.${closest} Auto skips it. Diagnose again, or try Manual Override.`;
     }
   }
 }

@@ -191,9 +191,46 @@ test("Diagnose identifies a red subpixel stuck on, and Auto runs Static Noise on
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-pattern", "static");
 });
 
-test("Diagnose calls a mark seen on every colour a surface or panel mark", async ({ page }) => {
+/** After Diagnose: whether Start can run Auto, and the status line. */
+function autoState(page: Page) {
+  return {
+    start: page.locator("#pixel-start"),
+    state: page.locator("#pixel-state"),
+  };
+}
+
+test("Diagnose calls a mark seen on every colour a surface or panel mark, and Auto skips it", async ({ page }) => {
   await diagnose(page, centre(ALL_COLOURS));
   await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Surface or panel mark");
+  await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("Auto skips it. Clean the screen");
+  const { start, state } = autoState(page);
+  await expect(start).toBeDisabled();
+  await expect(state).toHaveText("Nothing to repair");
+});
+
+test("Diagnose: a dead pixel is reported and not flashed", async ({ page }) => {
+  await diagnose(page, centre(allBut("black")));
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Dead pixel");
+  await expect(page.locator("#pixel-diagnosis-summary-body")).toContainText("warranty");
+  const { start, state } = autoState(page);
+  await expect(start).toBeDisabled();
+  await expect(state).toHaveText("Nothing to repair");
+});
+
+test("Diagnose: a hot pixel is identified and Auto runs on it", async ({ page }) => {
+  await diagnose(page, centre(allBut("white")));
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Hot pixel");
+  await page.clock.runFor(500);
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+});
+
+test("Diagnose: a dark green subpixel is identified and Auto runs on it", async ({ page }) => {
+  // Green stuck off shows wherever green is driven (dark grey is too faint to judge).
+  await diagnose(page, centre(["white", "green", "cyan", "yellow", "midGrey"]));
+  await expect(page.locator("#pixel-diagnosis-summary-title")).toContainText("Dark green subpixel");
+  await expect(page.locator("#pixel-start")).toBeEnabled();
 });
 
 test("Diagnose: a dark subpixel missed on dark grey is still identified", async ({ page }) => {
@@ -221,6 +258,11 @@ test("Diagnose classifies two marks on the screen independently", async ({ page 
   const labels = [];
   for (const index of [0, 1]) labels.push(await (await summaryFor(page, index)).title.textContent());
   expect(labels.map((label) => label?.replace(/^#\d+ /, "")).sort()).toEqual(["Bright red subpixel", "Dead pixel"]);
+  // Only the red subpixel is flashed; the dead pixel is listed but skipped.
+  await page.clock.runFor(500);
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-detail")).toContainText("(1/1)");
 });
 
 test("Diagnose still calls a pretend spot on unrelated colours unclear, naming the closest match", async ({ page }) => {

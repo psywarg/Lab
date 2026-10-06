@@ -18,6 +18,7 @@ import {
   diagnosisDescription,
   followUpColors,
   formatTime,
+  isRepairable,
   observationsForColors,
   pointerMatchRadius,
   speedRange,
@@ -115,6 +116,11 @@ describe("labels", () => {
     ...overrides,
   });
 
+  it("explains why a skipped mark is not flashed", () => {
+    expect(diagnosisDescription(mark({ classification: "dead", channels: [] }), () => "Static Noise")).toContain("Auto skips it");
+    expect(diagnosisDescription(mark({ classification: "unclear", channels: [] }), () => "Static Noise")).toContain("Auto skips it");
+  });
+
   it("lists channels and describes the result", () => {
     expect(channelList(["red", "green", "blue"])).toBe("red, green and blue");
     expect(classificationShortLabel(mark({}))).toBe("Bright red and green subpixels");
@@ -177,14 +183,27 @@ describe("speedRange (H11 flash limits)", () => {
 });
 
 describe("buildAutoRepairQueue", () => {
-  it("gives each mark the full duration and labels it", () => {
-    const mark = { x: 0, y: 0, observations: [], classification: "dead", channels: [], confidence: "likely", matchScore: 9, scoredCount: 9 } as DiagnosisMark;
-    const queue = buildAutoRepairQueue([mark, mark], 300);
+  const mark = (classification: DiagnosisMark["classification"]): DiagnosisMark => ({
+    x: 0, y: 0, observations: [], classification, channels: [], confidence: "likely", matchScore: 9, scoredCount: 9,
+  });
+
+  it("gives each repairable mark the full duration and labels it", () => {
+    const queue = buildAutoRepairQueue([mark("stuck-on"), mark("hot")], 300);
     expect(queue.map((item) => [item.label, item.patternId, item.durationSeconds])).toEqual([
       ["Mark 1", "static", 300],
       ["Mark 2", "static", 300],
     ]);
     expect(autoMarkDurationSeconds(queue, 1)).toBe(300);
+  });
+
+  it("leaves out marks flashing can't fix, keeping the others' mark numbers", () => {
+    const queue = buildAutoRepairQueue([mark("dead"), mark("stuck-off"), mark("persistent-mark"), mark("uneven-patch"), mark("unclear")], 300);
+    expect(queue.map((item) => item.label)).toEqual(["Mark 2"]);
+  });
+
+  it("flashes only stuck and hot pixels", () => {
+    const kinds = ["stuck-on", "stuck-off", "hot", "dead", "persistent-mark", "uneven-patch", "unclear"] as const;
+    expect(kinds.filter((classification) => isRepairable({ classification }))).toEqual(["stuck-on", "stuck-off", "hot"]);
   });
 });
 

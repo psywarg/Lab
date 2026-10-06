@@ -45,7 +45,7 @@ const referenceItems = [
   {
     label: "Run",
     check:
-      "Auto runs Static Noise on every mark for the selected time. Manual Override lets you run Static Noise or combine RGB, CMY, and B/W color cycles. Start with a short pass, stop if the phone becomes warm or you feel discomfort, then verify before deciding whether to repeat it.",
+      "Auto runs Static Noise on each stuck or hot pixel for the selected time; dead pixels, surface marks, uneven patches and unclear results are explained and skipped. Manual Override lets you run Static Noise or combine RGB, CMY, and B/W color cycles. Start with a short pass, stop if the phone becomes warm or you feel discomfort, then verify before deciding whether to repeat it.",
     reading:
       "RGB means red, green, and blue; B/W means black and white; CMY means cyan, magenta, and yellow. Static Noise starts at 15 fps and adjusts to a 30 fps cap. Color-cycle speed and spot size are limited by mode, and reduced-motion preferences lower the fastest setting. These limits reduce risk but do not guarantee that rapidly changing patterns are safe for every person. Keep the phone ventilated and stop the run if it becomes hot.",
     good: "If the pixel improves, repeat another short pass instead of pushing one long aggressive run.",
@@ -204,7 +204,8 @@ const structuredData = createToolApplicationSchema({
           substitute for a professional flash analysis.
           The Diagnose option compares each marked area across multiple test
           colors and classifies the likely issue; Auto then runs locally
-          rendered Static Noise on each mark, and Manual Override offers Static
+          rendered Static Noise on each stuck or hot pixel and explains why it
+          skips the rest, and Manual Override offers Static
           Noise or RGB, CMY, and B/W color cycles. It cannot guarantee recovery
           or repair dead black pixels,
           permanent OLED burn-in, horizontal lines, screen cracks, or physical
@@ -1606,9 +1607,14 @@ const structuredData = createToolApplicationSchema({
     function currentRunDetail(): string {
       const patternLabel = currentPattern().label;
       const item = autoRepairQueue[autoQueueIndex];
-      return workflowMode === "auto" && item
-        ? `Mark ${item.markIndex + 1}/${diagnosedMarks.length} • ${patternLabel}`
-        : patternLabel;
+      if (workflowMode !== "auto" || !item) return patternLabel;
+      // Count only the marks Auto flashes; the number names the mark on screen.
+      const queued = queuedMarkIndexes();
+      return `Mark #${item.markIndex + 1} (${queued.indexOf(item.markIndex) + 1}/${queued.length}) • ${patternLabel}`;
+    }
+
+    function queuedMarkIndexes(): number[] {
+      return [...new Set(autoRepairQueue.map((entry) => entry.markIndex))];
     }
 
     const MANUAL_COLOR_GROUP_ORDER: ManualColorGroup[] = [
@@ -1729,9 +1735,11 @@ const structuredData = createToolApplicationSchema({
 
     function syncAutoQueueControls(preview = false): void {
       const hasQueue = diagnosedMarks.length > 0 && autoRepairQueue.length > 0;
+      // Skipped marks stay listed, so their explanation can be read.
+      const hasMarks = diagnosedMarks.length > 0;
       if (autoMarkInput) {
         autoMarkInput.replaceChildren();
-        if (hasQueue) {
+        if (hasMarks) {
           diagnosedMarks.forEach((mark, index) => {
             const option = document.createElement("option");
             option.value = String(index);
@@ -1745,7 +1753,7 @@ const structuredData = createToolApplicationSchema({
           option.textContent = "Diagnose first";
           autoMarkInput.append(option);
         }
-        autoMarkInput.disabled = !hasQueue;
+        autoMarkInput.disabled = !hasMarks;
       }
 
       if (timerInput) {
@@ -1824,7 +1832,9 @@ const structuredData = createToolApplicationSchema({
       } else if (dockTip) {
         dockTip.textContent = autoRepairQueue.length > 0
           ? "Pick a mark to highlight it. Set time, then Play at display max."
-          : "Diagnose the screen to add repair marks.";
+          : diagnosedMarks.length > 0
+            ? "Nothing here for flashing to fix. Pick a mark to see why."
+            : "Diagnose the screen to add repair marks.";
       }
       if (isAuto && diagnosedMarks.length > 0) {
         const selectedMark = Number(autoMarkInput?.value ?? 0);
@@ -2367,7 +2377,8 @@ const structuredData = createToolApplicationSchema({
       autoQueueComplete = true;
       wakeLock.release();
       applyIdleStage();
-      updateStatus("Complete", `${diagnosedMarks.length} marks`);
+      const flashed = queuedMarkIndexes().length;
+      updateStatus("Complete", `${flashed} ${flashed === 1 ? "mark" : "marks"}`);
       if (countdownLabel) countdownLabel.textContent = "Done";
       updateRunButton();
       showRuntimeControls(testShell);
@@ -2902,6 +2913,11 @@ const structuredData = createToolApplicationSchema({
         if (countdownLabel && timerInput) {
           countdownLabel.textContent = formatTime(Number(timerInput.value));
         }
+      } else if (diagnosedMarks.length > 0) {
+        updateStatus(
+          "Nothing to repair",
+          `${diagnosedMarks.length} ${diagnosedMarks.length === 1 ? "mark" : "marks"}`,
+        );
       } else {
         updateStatus("Ready", "No marks");
         if (dockTip) dockTip.textContent = "No marks were added. Run Diagnose again.";
