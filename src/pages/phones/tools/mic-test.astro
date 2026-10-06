@@ -415,35 +415,300 @@ const structuredData = createToolApplicationSchema({
     } from "@/utils/phones/tools/lifecycle";
     import { describeMediaError } from "@/utils/phones/tools/capabilities";
     import { createWakeLock } from "@/utils/phones/tools/wakeLock";
-    import {
-      SILENCE_DBFS,
-      amplitudeToDbfs,
-      averageBandLevel,
-      computePeakAmplitude,
-      computeRmsDbfs,
-      createLogBands,
-      detectClipping,
-      getAudioContextClass,
-      onAudioContextStateChange,
-      rampParam,
-      strokeWaveform,
-      type FrequencyBand,
-    } from "@/utils/phones/tools/audio";
-    import {
-      formatClipEvents,
-      formatDbfs,
-      formatSeconds,
-      isNewClipEvent,
-      levelEstimates,
-      nextPeakHold,
-      pickRecorderMimeType,
-      snrDb,
-      mergeMeterReports,
-      micConstraints,
-      micDeviceOptions,
-      type MeterReport,
-    } from "@/utils/phones/tools/mic";
     import micMeterWorkletUrl from "@/utils/phones/tools/mic-meter.worklet.ts?worker&url";
+
+    // --- Logic moved in from audio.ts ---
+    // src/utils/phones/tools/audio.ts
+
+    function getAudioContextClass(): typeof AudioContext | null {
+      const withPrefix = window as Window & {
+        webkitAudioContext?: typeof AudioContext;
+      };
+      return window.AudioContext ?? withPrefix.webkitAudioContext ?? null;
+    }
+
+    function onAudioContextStateChange(
+      context: AudioContext,
+      callback: (state: AudioContextState) => void,
+    ): () => void {
+      function handleStateChange(): void {
+        callback(context.state);
+      }
+      context.addEventListener("statechange", handleStateChange);
+      return () => context.removeEventListener("statechange", handleStateChange);
+    }
+
+    const SILENCE_DBFS = -100;
+
+    function amplitudeToDbfs(amplitude: number): number {
+      if (amplitude <= 0) return SILENCE_DBFS;
+      return Math.max(SILENCE_DBFS, 20 * Math.log10(amplitude));
+    }
+
+    function computeRmsDbfs(timeDomainData: Float32Array): number {
+      let sumSquares = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        const sample = timeDomainData[index] ?? 0;
+        sumSquares += sample * sample;
+      }
+      return amplitudeToDbfs(Math.sqrt(sumSquares / timeDomainData.length));
+    }
+
+    function computePeakAmplitude(timeDomainData: Float32Array): number {
+      let peak = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        const sample = Math.abs(timeDomainData[index] ?? 0);
+        if (sample > peak) peak = sample;
+      }
+      return peak;
+    }
+
+    function detectClipping(
+      timeDomainData: Float32Array,
+      threshold = 0.99,
+      minRunLength = 3,
+    ): boolean {
+      let run = 0;
+      for (let index = 0; index < timeDomainData.length; index += 1) {
+        if (Math.abs(timeDomainData[index] ?? 0) >= threshold) {
+          run += 1;
+          if (run >= minRunLength) return true;
+        } else {
+          run = 0;
+        }
+      }
+      return false;
+    }
+
+    function percentile(values: number[], fraction: number): number {
+      if (values.length === 0) return SILENCE_DBFS;
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(
+        sorted.length - 1,
+        Math.max(0, Math.round((sorted.length - 1) * fraction)),
+      );
+      return sorted[index] ?? SILENCE_DBFS;
+    }
+
+    type FrequencyBand = {
+      startBin: number;
+      endBin: number;
+    };
+
+    function createLogBands(
+      bandCount: number,
+      minHz: number,
+      maxHz: number,
+      sampleRate: number,
+      frequencyBinCount: number,
+    ): FrequencyBand[] {
+      const nyquist = sampleRate / 2;
+      const hzPerBin = nyquist / frequencyBinCount;
+      const top = Math.min(maxHz, nyquist);
+      const bottom = Math.max(minHz, hzPerBin);
+      const ratio = Math.log(top / bottom) / bandCount;
+      const bands: FrequencyBand[] = [];
+
+      for (let band = 0; band < bandCount; band += 1) {
+        const startHz = bottom * Math.exp(ratio * band);
+        const endHz = bottom * Math.exp(ratio * (band + 1));
+        const startBin = Math.min(
+          frequencyBinCount - 1,
+          Math.floor(startHz / hzPerBin),
+        );
+        const endBin = Math.min(
+          frequencyBinCount,
+          Math.max(startBin + 1, Math.ceil(endHz / hzPerBin)),
+        );
+        bands.push({ startBin, endBin });
+      }
+
+      return bands;
+    }
+
+    function averageBandLevel(
+      frequencyData: Uint8Array,
+      band: FrequencyBand,
+    ): number {
+      let sum = 0;
+      for (let bin = band.startBin; bin < band.endBin; bin += 1) {
+        sum += frequencyData[bin] ?? 0;
+      }
+      return sum / Math.max(1, band.endBin - band.startBin) / 255;
+    }
+
+    function rampParam(
+      param: AudioParam,
+      target: number,
+      context: BaseAudioContext,
+      seconds = 0.03,
+    ): void {
+      const now = context.currentTime;
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+      param.linearRampToValueAtTime(target, now + seconds);
+    }
+
+    // --- Logic moved in from mic.ts, audio.ts (strokeWaveform, PathContext) ---
+
+    /**
+     * Raw capture by default: echo cancellation, noise suppression and automatic
+     * gain change the level, noise floor and SNR the test is trying to measure.
+     */
+    export function micConstraints(
+      deviceId: string,
+      callProcessing: boolean,
+    ): MediaStreamConstraints {
+      return {
+        audio: {
+          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+          echoCancellation: callProcessing,
+          noiseSuppression: callProcessing,
+          autoGainControl: callProcessing,
+        },
+      };
+    }
+
+    type MicOption = { value: string; label: string };
+
+    type DeviceLike = Pick<MediaDeviceInfo, "deviceId" | "kind" | "label">;
+
+    /** Chrome lists these aliases next to the real devices. */
+    const ALIAS_DEVICE_IDS = new Set(["", "default", "communications"]);
+
+    /** "System default" first, then each real input; unnamed until permission. */
+    function micDeviceOptions(devices: readonly DeviceLike[]): MicOption[] {
+      const inputs = devices.filter(
+        (device) =>
+          device.kind === "audioinput" && !ALIAS_DEVICE_IDS.has(device.deviceId),
+      );
+      return [
+        { value: "", label: "System default" },
+        ...inputs.map((device, index) => ({
+          value: device.deviceId,
+          label: device.label || `Microphone ${index + 1}`,
+        })),
+      ];
+    }
+
+    type MeterReport = {
+      /** Highest absolute sample value in the block, 0 to 1. */
+      peak: number;
+      /** RMS of the block, 0 to 1. */
+      rms: number;
+      /** True if at least `clipRun` consecutive samples reached the threshold. */
+      clipped: boolean;
+      samples: number;
+    };
+
+    /** Combines several reports into one, weighting RMS by sample count. */
+    function mergeMeterReports(reports: readonly MeterReport[]): MeterReport | null {
+      if (reports.length === 0) return null;
+      let peak = 0;
+      let energy = 0;
+      let samples = 0;
+      let clipped = false;
+      for (const report of reports) {
+        peak = Math.max(peak, report.peak);
+        energy += report.rms * report.rms * report.samples;
+        samples += report.samples;
+        clipped ||= report.clipped;
+      }
+      return {
+        peak,
+        rms: samples > 0 ? Math.sqrt(energy / samples) : 0,
+        clipped,
+        samples,
+      };
+    }
+
+    // --- Level statistics ---------------------------------------------------------
+
+    /** Readings needed before the noise floor and speech level are shown. */
+    const LEVEL_ESTIMATE_MIN_SAMPLES = 30;
+
+    /**
+     * Noise floor (10th percentile) and speech level (95th percentile) of a
+     * rolling window of RMS readings in dBFS, or null until it has 30 readings.
+     */
+    function levelEstimates(
+      window: readonly number[],
+    ): { noiseFloorDb: number; speechDb: number } | null {
+      if (window.length < LEVEL_ESTIMATE_MIN_SAMPLES) return null;
+      return { noiseFloorDb: percentile([...window], 0.1), speechDb: percentile([...window], 0.95) };
+    }
+
+    /** Speech minus noise floor, or null while either is unusable. */
+    function snrDb(noiseFloorDb: number, speechDb: number): number | null {
+      const usable = noiseFloorDb > SILENCE_DBFS && speechDb > noiseFloorDb + 1;
+      return usable ? speechDb - noiseFloorDb : null;
+    }
+
+    /** Clips closer together than this count as one event. */
+    const CLIP_EVENT_DEBOUNCE_MS = 250;
+
+    function isNewClipEvent(clipped: boolean, now: number, lastClipAt: number): boolean {
+      return clipped && now - lastClipAt > CLIP_EVENT_DEBOUNCE_MS;
+    }
+
+    /** The meter's peak marker holds the highest level for 1.5 s. */
+    const PEAK_HOLD_MS = 1500;
+
+    type PeakHold = { amplitude: number; at: number };
+
+    function nextPeakHold(amplitude: number, now: number, hold: PeakHold): PeakHold {
+      return amplitude >= hold.amplitude || now - hold.at > PEAK_HOLD_MS
+        ? { amplitude, at: now }
+        : hold;
+    }
+
+    function formatDbfs(value: number): string {
+      return value <= SILENCE_DBFS + 0.5 ? "--" : `${value.toFixed(1)} dBFS`;
+    }
+
+    function formatSeconds(milliseconds: number): string {
+      return (Math.max(0, milliseconds) / 1000).toFixed(1);
+    }
+
+    function formatClipEvents(count: number): string {
+      return count === 0 ? "None" : `${count} ${count === 1 ? "event" : "events"}`;
+    }
+
+    /** First recording format the browser supports, in order of preference. */
+    function pickRecorderMimeType(
+      candidates: readonly string[],
+      isSupported: (type: string) => boolean,
+    ): string | undefined {
+      return candidates.find((type) => isSupported(type));
+    }
+
+    type PathContext = Pick<
+      CanvasRenderingContext2D,
+      "beginPath" | "moveTo" | "lineTo" | "stroke"
+    >;
+
+    /**
+     * Strokes a waveform across `width`. `sampleAt` returns -1 to 1, drawn from
+     * the vertical middle (positive is up). Callers set the stroke style.
+     */
+    function strokeWaveform(
+      context: PathContext,
+      count: number,
+      sampleAt: (index: number) => number,
+      width: number,
+      height: number,
+    ): void {
+      if (count < 2) return;
+      const middle = height / 2;
+      context.beginPath();
+      for (let index = 0; index < count; index += 1) {
+        const x = (index / (count - 1)) * width;
+        const y = middle - sampleAt(index) * middle;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.stroke();
+    }
 
     type MicView = "waveform" | "spectrum" | "levels";
 

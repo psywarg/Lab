@@ -11,8 +11,8 @@ dist/
 .dev.vars.*
 
 # Tests
-test-results/
-playwright-report/
+tests/test-results/
+tests/playwright-report/
 coverage/
 
 # Logs and OS files

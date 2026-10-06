@@ -16,12 +16,3 @@ export function setStoredValue(key: string, value: string): boolean {
     return false;
   }
 }
-
-export function removeStoredValue(key: string): boolean {
-  try {
-    sessionStorage.removeItem(key);
-    return true;
-  } catch {
-    return false;
-  }
-}

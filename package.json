@@ -19,8 +19,8 @@
     "deploy": "astro build && wrangler deploy",
     "preview:cloudflare": "astro build && wrangler dev",
     "lint": "eslint .",
-    "test:unit": "vitest run",
-    "test:e2e": "playwright test",
+    "test:unit": "vitest run --config tests/vitest.config.ts",
+    "test:e2e": "playwright test --config tests/playwright.config.ts",
     "test": "npm run test:unit && npm run test:e2e"
   },
   "dependencies": {

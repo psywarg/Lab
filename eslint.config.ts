@@ -56,8 +56,8 @@ export default defineConfig(
       "dist/",
       ".astro/",
       "node_modules/",
-      "test-results/",
-      "playwright-report/",
+      "tests/test-results/",
+      "tests/playwright-report/",
     ],
   },
 );

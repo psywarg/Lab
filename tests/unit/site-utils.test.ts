@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml } from "@/utils/site/html";
 import { jsonForScript } from "@/utils/site/json";
 import { remapDeviceAxes } from "@/utils/phones/tools/orientation";
-
-describe("escapeHtml", () => {
-  it("escapes the five HTML-significant characters", () => {
-    expect(escapeHtml(`<a href="x">'&'</a>`)).toBe(
-      "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;",
-    );
-  });
-});
 
 describe("jsonForScript", () => {
   it("cannot close a script element and still round-trips", () => {

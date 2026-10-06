@@ -9,15 +9,6 @@ export const WEBSITE_ID = `${SITE_ORIGIN}/#website`;
 export const LABS_ID = `${SITE_ORIGIN}/#labs`;
 export const EDITORIAL_ID = `${SITE_ORIGIN}/#editorial`;
 
-/** Official profiles: the footer links and the Organization `sameAs`. */
-export const SOCIAL_PROFILES = {
-  x: "https://x.com/SortedTechHQ",
-  instagram: "https://www.instagram.com/SortedTechHQ",
-  youtube: "https://www.youtube.com/@SortedTechHQ",
-  reddit: "https://www.reddit.com/user/SortedTechHQ",
-  telegram: "https://t.me/SortedTechHQ",
-} as const;
-
 export const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -38,11 +29,11 @@ export const organizationSchema = {
     "SaaS Architecture",
   ],
   sameAs: [
-    SOCIAL_PROFILES.x,
-    SOCIAL_PROFILES.instagram,
-    SOCIAL_PROFILES.youtube,
-    SOCIAL_PROFILES.reddit,
-    SOCIAL_PROFILES.telegram,
+    "https://x.com/SortedTechHQ",
+    "https://www.instagram.com/SortedTechHQ",
+    "https://www.youtube.com/@SortedTechHQ",
+    "https://www.reddit.com/user/SortedTechHQ",
+    "https://t.me/SortedTechHQ",
   ],
 };
 

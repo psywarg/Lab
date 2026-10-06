@@ -7,16 +7,41 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 | Area | Review | Now | Main evidence | Not verified |
 |---|---|---|---|---|
 | Build and tooling | 6 | 9 | CI green on every PR; lint covers `.astro` scripts; 0 audit findings | None |
-| Architecture | 5 | **7** | 18 tested tool modules, 107 unit tests, listed duplicates removed | Below 8: see below |
+| Architecture | 5 | **6** | Rule of 3 applied (2026-10-06): logic used by fewer than 3 files is back in its page, test code only in `tests/` | Below 8: see "Update (2026-10-06)" |
 | Performance | 7 | 9 | Lab FCP and LCP 88 to 220 ms faster than before the font trim on 8 pages, CLS at most 0.001 on every page at 360 px on slow 4G, fonts 85% smaller, no analytics before consent | Field LCP/INP/CLS |
 | Screen test | 7 | 8 | 1 px patterns, transform animations, tap-to-reveal, fps readout, fallback fullscreen | Real devices |
-| Stuck pixel fixer | 6 | 8 | 3/s cap above 140 px, truthful copy, no auto-start, diagnosis unit tests | Flash analyser; diagnosis UI flow |
+| Stuck pixel fixer | 6 | 8 | 3/s cap above 140 px, truthful copy, no auto-start, Diagnose and result check tested end to end | Flash analyser; real stuck pixels |
 | Touch test | 4 | 8 | 100% coverage, graded precision, equal Hz for 1 and 2 fingers, drift e2e | Real touch screens |
 | Speaker test | 6 | 8 | Sweep survives volume changes, mono level matched, dB slider, noise tests | Actual speaker output |
 | Mic test | 5 | 8 | Raw capture, device loss handled, worklet meter on every sample | Real-device picker and unplug |
 | Accelerometer test | 3 | 8 | Raw sensor drives verdicts; injected 1.30 g reads 1.30 g "High offset" | iOS permission prompt (M9) |
 | Gyroscope test | 4 | 8 | Raw bias and noise; 4 deg/s reads 3.5 to 4.5; 8 deg/s capture accepted | M10 legacy orientation sign |
 | Image pipeline | 5 | 8 | PNG masters, AVIF with WebP fallback, downloads 0.95 to 1.3x displayed size, SVGO, 1200x630 JPEG OG images | Final artwork: masters are placeholders |
+
+## Update (2026-10-06): rule of 3 and test code out of production
+
+The project's rules: something becomes its own component or util only when 3 or more production files use it (tests don't count), and anything that exists only for testing lives in `tests/`.
+
+- **Moved back into their pages** (fewer than 3 production users):
+  - the per-tool logic modules (stuck pixel, touch, screen, speaker, mic, accelerometer, gyroscope);
+  - helpers shared by 2 pages (`motion`, `sensorSession`, `stats`, `strokeWaveform`, the motion permission request), now copied into both;
+  - `ConsentBanner` and `analytics.ts` (into `BaseLayout`);
+  - `SOCIAL_PROFILES`.
+- **Kept:**
+  - `ResponsiveImage` (5 users);
+  - `runtimeShell` (5 users);
+  - the mic worklet (browsers require a separate file);
+  - `theme-init.js` (`astro.config.ts` hashes that file for the CSP).
+- **Test code:**
+  - the Vitest and Playwright configs moved into `tests/`;
+  - a unit test fails if anything in `src/` is imported by a test but by no production file;
+  - `tests/tools/rule-of-three.mjs` prints the rule-of-3 report.
+- **Unit tests:** about 100 that covered the moved logic were removed. The browser tests for every tool are unchanged and pass.
+- **Architecture 7 → 6 against the original review's criteria:**
+  - logic is back inside pages;
+  - the accelerometer and gyroscope share copied code again (review item L1);
+  - the maths that only unit tests covered is now unverified. That includes Diagnose with every colour misjudged, drift distance, rotation remapping, noise spectra and dB mapping.
+  - The project's own rules are met.
 
 ## Delivery
 
@@ -108,11 +133,11 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 - **Not verified:** real devices.
 
 ### Stuck pixel fixer: 8
-- Colour cycling is capped at 3/s except for spots of 140 px or less (H11 e2e at 140 and 160 px; unit tests on `speedRange`). The 140 px boundary is an estimate from assumed viewing distances, **not** a flash-analyser measurement.
+- Colour cycling is capped at 3/s except for spots of 140 px or less (H11 e2e at 140 and 160 px). The 140 px boundary is an estimate from assumed viewing distances, **not** a flash-analyser measurement.
 - The "WCAG Level A / AAA" claim is replaced with the actual limits.
 - Flashing can no longer auto-start (M13).
-- Defect classification is unit tested: stuck-on, hot, dead, surface mark, uneven patch and unclear.
-- **Not verified:** the diagnosis tap flow end to end. There is no e2e test for it; only its logic is unit tested.
+- Diagnose is tested end to end at 3 screen sizes: stuck-on, stuck-off, hot, dead, surface mark, a misjudged colour corrected by a follow-up question, two marks at once, and a pretend spot staying unclear. The result check after Auto is tested too.
+- **Not verified:** real stuck pixels on a phone.
 
 ### Touch test: 8
 - Tapping every drawn cell reports 100% (C4).
@@ -128,7 +153,7 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 - Mono matches Left per side (M5).
 - The volume slider is in dB (M7).
 - The meter uses 12 Hz bins and accurate copy (M4).
-- Noise buffers are 10 s (M6). Pink and brown spectra are checked with seeded unit tests.
+- Noise buffers are 10 s (M6). (The seeded spectrum unit tests were removed with the rule of 3 change; **not verified** since.)
 - **Not verified:** what real speakers output.
 
 ### Mic test: 8
@@ -140,7 +165,6 @@ Date: 2026-10-05. Scores are out of 10, comparing the original code review with 
 ### Accelerometer test: 8
 - The raw `Accelerometer` drives X/Y/Z, total force, offset and noise: an injected 1.30 g reads above 1.2 g and "High offset" (C2).
 - The optional linear sensor drives shake detection (e2e).
-- `stepAccel` is unit tested on synthetic streams.
 - **Not verified:** the iOS permission prompt timing (M9) on a real iPhone.
 
 ### Gyroscope test: 8
