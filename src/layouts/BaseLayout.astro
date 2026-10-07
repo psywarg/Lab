@@ -214,28 +214,28 @@ const robotsContent = robots ?? "index, follow";
 
     <Footer />
     <!-- Opt-in for Google Analytics. Shown until the visitor chooses, and again
-         from "Cookie settings" in the footer. -->
+         from "Cookie Settings" in the footer. -->
     <section
       id="consent-banner"
       aria-labelledby="consent-banner-title"
       hidden
       class="bg-surface border-accent-line shadow-accent-glow text-small fixed inset-x-2 bottom-2 z-50 rounded-2xl border p-4 shadow-lg sm:inset-x-auto sm:right-4 sm:bottom-4 sm:max-w-md"
     >
-      <h2 id="consent-banner-title" class="text-body m-0 mb-1 font-semibold">
+      <h2 id="consent-banner-title" class="text-small m-0 mb-1 font-semibold">
         Analytics cookies
       </h2>
-      <p class="m-0 mb-3">
+      <p class="text-small m-0 mb-3">
         Can we use Google Analytics to count visits? It sets cookies and helps us
-        see which pages are useful. Nothing is loaded unless you accept. See the
+        see which pages are useful. Nothing is loaded unless you accept. See the{" "}
         <a href="/privacy" class="underline">Privacy Policy</a>.
       </p>
       <div class="flex justify-end gap-2">
-        <button type="button" class="btn-base" data-consent-choice="denied">
+        <button type="button" class="btn-base text-small px-3 py-1" data-consent-choice="denied">
           Reject
         </button>
         <button
           type="button"
-          class="btn-base bg-accent-500 hover:bg-accent-600 text-white"
+          class="btn-base bg-accent-500 hover:bg-accent-600 text-small px-3 py-1 text-white"
           data-consent-choice="granted"
         >
           Accept

@@ -58,11 +58,11 @@ test("H9: Accept loads gtag with real `arguments` commands, and again on the nex
   await expect(banner(page)).toBeHidden();
 });
 
-test("H9: Cookie settings reopens the banner and can withdraw consent", async ({ page }) => {
+test("H9: Cookie Settings reopens the banner and can withdraw consent", async ({ page }) => {
   await recordGoogle(page);
   await page.goto("/");
   await banner(page).getByRole("button", { name: "Accept" }).click();
-  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await page.getByRole("button", { name: "Cookie Settings" }).click();
   await expect(banner(page)).toBeVisible();
   await expect(banner(page).getByRole("button", { name: "Accept" })).toBeFocused();
   await banner(page).getByRole("button", { name: "Reject" }).click();
@@ -73,11 +73,11 @@ test("H9: Accept after Reject on the same page grants analytics again", async ({
   await recordGoogle(page);
   await page.goto("/");
   await banner(page).getByRole("button", { name: "Accept" }).click();
-  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await page.getByRole("button", { name: "Cookie Settings" }).click();
   await banner(page).getByRole("button", { name: "Reject" }).click();
   // Consent Mode alone would keep sending cookieless pings on this page.
   expect(await page.evaluate(() => (window as unknown as Record<string, unknown>)["ga-disable-G-HJ4YRNZ9LG"])).toBe(true);
-  await page.getByRole("button", { name: "Cookie settings" }).click();
+  await page.getByRole("button", { name: "Cookie Settings" }).click();
   await banner(page).getByRole("button", { name: "Accept" }).click();
   expect(await page.evaluate(() => (window as unknown as Record<string, unknown>)["ga-disable-G-HJ4YRNZ9LG"])).toBe(false);
   const lastConsent = await page.evaluate(() => {
@@ -87,4 +87,36 @@ test("H9: Accept after Reject on the same page grants analytics again", async ({
     return (updates.at(-1)?.[2] as { analytics_storage?: string } | undefined)?.analytics_storage;
   });
   expect(lastConsent).toBe("granted");
+});
+
+test("Banner text is the small size, so the banner takes less of a phone screen", async ({ page }) => {
+  await recordGoogle(page);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto("/");
+  await expect(banner(page)).toBeVisible();
+  const sizes = await banner(page).evaluate((section) => {
+    const size = (el: Element | null) => (el ? getComputedStyle(el).fontSize : "");
+    const small = document.createElement("span");
+    small.className = "text-small";
+    document.body.append(small);
+    const expected = size(small);
+    small.remove();
+    return {
+      expected,
+      title: size(section.querySelector("h2")),
+      body: size(section.querySelector("p")),
+      buttons: [...section.querySelectorAll("button")].map(size),
+      buttonHeights: [...section.querySelectorAll("button")].map((button) => button.getBoundingClientRect().height),
+      height: section.getBoundingClientRect().height,
+      text: section.querySelector("p")?.textContent?.replace(/\s+/g, " ").trim(),
+    };
+  });
+  expect(sizes.title).toBe(sizes.expected);
+  expect(sizes.body).toBe(sizes.expected);
+  expect(sizes.buttons).toEqual([sizes.expected, sizes.expected]);
+  // WCAG 2.5.8 minimum target size.
+  for (const height of sizes.buttonHeights) expect(height).toBeGreaterThanOrEqual(24);
+  // 246 px before the change (16.4 px text).
+  expect(sizes.height).toBeLessThan(246);
+  expect(sizes.text).toContain("See the Privacy Policy.");
 });
