@@ -366,3 +366,22 @@ test("Switching to Manual during the result check closes it", async ({ page }) =
   await expect(page.locator("#pixel-test-shell")).toHaveAttribute("data-workflow", "manual");
   await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "false");
 });
+
+test("Leaving Auto during a longer round drops it: back in Auto, Start runs the first round", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  await page.locator("#pixel-check-still").click();
+  await page.locator("[data-longer-minutes='10']").click();
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^(10:00|09:\d\d)$/);
+  // The workflow tabs are only shown outside fullscreen.
+  await page.locator("#pixel-fullscreen").dispatchEvent("click");
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-test-shell")).toHaveAttribute("data-fullscreen", "false");
+  await page.locator("#pixel-manual-tab").click();
+  await page.locator("#pixel-auto-tab").click();
+  await expect(page.locator("#pixel-test-shell")).toHaveAttribute("data-workflow", "auto");
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^0[01]:\d\d$/);
+});

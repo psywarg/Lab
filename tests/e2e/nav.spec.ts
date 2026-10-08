@@ -126,7 +126,7 @@ test("Footer: Cookie Settings sits in the disclaimer line, styled like View Disc
       "Our content is independent, backed by data, and fueled by late-night coffee. View Disclaimer · Cookie Settings",
     );
     const colour = (locator: ReturnType<Page["locator"]>) => locator.evaluate((el) => getComputedStyle(el).color);
-    const disclaimer = await colour(note.getByRole("link", { name: "Read full disclaimer" }));
+    const disclaimer = await colour(note.getByRole("link", { name: "View Disclaimer" }));
     expect(await colour(note.getByRole("button", { name: "Cookie Settings" }))).toBe(disclaimer);
   }
 });

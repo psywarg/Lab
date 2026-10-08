@@ -2541,11 +2541,14 @@ const structuredData = createToolApplicationSchema({
     function setWorkflowMode(nextMode: WorkflowMode): void {
       if (workflowMode === nextMode) return;
       if (diagnosisActive) cancelDiagnosis();
-      // The result check belongs to Auto; leaving Auto drops it.
+      // The result check and any longer round belong to Auto; leaving Auto
+      // drops them, so Start back in Auto runs the first round.
+      const wasLongerRound = autoRound === 2;
       resetResultCheck();
       if (stage?.dataset.running === "true" || runPaused) {
         resetFlashing(false);
       }
+      if (wasLongerRound) buildAutoRepairQueue();
       autoQueueRunning = false;
       workflowMode = nextMode;
       syncWorkflowUI();
