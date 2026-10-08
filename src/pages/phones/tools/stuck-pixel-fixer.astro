@@ -3214,7 +3214,14 @@ const structuredData = createToolApplicationSchema({
     }
 
     function resetResultCheck(): void {
+      const wasOpen = checkPanel?.dataset.visible === "true";
       hideCheckPanel();
+      if (wasOpen) {
+        // Closed mid-question: undo the check colour, ring and status.
+        applyIdleStage();
+        diagnosisMarkerElements.forEach((marker) => marker.classList.remove("is-highlighted"));
+        updateStatus("Ready", currentPattern().label);
+      }
       checkMarkIndexes = [];
       checkResults = new Map();
       autoRound = 1;

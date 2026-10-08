@@ -423,3 +423,34 @@ test("Changing the timer during a paused longer round restarts the first round",
   // A fresh first round, so a longer round is offered again.
   await expect(page.locator("#pixel-check-longer")).toBeVisible();
 });
+
+// The check paints the stage the mark's check colour: black for a stuck-on
+// subpixel, green for a dark green one. Auto always runs in spot mode, whose
+// idle stage is black.
+const CHECK_CASES = [
+  { name: "a bright red subpixel (checked on black)", seenOn: RED_STUCK_ON, checkColour: COLOURS.black },
+  { name: "a dark green subpixel (checked on green)", seenOn: ["white", "green", "cyan", "yellow", "midGrey"] as Colour[], checkColour: COLOURS.green },
+] as const;
+
+for (const closeBy of ["a timer change", "switching to Manual"] as const) {
+  for (const mark of CHECK_CASES) {
+    test(`Closing the result check for ${mark.name} by ${closeBy} restores the idle stage`, async ({ page }) => {
+      await diagnose(page, centre(mark.seenOn), 60);
+      await runAutoToEnd(page, 60);
+      await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+      await expect(page.locator("#pixel-state")).toHaveText("Check");
+      expect(await page.locator("#pixel-stage").evaluate((stage) => stage.style.background)).toBe(mark.checkColour);
+      await expect(page.locator(".pixel-auto-marker.is-highlighted")).toHaveCount(1);
+      // The workflow tabs and timer are only shown outside fullscreen.
+      await page.locator("#pixel-fullscreen").dispatchEvent("click");
+      await page.clock.runFor(500);
+      if (closeBy === "a timer change") await page.locator("#pixel-timer").selectOption("300", { force: true });
+      else await page.locator("#pixel-manual-tab").click();
+      await page.clock.runFor(500);
+      await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "false");
+      await expect(page.locator("#pixel-state")).toHaveText("Ready");
+      expect(await page.locator("#pixel-stage").evaluate((stage) => stage.style.background)).toBe(COLOURS.black);
+      await expect(page.locator(".pixel-auto-marker.is-highlighted")).toHaveCount(0);
+    });
+  }
+}
