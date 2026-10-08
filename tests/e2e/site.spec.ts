@@ -214,3 +214,63 @@ test("Fonts: every character in the built pages is in the trimmed Sorted fonts",
   }
   expect([...missing].map(([char, file]) => `${char} (U+${(char.codePointAt(0) ?? 0).toString(16)}) in ${file}`)).toEqual([]);
 });
+
+test("every page: no words glued to a link or inline tag, and link names match their text", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Checks page text; one viewport is enough");
+  const pages = readdirSync("dist", { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".html"))
+    .map((file) => `/${file.replace(/\\/g, "/").replace(/\.html$/, "")}`);
+  await blockExternal(page);
+  const glued: string[] = [];
+  const mislabelled: string[] = [];
+  for (const path of pages) {
+    await page.goto(path);
+    const found = await page.evaluate(() => {
+      const INLINE = new Set(["A", "STRONG", "EM", "B", "I", "SPAN", "CODE", "BUTTON", "ABBR", "KBD", "MARK", "SMALL", "SUP", "SUB", "TIME", "LABEL", "Q", "CITE"]);
+      const shown = (el: Element) => {
+        const style = getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden" && el.getClientRects().length > 0;
+      };
+      const inFlow = (node: Node | null): node is Node =>
+        !!node &&
+        (node.nodeType === Node.TEXT_NODE
+          ? (node.textContent ?? "").trim() !== ""
+          : node instanceof Element && /^inline/.test(getComputedStyle(node).display) && shown(node));
+      const textOf = (node: Node) => (node instanceof HTMLElement ? node.innerText : (node.textContent ?? ""));
+      const glued: string[] = [];
+      for (const el of document.body.querySelectorAll("*")) {
+        if (!INLINE.has(el.tagName) || el.closest("svg, script, style, [aria-hidden='true']") || !shown(el)) continue;
+        // Flex and grid children are laid out apart, whatever the markup.
+        const parent = el.parentElement;
+        if (!parent || /flex|grid/.test(getComputedStyle(parent).display) || !/^inline/.test(getComputedStyle(el).display)) continue;
+        const inner = (el.textContent ?? "").replace(/\s+/g, " ");
+        if (!inner.trim()) continue;
+        const prev = inFlow(el.previousSibling) ? el.previousSibling : null;
+        const next = inFlow(el.nextSibling) ? el.nextSibling : null;
+        if (prev && /[\p{L}\p{N},.;:!?)"”’]$/u.test(textOf(prev)) && /^[\p{L}\p{N}("“‘_]/u.test(inner)) {
+          glued.push(`${textOf(prev).slice(-20)}|${inner.slice(0, 20)}`);
+        }
+        if (next && /[\p{L}\p{N})"”’]$/u.test(inner) && /^[\p{L}\p{N}("“‘]/u.test(textOf(next))) {
+          glued.push(`${inner.slice(-20)}|${textOf(next).slice(0, 20)}`);
+        }
+      }
+      // WCAG 2.5.3: a control's spoken name contains its visible words.
+      const normal = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
+      const mislabelled: string[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>("a[aria-label], button[aria-label], summary[aria-label], a[aria-labelledby], button[aria-labelledby]")) {
+        const visible = normal(el.innerText);
+        if (!visible) continue;
+        const labelledBy = el.getAttribute("aria-labelledby");
+        const name = labelledBy
+          ? labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ")
+          : (el.getAttribute("aria-label") ?? "");
+        if (!normal(name).includes(visible)) mislabelled.push(`"${el.innerText.trim()}" is named "${name.trim()}"`);
+      }
+      return { glued, mislabelled };
+    });
+    glued.push(...found.glued.map((entry) => `${path}: ${entry}`));
+    mislabelled.push(...found.mislabelled.map((entry) => `${path}: ${entry}`));
+  }
+  expect.soft(glued).toEqual([]);
+  expect.soft([...new Set(mislabelled.map((entry) => entry.replace(/^[^:]+: /, "")))]).toEqual([]);
+});
