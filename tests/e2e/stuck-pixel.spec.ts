@@ -385,3 +385,41 @@ test("Leaving Auto during a longer round drops it: back in Auto, Start runs the 
   await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
   await expect(page.locator("#pixel-countdown")).toHaveText(/^0[01]:\d\d$/);
 });
+
+test("Changing the timer while Auto is paused restarts it at the new time", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  // The runtime ignores a fullscreen toggle within 350 ms of the last one.
+  await page.clock.runFor(500);
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  // Leaving fullscreen pauses the run and shows the controls.
+  await page.locator("#pixel-fullscreen").dispatchEvent("click");
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "false");
+  await page.locator("#pixel-timer").selectOption("300", { force: true });
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-stage")).toHaveAttribute("data-running", "true");
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^(05:00|04:5\d)$/);
+});
+
+test("Changing the timer during a paused longer round restarts the first round", async ({ page }) => {
+  await diagnose(page, centre(RED_STUCK_ON), 60);
+  await runAutoToEnd(page, 60);
+  await page.locator("#pixel-check-still").click();
+  await page.locator("[data-longer-minutes='10']").click();
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^(10:00|09:\d\d)$/);
+  await page.locator("#pixel-fullscreen").dispatchEvent("click");
+  await page.clock.runFor(500);
+  await page.locator("#pixel-timer").selectOption("60", { force: true });
+  await page.locator("#pixel-start").click();
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-countdown")).toHaveText(/^(01:00|00:5\d)$/);
+  await page.clock.fastForward(61_000);
+  await page.clock.runFor(500);
+  await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+  await page.locator("#pixel-check-still").click();
+  // A fresh first round, so a longer round is offered again.
+  await expect(page.locator("#pixel-check-longer")).toBeVisible();
+});

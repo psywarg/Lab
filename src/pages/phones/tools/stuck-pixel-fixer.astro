@@ -3868,6 +3868,10 @@ const structuredData = createToolApplicationSchema({
       if (workflowMode === "auto") {
         const durationSeconds = Number(timerInput.value);
         const selectedMark = Number(autoMarkInput?.value ?? 0);
+        // A new time restarts Auto: drop a running or paused run, any
+        // longer round and its check, so Start runs the first round.
+        if (stage?.dataset.running === "true" || runPaused) resetFlashing();
+        resetResultCheck();
         buildAutoRepairQueue();
         syncAutoQueueControls(false);
         if (
