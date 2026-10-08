@@ -158,23 +158,27 @@ test("Footer: page links stay on one line each, down to 320 px wide", async ({ p
   }
 });
 
-test("Footer: social icons share one size and line weight", async ({ page }) => {
+test("Footer: social icons are centred on a 24-unit box and take the tile colour", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "Measures the sprite; one viewport is enough");
   await blockExternal(page);
   await page.goto("/");
   const href = await page.locator("footer ul use").first().getAttribute("href");
   const sprite = await (await page.request.get(new URL(href ?? "", page.url()).href)).text();
-  // Renders each symbol at 960 px and measures, in 24-unit terms, the drawn
-  // box and the median line thickness (twice the distance from the ridge of
-  // each line to its edge).
-  const icons = await page.evaluate(async (text) => {
-    const N = 960;
-    const out: Record<string, { area: number; cx: number; cy: number; line: number }> = {};
-    for (const m of text.matchAll(/<symbol id="(social-[^"]+)"([^>]*)>([\s\S]*?)<\/symbol>/g)) {
-      const [, id = "", attrs = "", body = ""] = m;
+  const symbols = [...sprite.matchAll(/<symbol id="(social-[^"]+)"([^>]*)>([\s\S]*?)<\/symbol>/g)].map(([, id = "", attrs = "", body = ""]) => ({ id, attrs, body }));
+  expect(symbols.map((symbol) => symbol.id).sort()).toEqual(["social-instagram", "social-telegram", "social-x", "social-youtube"]);
+  for (const { id, attrs, body } of symbols) {
+    expect.soft(attrs, `${id} viewBox`).toContain('viewBox="0 0 24 24"');
+    expect.soft(body, `${id} colour`).toContain('"currentColor"');
+    // Only currentColor, so the icon follows the tile's text colour and hover.
+    expect.soft(body.match(/(?:fill|stroke)="(?!none|currentColor)[^"]*"/g) ?? [], `${id} fixed colours`).toEqual([]);
+  }
+  // Renders each symbol and checks its drawn box is centred in the 24 box.
+  const boxes = await page.evaluate(async (list) => {
+    const N = 480;
+    const out: Record<string, { cx: number; cy: number }> = {};
+    for (const { id, attrs, body } of list) {
       const fill = /fill="none"/.test(attrs) ? 'fill="none"' : "";
-      const viewBox = /viewBox="([^"]+)"/.exec(attrs)?.[1] ?? "";
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${N}" height="${N}" viewBox="${viewBox}" ${fill} color="#000">${body}</svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${N}" height="${N}" viewBox="0 0 24 24" ${fill} color="#000">${body}</svg>`;
       const img = new Image();
       img.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
       await img.decode();
@@ -182,45 +186,18 @@ test("Footer: social icons share one size and line weight", async ({ page }) => 
       if (!ctx) throw new Error("no 2d context");
       ctx.drawImage(img, 0, 0);
       const data = ctx.getImageData(0, 0, N, N).data;
-      const dist = new Float64Array(N * N);
       let x0 = N, y0 = N, x1 = -1, y1 = -1;
       for (let i = 0; i < N * N; i++) {
         if ((data[i * 4 + 3] ?? 0) <= 127) continue;
-        dist[i] = Infinity;
         const x = i % N, y = Math.floor(i / N);
         x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
       }
-      const at = (x: number, y: number) => (x < 0 || y < 0 || x >= N || y >= N ? 0 : (dist[y * N + x] ?? 0));
-      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-        const i = y * N + x;
-        if (dist[i]) dist[i] = Math.min(dist[i] ?? 0, at(x - 1, y) + 3, at(x, y - 1) + 3, at(x - 1, y - 1) + 4, at(x + 1, y - 1) + 4);
-      }
-      for (let y = N - 1; y >= 0; y--) for (let x = N - 1; x >= 0; x--) {
-        const i = y * N + x;
-        if (dist[i]) dist[i] = Math.min(dist[i] ?? 0, at(x + 1, y) + 3, at(x, y + 1) + 3, at(x + 1, y + 1) + 4, at(x - 1, y + 1) + 4);
-      }
-      const ridge: number[] = [];
-      for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
-        const i = y * N + x, v = dist[i] ?? 0;
-        if (v && [-1, 1, -N, N, -N - 1, -N + 1, N - 1, N + 1].every((o) => v >= (dist[i + o] ?? 0))) ridge.push(v / 3);
-      }
-      ridge.sort((a, b) => a - b);
-      const u = 24 / N;
-      out[id] = {
-        area: (x1 - x0 + 1) * (y1 - y0 + 1) * u * u,
-        cx: ((x0 + x1 + 1) / 2) * u,
-        cy: ((y0 + y1 + 1) / 2) * u,
-        line: (2 * (ridge[Math.floor(ridge.length / 2)] ?? 0) - 1) * u,
-      };
+      out[id] = { cx: ((x0 + x1 + 1) / 2) * (24 / N), cy: ((y0 + y1 + 1) / 2) * (24 / N) };
     }
     return out;
-  }, sprite);
-  expect(Object.keys(icons).sort()).toEqual(["social-instagram", "social-telegram", "social-x", "social-youtube"]);
-  for (const [id, icon] of Object.entries(icons)) {
-    expect.soft(icon.area, `${id} area`).toBeGreaterThan(324 * 0.95);
-    expect.soft(icon.area, `${id} area`).toBeLessThan(324 * 1.05);
-    expect.soft(Math.abs(icon.cx - 12), `${id} centre x`).toBeLessThan(0.25);
-    expect.soft(Math.abs(icon.cy - 12), `${id} centre y`).toBeLessThan(0.25);
-    expect.soft(Math.abs(icon.line - 2), `${id} line weight`).toBeLessThan(0.15);
+  }, symbols);
+  for (const [id, box] of Object.entries(boxes)) {
+    expect.soft(Math.abs(box.cx - 12), `${id} centre x`).toBeLessThan(0.25);
+    expect.soft(Math.abs(box.cy - 12), `${id} centre y`).toBeLessThan(0.25);
   }
 });

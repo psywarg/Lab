@@ -89,20 +89,24 @@ test("H9: Accept after Reject on the same page grants analytics again", async ({
   expect(lastConsent).toBe("granted");
 });
 
-test("Banner text is the small size, so the banner takes less of a phone screen", async ({ page }) => {
+test("Banner: small title and buttons, extra-small copy, so it takes less of a phone screen", async ({ page }) => {
   await recordGoogle(page);
   await page.setViewportSize({ width: 360, height: 780 });
   await page.goto("/");
   await expect(banner(page)).toBeVisible();
   const sizes = await banner(page).evaluate((section) => {
     const size = (el: Element | null) => (el ? getComputedStyle(el).fontSize : "");
-    const small = document.createElement("span");
-    small.className = "text-small";
-    document.body.append(small);
-    const expected = size(small);
-    small.remove();
+    const sizeOf = (className: string) => {
+      const probe = document.createElement("span");
+      probe.className = className;
+      document.body.append(probe);
+      const value = size(probe);
+      probe.remove();
+      return value;
+    };
     return {
-      expected,
+      small: sizeOf("text-small"),
+      xsmall: sizeOf("text-xsmall"),
       title: size(section.querySelector("h2")),
       body: size(section.querySelector("p")),
       buttons: [...section.querySelectorAll("button")].map(size),
@@ -111,12 +115,12 @@ test("Banner text is the small size, so the banner takes less of a phone screen"
       text: section.querySelector("p")?.textContent?.replace(/\s+/g, " ").trim(),
     };
   });
-  expect(sizes.title).toBe(sizes.expected);
-  expect(sizes.body).toBe(sizes.expected);
-  expect(sizes.buttons).toEqual([sizes.expected, sizes.expected]);
+  expect(sizes.title).toBe(sizes.small);
+  expect(sizes.body).toBe(sizes.xsmall);
+  expect(sizes.buttons).toEqual([sizes.small, sizes.small]);
   // WCAG 2.5.8 minimum target size.
   for (const height of sizes.buttonHeights) expect(height).toBeGreaterThanOrEqual(24);
-  // 246 px before the change (16.4 px text).
-  expect(sizes.height).toBeLessThan(246);
+  // 246 px with 16.4 px text, 218 px with the copy at text-small.
+  expect(sizes.height).toBeLessThan(218);
   expect(sizes.text).toContain("See the Privacy Policy.");
 });
