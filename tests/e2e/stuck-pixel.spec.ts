@@ -423,3 +423,31 @@ test("Changing the timer during a paused longer round restarts the first round",
   // A fresh first round, so a longer round is offered again.
   await expect(page.locator("#pixel-check-longer")).toBeVisible();
 });
+
+for (const closeBy of ["a timer change", "switching to Manual"] as const) {
+  for (const mode of ["spot", "full"] as const) {
+    test(`Closing the result check mid-question by ${closeBy} restores the idle stage (${mode} mode)`, async ({ page }) => {
+      await diagnose(page, centre(RED_STUCK_ON), 60);
+      await runAutoToEnd(page, 60);
+      await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "true");
+      // The check shows a stuck-on mark on black, ringed, with status "Check".
+      await expect(page.locator("#pixel-state")).toHaveText("Check");
+      await page.locator("#pixel-fullscreen").dispatchEvent("click");
+      await page.clock.runFor(500);
+      if (mode === "full") {
+        // Changing the mode does not repaint the stage, so it stays black.
+        await page.locator("#pixel-mode").selectOption("full", { force: true });
+      }
+      if (closeBy === "a timer change") await page.locator("#pixel-timer").selectOption("300", { force: true });
+      else await page.locator("#pixel-manual-tab").click();
+      await page.clock.runFor(500);
+      await expect(page.locator("#pixel-check")).toHaveAttribute("data-visible", "false");
+      await expect(page.locator("#pixel-state")).toHaveText("Ready");
+      // Idle is black in spot mode, unpainted in full-screen mode.
+      expect(await page.locator("#pixel-stage").evaluate((stage) => stage.style.background)).toBe(
+        mode === "spot" ? "rgb(0, 0, 0)" : "",
+      );
+      await expect(page.locator(".pixel-auto-marker.is-highlighted")).toHaveCount(0);
+    });
+  }
+}
