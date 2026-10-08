@@ -29,7 +29,7 @@ const socialLinks = [
   <div
     class="text-small mt-4 flex flex-col items-center justify-center gap-x-2 gap-y-1 sm:flex-row"
   >
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1 whitespace-nowrap min-[360px]:gap-2">
       <a
         href="/about"
         class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
@@ -49,7 +49,7 @@ const socialLinks = [
       >
     </div>
     <span aria-hidden="true" class="hidden sm:inline">•</span>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1 whitespace-nowrap min-[360px]:gap-2">
       <a
         href="/privacy"
         class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
@@ -60,13 +60,6 @@ const socialLinks = [
         href="/terms"
         class="relative inline-block after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
         >Terms of Service</a
-      >
-      <span aria-hidden="true">•</span>
-      <button
-        type="button"
-        data-consent-open
-        class="relative inline-block cursor-pointer text-blue-600 dark:text-blue-400 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-bottom-right after:scale-x-0 after:bg-current after:transition-transform after:duration-300 after:ease-out hover:after:origin-bottom-left hover:after:scale-x-100 active:after:origin-bottom-left active:after:scale-x-100"
-        >Cookie settings</button
       >
     </div>
   </div>
@@ -94,14 +87,19 @@ const socialLinks = [
   <div
     class="text-xsmall text-custom-500 mt-2 px-4 leading-relaxed"
   >
-    Our content is independent, backed by data, and fueled by late-night coffee.
+    Our content is independent, backed by data, and fueled by late-night coffee.{" "}
     <a
       href="/disclaimer"
-      class="text-custom-500 hover:text-accent-500 hover:decoration-accent-500 underline decoration-dotted"
-      aria-label="Read full disclaimer"
+      class="text-custom-500 hover:text-accent-500 hover:decoration-accent-500 whitespace-nowrap underline decoration-dotted"
+      aria-label="Read full disclaimer">View Disclaimer</a
+    >{" "}
+    <span aria-hidden="true">·</span>{" "}
+    <button
+      type="button"
+      data-consent-open
+      class="text-custom-500 hover:text-accent-500 hover:decoration-accent-500 cursor-pointer whitespace-nowrap underline decoration-dotted"
+      >Cookie Settings</button
     >
-      View Disclaimer.
-    </a>
   </div>
 </footer>
 
